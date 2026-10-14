@@ -1,0 +1,13 @@
+*.env
+*.env.local
+.env
+.env.local
+local.properties
+*.jks
+.gradle/
+.idea/
+.kotlin/
+build/
+composeApp/build/
+*.exe
+*.winmd
