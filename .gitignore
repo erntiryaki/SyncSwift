@@ -1,21 +1,37 @@
+# Environment & secrets
 *.env
 *.env.local
+*.env.*.local
 .env
 .env.local
 local.properties
 *.jks
+*.keystore
+*firebase-service-account*.json
+
+# Build and IDE
 .gradle/
-.idea/
-.kotlin/
 build/
+**/build/
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.kotlin/
 composeApp/build/
 iosApp/build/
+
+# Binaries & packages
 *.exe
 *.winmd
-*firebase-service-account*.json
-scratch/
 *.apk
 *.aab
+node_modules/
+
+# Logs & temp
+scratch/
 *.log
 .DS_Store
 Thumbs.db
+
