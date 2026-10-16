@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		9B0000012A00000100000001 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B0000022A00000100000001 /* iOSApp.swift */; };
 		9B0000032A00000100000001 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 9B0000042A00000100000001 /* GoogleService-Info.plist */; };
+		9B0000162A00000100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9B0000172A00000100000001 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -16,6 +17,7 @@
 		9B0000042A00000100000001 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9B0000052A00000100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9B0000062A00000100000001 /* iosApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9B0000172A00000100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,6 +45,7 @@
 				9B0000022A00000100000001 /* iOSApp.swift */,
 				9B0000042A00000100000001 /* GoogleService-Info.plist */,
 				9B0000052A00000100000001 /* Info.plist */,
+				9B0000172A00000100000001 /* Assets.xcassets */,
 			);
 			sourceTree = "<group>";
 		};
@@ -114,6 +117,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B0000032A00000100000001 /* GoogleService-Info.plist in Resources */,
+				9B0000162A00000100000001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

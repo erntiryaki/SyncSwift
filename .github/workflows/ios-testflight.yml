@@ -24,8 +24,17 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Select Xcode 15.4
-        run: sudo xcode-select -switch /Applications/Xcode_15.4.app
+      - name: Select Xcode 16
+        run: |
+          XCODE_APP=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
+          if [ -n "$XCODE_APP" ]; then
+            echo "Selecting $XCODE_APP"
+            sudo xcode-select -switch "$XCODE_APP"
+          elif [ -d "/Applications/Xcode.app" ]; then
+            echo "Falling back to /Applications/Xcode.app"
+            sudo xcode-select -switch /Applications/Xcode.app
+          fi
+          xcodebuild -version
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -132,6 +141,7 @@ jobs:
           sed -i '' '/org.gradle.java.home/d' gradle.properties 2>/dev/null || true
           mkdir -p iosApp/iosApp
           cp iosApp/Info.plist iosApp/iosApp/Info.plist 2>/dev/null || true
+          cp -R iosApp/Assets.xcassets iosApp/iosApp/Assets.xcassets 2>/dev/null || true
 
       - name: Create ExportOptions.plist
         run: |
