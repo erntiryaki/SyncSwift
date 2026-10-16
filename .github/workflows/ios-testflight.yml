@@ -3,6 +3,8 @@ name: iOS TestFlight Build & Deploy
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -139,6 +141,12 @@ jobs:
         run: |
           chmod +x gradlew
           sed -i '' '/org.gradle.java.home/d' gradle.properties 2>/dev/null || true
+          
+          # Auto-increment CFBundleVersion with github.run_number so TestFlight never rejects duplicate builds
+          BUILD_NUM=${{ github.run_number }}
+          echo "Setting CFBundleVersion and CURRENT_PROJECT_VERSION to $BUILD_NUM"
+          plutil -replace CFBundleVersion -string "$BUILD_NUM" iosApp/Info.plist 2>/dev/null || sed -i '' "s/<string>1<\/string>/<string>$BUILD_NUM<\/string>/g" iosApp/Info.plist
+          
           mkdir -p iosApp/iosApp
           cp iosApp/Info.plist iosApp/iosApp/Info.plist 2>/dev/null || true
           cp -R iosApp/Assets.xcassets iosApp/iosApp/Assets.xcassets 2>/dev/null || true
@@ -187,7 +195,8 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             CODE_SIGN_STYLE="Manual" \
             CODE_SIGN_REQUIRED=YES \
-            CODE_SIGN_ALLOWED=YES
+            CODE_SIGN_ALLOWED=YES \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
 
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
