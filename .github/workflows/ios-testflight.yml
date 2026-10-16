@@ -109,9 +109,22 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN_PATH
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Apply provisioning profile
+          # Apply provisioning profile with its real UUID and extract exact profile name
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+          PROFILE_INFO=$(python3 -c "import plistlib; data = open('$PP_PATH', 'rb').read(); start = data.find(b'<?xml'); end = data.find(b'</plist>') + 8; p = plistlib.loads(data[start:end]); team = p.get('TeamIdentifier', [''])[0]; print(f'{p[\"UUID\"]}|{p[\"Name\"]}|{team}')")
+          IFS='|' read -r PROFILE_UUID PROFILE_NAME PROFILE_TEAM <<< "$PROFILE_INFO"
+
+          echo "Detected Profile UUID: $PROFILE_UUID"
+          echo "Detected Profile Name: $PROFILE_NAME"
+          echo "Detected Team ID: $PROFILE_TEAM"
+
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"$PROFILE_UUID".mobileprovision
+
+          echo "ACTUAL_PROFILE_NAME=$PROFILE_NAME" >> $GITHUB_ENV
+          echo "ACTUAL_PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
+          if [ -n "$PROFILE_TEAM" ]; then
+            echo "ACTUAL_TEAM_ID=$PROFILE_TEAM" >> $GITHUB_ENV
+          fi
 
       - name: Prepare Gradle Wrapper
         run: |
@@ -120,6 +133,7 @@ jobs:
 
       - name: Create ExportOptions.plist
         run: |
+          TEAM_ID="${ACTUAL_TEAM_ID:-${{ secrets.APPLE_TEAM_ID || vars.APPLE_TEAM_ID }}}"
           cat <<EOF > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -132,11 +146,11 @@ jobs:
               <key>signingStyle</key>
               <string>manual</string>
               <key>teamID</key>
-              <string>${{ secrets.APPLE_TEAM_ID || vars.APPLE_TEAM_ID }}</string>
+              <string>$TEAM_ID</string>
               <key>provisioningProfiles</key>
               <dict>
                   <key>net.syncswift</key>
-                  <string>${{ secrets.PROVISIONING_PROFILE_SPECIFIER || vars.PROVISIONING_PROFILE_SPECIFIER }}</string>
+                  <string>$ACTUAL_PROFILE_NAME</string>
               </dict>
           </dict>
           </plist>
@@ -144,14 +158,15 @@ jobs:
 
       - name: Build Archive & Export IPA
         run: |
+          TEAM_ID="${ACTUAL_TEAM_ID:-${{ secrets.APPLE_TEAM_ID || vars.APPLE_TEAM_ID }}}"
           xcodebuild -project iosApp/iosApp.xcodeproj \
             -scheme iosApp \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
             archive \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID || vars.APPLE_TEAM_ID }}" \
-            PROVISIONING_PROFILE_SPECIFIER="${{ secrets.PROVISIONING_PROFILE_SPECIFIER || vars.PROVISIONING_PROFILE_SPECIFIER }}" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$ACTUAL_PROFILE_NAME" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             CODE_SIGN_STYLE="Manual" \
             CODE_SIGN_REQUIRED=YES \

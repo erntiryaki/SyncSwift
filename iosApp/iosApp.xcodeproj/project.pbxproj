@@ -307,7 +307,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
-				PROVISIONING_PROFILE_SPECIFIER = SyncSwift_AppStore;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../composeApp/build/bin/iosArm64/podspec/release",
