@@ -266,6 +266,22 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                         }
                                     }
                                 },
+                                onAppleSignIn = { appleUser ->
+                                    val targetEmail = if (appleUser.email.isNotBlank()) appleUser.email.trim().lowercase() else "${appleUser.userIdentifier}@privaterelay.appleid.com"
+                                    val aFirstName = appleUser.givenName ?: ""
+                                    val aLastName = appleUser.familyName ?: ""
+                                    scope.launch {
+                                        val existingProvider = SupabaseNetwork.getUserProvider(targetEmail) ?: authPolicy.getRegisteredProvider(targetEmail)
+                                        if (existingProvider == IdentityProvider.EmailPassword) {
+                                            authAlert = AuthAlertState.CrossProviderEmailToGoogle
+                                        } else {
+                                            authDraftEmail = ""
+                                            authPolicy.registerAccount(targetEmail, IdentityProvider.Apple)
+                                            commitUserRegistration(targetEmail, IdentityProvider.Apple, aFirstName, aLastName)
+                                            screen = AuthStep.Home
+                                        }
+                                    }
+                                },
                                 onContinueLocally = {
                                     authProvider = IdentityProvider.Local
                                     email = ""

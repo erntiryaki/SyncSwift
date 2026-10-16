@@ -39,6 +39,7 @@ fun EmailAuthScreen(
     onSignInWithPassword: (email: String, password: String) -> Unit,
     onSendOtpAndContinue: (email: String) -> Unit,
     onGoogleSignIn: (GoogleUserData) -> Unit,
+    onAppleSignIn: (AppleUserData) -> Unit = {},
     onContinueLocally: () -> Unit = {},
     onBack: (() -> Unit)? = null,
     language: AppLanguage,
@@ -58,6 +59,15 @@ fun EmailAuthScreen(
         webClientId = SyncSwiftConfig.GOOGLE_WEB_CLIENT_ID,
         onSuccess = { userData ->
             onGoogleSignIn(userData)
+        },
+        onError = { err ->
+            localWarning = err
+        }
+    )
+
+    val launchNativeAppleAuth = rememberAppleAuthLauncher(
+        onSuccess = { userData ->
+            onAppleSignIn(userData)
         },
         onError = { err ->
             localWarning = err
@@ -240,7 +250,7 @@ fun EmailAuthScreen(
                     label = copy.apple,
                     provider = IdentityProvider.Apple,
                     light = false,
-                    action = {},
+                    action = launchNativeAppleAuth,
                     modifier = Modifier.weight(1f)
                 )
             }

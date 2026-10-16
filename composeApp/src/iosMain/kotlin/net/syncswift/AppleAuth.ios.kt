@@ -1,0 +1,97 @@
+package net.syncswift
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import kotlinx.cinterop.ExperimentalForeignApi
+import platform.AuthenticationServices.ASAuthorization
+import platform.AuthenticationServices.ASAuthorizationAppleIDCredential
+import platform.AuthenticationServices.ASAuthorizationAppleIDProvider
+import platform.AuthenticationServices.ASAuthorizationController
+import platform.AuthenticationServices.ASAuthorizationControllerDelegateProtocol
+import platform.AuthenticationServices.ASAuthorizationControllerPresentationContextProvidingProtocol
+import platform.AuthenticationServices.ASAuthorizationScopeEmail
+import platform.AuthenticationServices.ASAuthorizationScopeFullName
+import platform.Foundation.NSError
+import platform.Foundation.NSString
+import platform.Foundation.NSUTF8StringEncoding
+import platform.Foundation.create
+import platform.UIKit.UIApplication
+import platform.UIKit.UIWindow
+import platform.darwin.NSObject
+
+@OptIn(ExperimentalForeignApi::class)
+private class AppleSignInHandler(
+    private val onSuccess: (AppleUserData) -> Unit,
+    private val onError: (String) -> Unit
+) : NSObject(), ASAuthorizationControllerDelegateProtocol, ASAuthorizationControllerPresentationContextProvidingProtocol {
+
+    override fun authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithAuthorization: ASAuthorization
+    ) {
+        val credential = didCompleteWithAuthorization.credential as? ASAuthorizationAppleIDCredential
+        if (credential != null) {
+            val userIdentifier = credential.user
+            val idTokenData = credential.identityToken
+            val idToken = idTokenData?.let { NSString.create(it, NSUTF8StringEncoding).toString() } ?: userIdentifier
+            val email = credential.email ?: ""
+            val givenName = credential.fullName?.givenName
+            val familyName = credential.fullName?.familyName
+
+            onSuccess(
+                AppleUserData(
+                    idToken = idToken,
+                    email = email,
+                    userIdentifier = userIdentifier,
+                    givenName = givenName,
+                    familyName = familyName
+                )
+            )
+        } else {
+            onError("No Apple ID credentials received.")
+        }
+    }
+
+    override fun authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithError: NSError
+    ) {
+        val errorMsg = didCompleteWithError.localizedDescription ?: "Sign in with Apple was cancelled or failed."
+        onError(errorMsg)
+    }
+
+    override fun presentationAnchorForAuthorizationController(
+        controller: ASAuthorizationController
+    ): UIWindow {
+        val window = UIApplication.sharedApplication.keyWindow 
+            ?: UIApplication.sharedApplication.windows.firstOrNull() as? UIWindow
+            ?: UIWindow()
+        return window
+    }
+}
+
+@Composable
+actual fun rememberAppleAuthLauncher(
+    onSuccess: (userData: AppleUserData) -> Unit,
+    onError: (message: String) -> Unit
+): () -> Unit {
+    val handler = remember(onSuccess, onError) {
+        AppleSignInHandler(onSuccess, onError)
+    }
+
+    return {
+        try {
+            val provider = ASAuthorizationAppleIDProvider()
+            val request = provider.createRequest().apply {
+                requestedScopes = listOf(ASAuthorizationScopeFullName, ASAuthorizationScopeEmail)
+            }
+            val controller = ASAuthorizationController(listOf(request)).apply {
+                delegate = handler
+                presentationContextProvider = handler
+            }
+            controller.performRequests()
+        } catch (e: Exception) {
+            onError(e.message ?: "Could not launch Apple Sign-In.")
+        }
+    }
+}
