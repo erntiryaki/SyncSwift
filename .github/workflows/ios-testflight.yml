@@ -116,6 +116,7 @@ jobs:
       - name: Build Compose Multiplatform iOS Framework
         run: |
           chmod +x gradlew
+          sed -i '' '/org.gradle.java.home/d' gradle.properties 2>/dev/null || true
           ./gradlew :composeApp:assembleComposeAppReleaseXCFramework || ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
 
       - name: Create ExportOptions.plist
