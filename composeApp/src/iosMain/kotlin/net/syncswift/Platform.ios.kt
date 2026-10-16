@@ -2,12 +2,16 @@ package net.syncswift
 
 import platform.Foundation.NSDate
 import platform.Foundation.timeIntervalSince1970
+import platform.Foundation.preferredLanguages
 
 actual fun currentPlatform(): PlatformFlavor = PlatformFlavor.Ios
 actual fun currentTimeMs(): Long = (NSDate().timeIntervalSince1970 * 1000).toLong()
 actual fun getSystemLanguageCode(): String {
     return try {
-        val preferred = (platform.Foundation.NSLocale.preferredLanguages().firstOrNull() as? String) ?: "en"
+        val langs = platform.Foundation.NSUserDefaults.standardUserDefaults.objectForKey("AppleLanguages") as? List<*>
+        val preferred = (langs?.firstOrNull() as? String)
+            ?: (platform.Foundation.NSLocale.preferredLanguages.firstOrNull() as? String)
+            ?: "en"
         preferred.split("-", "_").first().lowercase()
     } catch (e: Throwable) {
         "en"
