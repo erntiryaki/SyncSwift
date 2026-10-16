@@ -142,9 +142,9 @@ jobs:
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>app-store</string>
+              <string>app-store-connect</string>
               <key>destination</key>
-              <string>upload</string>
+              <string>export</string>
               <key>signingStyle</key>
               <string>manual</string>
               <key>teamID</key>
@@ -154,6 +154,10 @@ jobs:
                   <key>net.syncswift</key>
                   <string>$ACTUAL_PROFILE_NAME</string>
               </dict>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
           </dict>
           </plist>
           EOF
@@ -185,11 +189,19 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || vars.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY || vars.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
-          mkdir -p ~/.appstoreconnect/private_keys
+          mkdir -p ~/.appstoreconnect/private_keys ~/.private_keys
           echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+          cp ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8 ~/.private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+
+          IPA_PATH=$(find $RUNNER_TEMP/export -name "*.ipa" | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "::error::Exported IPA not found in $RUNNER_TEMP/export"
+            exit 1
+          fi
+          echo "Found IPA to upload: $IPA_PATH"
 
           xcrun altool --upload-app \
-            -f $RUNNER_TEMP/export/iosApp.ipa \
+            -f "$IPA_PATH" \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
