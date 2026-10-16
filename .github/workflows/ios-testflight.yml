@@ -55,19 +55,25 @@ jobs:
 
       - name: Install Apple Certificate and Provisioning Profile
         env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 || vars.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD || vars.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 || vars.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD || vars.KEYCHAIN_PASSWORD }}
         run: |
           # Create temporary keychain
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
+          echo "Secret check:"
+          echo "  - BUILD_CERTIFICATE_BASE64 present: $([ -n "$BUILD_CERTIFICATE_BASE64" ] && echo 'YES' || echo 'NO')"
+          echo "  - P12_PASSWORD present: $([ -n "$P12_PASSWORD" ] && echo 'YES' || echo 'NO')"
+          echo "  - KEYCHAIN_PASSWORD present: $([ -n "$KEYCHAIN_PASSWORD" ] && echo 'YES' || echo 'NO')"
+          echo "  - BUILD_PROVISION_PROFILE_BASE64 present: $([ -n "$BUILD_PROVISION_PROFILE_BASE64" ] && echo 'YES' || echo 'NO')"
+
           # Check required secrets
           if [ -z "$BUILD_CERTIFICATE_BASE64" ]; then
-            echo "::error::BUILD_CERTIFICATE_BASE64 secret is missing or empty! Please ensure it is added under Repository Secrets."
+            echo "::error::BUILD_CERTIFICATE_BASE64 secret is missing or empty! Please check https://github.com/erntiryaki/SyncSwift/settings/secrets/actions"
             exit 1
           fi
           if [ -z "$P12_PASSWORD" ]; then
@@ -119,11 +125,11 @@ jobs:
               <key>signingStyle</key>
               <string>manual</string>
               <key>teamID</key>
-              <string>${{ secrets.APPLE_TEAM_ID }}</string>
+              <string>${{ secrets.APPLE_TEAM_ID || vars.APPLE_TEAM_ID }}</string>
               <key>provisioningProfiles</key>
               <dict>
                   <key>net.syncswift</key>
-                  <string>${{ secrets.PROVISIONING_PROFILE_SPECIFIER }}</string>
+                  <string>${{ secrets.PROVISIONING_PROFILE_SPECIFIER || vars.PROVISIONING_PROFILE_SPECIFIER }}</string>
               </dict>
           </dict>
           </plist>
@@ -146,9 +152,9 @@ jobs:
 
       - name: Upload IPA to App Store Connect / TestFlight
         env:
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || vars.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || vars.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY || vars.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
           echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
