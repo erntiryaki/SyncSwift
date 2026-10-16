@@ -72,15 +72,7 @@ class MainActivity : ComponentActivity() {
         if (type == "clipboard_sync") {
             val clipText = intent.getStringExtra("text") ?: ""
             if (clipText.isNotBlank()) {
-                try {
-                    val cm = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                    val clip = android.content.ClipData.newPlainText("SyncSwift", clipText)
-                    cm?.setPrimaryClip(clip)
-                    val copy = currentAppCopy()
-                    showNativeToast(copy.clipboardSynced.replace("%s", clipText.take(30)))
-                } catch (e: Exception) {
-                    android.util.Log.e("MainActivity", "Failed to set clipboard: ${e.message}")
-                }
+                net.syncswift.transfer.TransferEngine.applyReceivedClipboard(clipText, currentAppCopy())
             }
         } else if (type == "pair_request") {
             val senderHost = intent.getStringExtra("senderHost") ?: ""

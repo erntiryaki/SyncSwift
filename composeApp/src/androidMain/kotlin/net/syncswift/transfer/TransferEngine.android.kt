@@ -64,6 +64,33 @@ actual object TransferEngine {
     private var isServerRunning = false
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private var lastReceivedClipHash: Int = 0
+    private var lastReceivedClipTime: Long = 0L
+
+    fun applyReceivedClipboard(text: String, copy: net.syncswift.Copy): Boolean {
+        val hash = text.hashCode()
+        val now = System.currentTimeMillis()
+        if (hash == lastReceivedClipHash && now - lastReceivedClipTime < 5000L) {
+            return false
+        }
+        lastReceivedClipHash = hash
+        lastReceivedClipTime = now
+
+        appContext?.let { ctx ->
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val clip = ClipData.newPlainText("SyncSwift", text)
+                    cm?.setPrimaryClip(clip)
+                    showNativeToast(copy.clipboardSynced.replace("%s", text.take(30)))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to set clipboard: ${e.message}")
+                }
+            }
+        }
+        return true
+    }
+
     private val _transfers = MutableStateFlow<List<TransferItem>>(emptyList())
     actual val transfers: StateFlow<List<TransferItem>> = _transfers.asStateFlow()
 
@@ -234,37 +261,70 @@ actual object TransferEngine {
                     }
 
                     TYPE_CLIPBOARD -> {
+                        val senderName = input.readUTF()
                         val text = input.readUTF()
-                        Log.d(TAG, "Received clipboard: $text")
+                        Log.d(TAG, "Received clipboard transfer request from $senderName: $text")
 
-                        appContext?.let { ctx ->
-                            Handler(Looper.getMainLooper()).post {
-                                try {
-                                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                    val clip = ClipData.newPlainText("SyncSwift", text)
-                                    cm?.setPrimaryClip(clip)
-                                    val copy = currentAppCopy()
-                                    showNativeToast(copy.clipboardSynced.replace("%s", text.take(30)))
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to set clipboard: ${e.message}")
+                        val copy = currentAppCopy()
+                        val preview = text.take(35).replace("\n", " ")
+                        val transferRequest = IncomingTransferRequest(
+                            senderName = senderName,
+                            fileName = "${copy.clipboard}: $preview",
+                            fileSize = text.toByteArray().size.toLong(),
+                            mimeType = "text/plain"
+                        )
+
+                        ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
+
+                        // Launch watcher to monitor client disconnection / cancellation in real time
+                        val watchJob = scope.launch(Dispatchers.IO) {
+                            try {
+                                val b = input.read()
+                                if (b == -1 || b == 10) {
+                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                                 }
+                            } catch (_: Exception) {
+                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                             }
                         }
 
+                        // Wait for recipient to accept or reject in UI (max 35 seconds)
+                        val accepted = try {
+                            withTimeout(35000) {
+                                transferRequest.deferredResponse.await()
+                            }
+                        } catch (e: Exception) {
+                            ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                            false
+                        } finally {
+                            watchJob.cancel()
+                        }
+
+                        if (!accepted) {
+                            try {
+                                output.writeByte(RESP_REJECTED.toInt())
+                                output.flush()
+                            } catch (_: Exception) {}
+                            return
+                        }
+
+                        // Receiver accepted -> set clipboard and reply accepted
+                        applyReceivedClipboard(text, copy)
+
                         val item = TransferItem(
                             id = UUID.randomUUID().toString(),
-                            fileName = text.take(40).replace("\n", " "),
+                            fileName = "${copy.clipboard}: $preview",
                             fileSizeBytes = text.toByteArray().size.toLong(),
                             mimeType = "text/plain",
                             bytesTransferred = text.toByteArray().size.toLong(),
                             isSent = false,
-                            peerName = "Remote Device",
+                            peerName = senderName,
                             status = TransferStatus.COMPLETED,
                             timestamp = System.currentTimeMillis()
                         )
                         recordTransfer(item)
 
-                        output.writeByte(ACK.toInt())
+                        output.writeByte(RESP_ACCEPTED.toInt())
                         output.flush()
                     }
 
@@ -701,7 +761,7 @@ actual object TransferEngine {
                     // 2. Wait for receiver's decision
                     val response = input.readByte()
                     if (response != RESP_ACCEPTED) {
-                        updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+                        updateTransferProgress(transferId, 0, TransferStatus.FAILED)
                         OutgoingStatusManager.fail(copy.transferRejectedByRecipient)
                         withContext(Dispatchers.Main) {
                             showNativeToast(copy.transferDeclined)
@@ -1056,28 +1116,48 @@ actual object TransferEngine {
         onError: (String) -> Unit
     ) {
         scope.launch {
+            val copy = currentAppCopy()
             val transferId = UUID.randomUUID().toString()
             val item = TransferItem(
                 id = transferId,
-                fileName = text.take(40).replace("\n", " "),
+                fileName = "${copy.clipboard}: ${text.take(35).replace("\n", " ")}",
                 fileSizeBytes = text.toByteArray().size.toLong(),
                 mimeType = "text/plain",
                 bytesTransferred = text.toByteArray().size.toLong(),
                 isSent = true,
                 peerName = targetDeviceName,
-                status = TransferStatus.IN_PROGRESS,
+                status = TransferStatus.PENDING,
                 timestamp = System.currentTimeMillis()
             )
             recordTransfer(item)
 
+            var activeSocket: Socket? = null
+            val cancelClipboard: () -> Unit = {
+                try {
+                    activeSocket?.close()
+                } catch (_: Exception) {}
+                updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+            }
+
+            OutgoingStatusManager.show(
+                type = OutgoingStatusType.FILE,
+                deviceName = targetDeviceName,
+                fileName = "${copy.clipboard}: ${text.take(30).replace("\n", " ")}",
+                totalBytes = text.toByteArray().size.toLong(),
+                step = OutgoingStep.WAITING_APPROVAL,
+                message = copy.waitingForRecipientApproval,
+                onCancel = cancelClipboard
+            )
+
             try {
                 val socket = Socket()
+                activeSocket = socket
                 try {
                     socket.connect(InetSocketAddress(targetHost, targetPort), 6000)
                 } catch (e: Exception) {
+                    activeSocket = null
                     val pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, targetDeviceName)
                     if (!pushToken.isNullOrBlank()) {
-                        val copy = currentAppCopy()
                         val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
                         val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
                         val sent = ConnectionManager.sendFcmNotification(
@@ -1092,6 +1172,7 @@ actual object TransferEngine {
                         )
                         if (sent) {
                             updateTransferProgress(transferId, text.toByteArray().size.toLong(), TransferStatus.COMPLETED)
+                            OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", text.take(30)))
                             withContext(Dispatchers.Main) {
                                 showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
                                 onSuccess()
@@ -1100,8 +1181,8 @@ actual object TransferEngine {
                         }
                     }
 
-                    val copy = currentAppCopy()
                     updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                    OutgoingStatusManager.fail(copy.deviceNotAvailable)
                     withContext(Dispatchers.Main) {
                         showNativeToast(copy.deviceNotAvailable)
                         onError(copy.deviceNotAvailable)
@@ -1110,31 +1191,37 @@ actual object TransferEngine {
                 }
 
                 socket.use { s ->
-                    s.soTimeout = 15000
+                    s.soTimeout = 35000
                     val output = DataOutputStream(s.getOutputStream())
                     val input = DataInputStream(s.getInputStream())
 
                     output.writeByte(PROTOCOL_VERSION.toInt())
                     output.writeByte(TYPE_CLIPBOARD.toInt())
+                    output.writeUTF(Build.MODEL)
                     output.writeUTF(text)
                     output.flush()
 
-                    val ack = input.readByte()
-                    if (ack == ACK) {
-                        val copy = currentAppCopy()
+                    val resp = input.readByte()
+                    if (resp == RESP_ACCEPTED || resp == ACK) {
                         updateTransferProgress(transferId, text.toByteArray().size.toLong(), TransferStatus.COMPLETED)
+                        OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", text.take(30)))
                         withContext(Dispatchers.Main) {
                             showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
                             onSuccess()
                         }
                     } else {
-                        throw Exception("Invalid ACK from receiver")
+                        updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                        OutgoingStatusManager.fail(copy.transferDeclined)
+                        withContext(Dispatchers.Main) {
+                            showNativeToast(copy.transferDeclined)
+                            onError(copy.transferDeclined)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Send clipboard failed: ${e.message}")
-                val copy = currentAppCopy()
                 updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                OutgoingStatusManager.fail(copy.deviceNotAvailable)
                 withContext(Dispatchers.Main) {
                     showNativeToast(copy.deviceNotAvailable)
                     onError(copy.deviceNotAvailable)
@@ -1230,7 +1317,7 @@ actual object TransferEngine {
         saveTransfers()
     }
 
-    private fun updateTransferProgress(id: String, bytes: Long, status: TransferStatus, localFilePath: String? = null) {
+    fun updateTransferProgress(id: String, bytes: Long, status: TransferStatus, localFilePath: String? = null) {
         val current = _transfers.value.toMutableList()
         val index = current.indexOfFirst { it.id == id }
         if (index >= 0) {

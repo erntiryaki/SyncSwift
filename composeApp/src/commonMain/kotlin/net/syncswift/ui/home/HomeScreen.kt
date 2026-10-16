@@ -570,6 +570,9 @@ private fun BoxlessTransferRow(
     isSent: Boolean,
     status: TransferStatus = TransferStatus.COMPLETED
 ) {
+    val isFailed = status == TransferStatus.FAILED || status == TransferStatus.CANCELLED
+    val statusColor = if (isFailed) ErrorRed else SuccessGreen
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -580,13 +583,13 @@ private fun BoxlessTransferRow(
             modifier = Modifier
                 .size(38.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(SuccessGreen.copy(alpha = 0.12f)),
+                .background(statusColor.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             if (isSent) {
-                OutgoingArrowIcon(Modifier.size(18.dp), color = SuccessGreen)
+                OutgoingArrowIcon(Modifier.size(18.dp), color = statusColor)
             } else {
-                IncomingArrowIcon(Modifier.size(18.dp), color = SuccessGreen)
+                IncomingArrowIcon(Modifier.size(18.dp), color = statusColor)
             }
         }
         Spacer(Modifier.width(14.dp))
@@ -600,7 +603,7 @@ private fun BoxlessTransferRow(
             )
             Text(
                 text = info,
-                color = Mist,
+                color = if (isFailed) ErrorRed else Mist,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 2.dp)
             )
@@ -616,7 +619,7 @@ private fun BoxlessTransferRow(
             TransferStatus.COMPLETED -> {
                 AnimatedCheckCircleIcon(Modifier.size(20.dp))
             }
-            TransferStatus.FAILED -> {
+            TransferStatus.FAILED, TransferStatus.CANCELLED -> {
                 Box(
                     modifier = Modifier
                         .size(20.dp)

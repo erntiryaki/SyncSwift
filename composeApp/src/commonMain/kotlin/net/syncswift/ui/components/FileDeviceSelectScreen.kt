@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,14 @@ fun FileDeviceSelectScreen(
     onSelectDevice: (DiscoveredDevice) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val targetDevices = remember(devices) {
+        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+        devices.filter { dev ->
+            !dev.isSelf &&
+            (self == null || (dev.host != self.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(self.name)))
+        }.distinctBy { it.host to cleanDeviceDisplayName(it.name) }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -137,7 +146,7 @@ fun FileDeviceSelectScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            if (devices.isEmpty()) {
+            if (targetDevices.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -157,7 +166,7 @@ fun FileDeviceSelectScreen(
                         .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(devices) { dev ->
+                    items(targetDevices) { dev ->
                         val connected = isDeviceConnected(dev)
                         Surface(
                             modifier = Modifier

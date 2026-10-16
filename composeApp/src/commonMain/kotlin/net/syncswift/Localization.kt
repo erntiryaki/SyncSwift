@@ -361,6 +361,9 @@ class Copy {
     var trialPricingMonthlySummary: String = "$2.99/mo, cancel anytime"
     var remindBeforeTrialEnds: String = "Remind me before the trial ends"
     var subscriptionTerms: String = "Subscription Terms"
+    var alreadyProTitle: String = "You are already a Pro subscriber."
+    var proStartDateLabel: String = "Start Date: %s"
+    var proRenewalDateLabel: String = "End / Renewal Date: %s (%d days left)"
 
     // Full-page Transfer & Status Screens
     var fileTransferScreenTitle: String = "File Transfer"

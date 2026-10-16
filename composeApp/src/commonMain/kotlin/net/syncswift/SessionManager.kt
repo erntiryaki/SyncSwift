@@ -45,5 +45,9 @@ expect object SessionManager {
 
     fun saveProStatus(isPro: Boolean)
     fun getSavedProStatus(): Boolean
+    fun saveProStartDateMillis(millis: Long)
+    fun getProStartDateMillis(): Long
+    fun saveProRenewalDateMillis(millis: Long)
+    fun getProRenewalDateMillis(): Long
 }
 

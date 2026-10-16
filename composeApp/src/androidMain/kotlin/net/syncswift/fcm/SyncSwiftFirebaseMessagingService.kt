@@ -76,16 +76,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
             "clipboard_sync" -> {
                 val clipText = data["text"] ?: ""
                 if (clipText.isNotBlank()) {
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        try {
-                            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                            val clip = android.content.ClipData.newPlainText("SyncSwift", clipText)
-                            cm?.setPrimaryClip(clip)
-                            net.syncswift.showNativeToast(copy.clipboardSynced.replace("%s", clipText.take(30)))
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to set clipboard: ${e.message}")
-                        }
-                    }
+                    net.syncswift.transfer.TransferEngine.applyReceivedClipboard(clipText, copy)
                 }
             }
             "pair_request" -> {
@@ -142,6 +133,10 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
             }
             "file_rejected" -> {
+                val transferId = data["transferId"]
+                if (!transferId.isNullOrBlank()) {
+                    net.syncswift.transfer.TransferEngine.updateTransferProgress(transferId, 0, net.syncswift.transfer.TransferStatus.FAILED)
+                }
                 net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationFileRejectedStatus.replace("%s", senderName))
             }
         }

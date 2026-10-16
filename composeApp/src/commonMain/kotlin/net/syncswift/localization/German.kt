@@ -333,6 +333,9 @@ val GermanCopy = Copy().apply {
     trialPricingMonthlySummary = "$2.99/Monat, jederzeit kündbar"
     remindBeforeTrialEnds = "Vor Ablauf des Testzeitraums erinnern"
     subscriptionTerms = "Abonnementbedingungen"
+    alreadyProTitle = "Sie sind bereits ein Pro-Abonnent."
+    proStartDateLabel = "Startdatum: %s"
+    proRenewalDateLabel = "End-/Verlängerungsdatum: %s (noch %d Tage)"
 
     // Vollbild-Transfer- und Statusseiten
     fileTransferScreenTitle = "Dateiübertragung"

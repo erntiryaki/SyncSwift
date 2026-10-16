@@ -73,6 +73,42 @@ object SubscriptionManager {
     fun setProState(pro: Boolean) {
         _isPro.value = pro
         SessionManager.saveProStatus(pro)
+        if (pro) {
+            if (SessionManager.getProStartDateMillis() <= 0L) {
+                SessionManager.saveProStartDateMillis(net.syncswift.currentTimeMs())
+            }
+            if (SessionManager.getProRenewalDateMillis() <= 0L) {
+                SessionManager.saveProRenewalDateMillis(net.syncswift.currentTimeMs() + 365L * 24 * 60 * 60 * 1000L)
+            }
+        }
+    }
+
+    data class ProSubscriptionDates(
+        val startDateFormatted: String,
+        val renewalDateFormatted: String,
+        val daysLeft: Int
+    )
+
+    fun getProSubscriptionDates(): ProSubscriptionDates {
+        var startMs = SessionManager.getProStartDateMillis()
+        if (startMs <= 0L) {
+            startMs = net.syncswift.currentTimeMs()
+            SessionManager.saveProStartDateMillis(startMs)
+        }
+        var renewalMs = SessionManager.getProRenewalDateMillis()
+        if (renewalMs <= 0L) {
+            renewalMs = startMs + 365L * 24 * 60 * 60 * 1000L
+            SessionManager.saveProRenewalDateMillis(renewalMs)
+        }
+        val now = net.syncswift.currentTimeMs()
+        val diff = (renewalMs - now).coerceAtLeast(0)
+        val days = (diff / (1000L * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+
+        return ProSubscriptionDates(
+            startDateFormatted = net.syncswift.formatEpochToDate(startMs),
+            renewalDateFormatted = net.syncswift.formatEpochToDate(renewalMs),
+            daysLeft = days
+        )
     }
 
     fun triggerPaywall(reason: PaywallReason) {

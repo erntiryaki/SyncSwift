@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
 import net.syncswift.LaptopVectorIcon
+import net.syncswift.PhoneVectorIcon
 import net.syncswift.TransferVectorIcon
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
@@ -41,6 +42,10 @@ fun ConnectedDeviceActionScreen(
     onDismiss: () -> Unit
 ) {
     val cleanName = cleanDeviceDisplayName(device.name)
+    val isMobile = device.osType.equals("Android", ignoreCase = true) ||
+                   device.osType.equals("iOS", ignoreCase = true) ||
+                   device.name.contains("Phone", ignoreCase = true) ||
+                   device.name.contains("Mobile", ignoreCase = true)
 
     Box(
         modifier = Modifier
@@ -105,7 +110,11 @@ fun ConnectedDeviceActionScreen(
                             .background(SuccessGreen),
                         contentAlignment = Alignment.Center
                     ) {
-                        LaptopVectorIcon(Modifier.size(34.dp), color = Color.White)
+                        if (isMobile) {
+                            PhoneVectorIcon(Modifier.size(34.dp), color = Color.White)
+                        } else {
+                            LaptopVectorIcon(Modifier.size(34.dp), color = Color.White)
+                        }
                     }
                 }
 

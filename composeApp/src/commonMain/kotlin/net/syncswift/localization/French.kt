@@ -333,6 +333,9 @@ val FrenchCopy = Copy().apply {
     trialPricingMonthlySummary = "2,99 $/mois, résiliable à tout moment"
     remindBeforeTrialEnds = "Me rappeler avant la fin de l'essai"
     subscriptionTerms = "Conditions d'abonnement"
+    alreadyProTitle = "Vous êtes déjà abonné Pro."
+    proStartDateLabel = "Date de début : %s"
+    proRenewalDateLabel = "Date de fin / renouvellement : %s (%d jours restants)"
 
     // Écrans de transfert et d'état en plein écran
     fileTransferScreenTitle = "Transfert de fichier"

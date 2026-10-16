@@ -198,33 +198,6 @@ fun PaywallScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 14.dp)
                         ) {
-                            // Centered "Önerilen" Badge with Crown Icon (Soft Gold)
-                            Box(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .background(softGold.copy(alpha = 0.14f))
-                                        .border(1.dp, softGold.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                                        .padding(horizontal = 12.dp, vertical = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    net.syncswift.CrownVectorIcon(Modifier.size(13.dp), color = softGold)
-                                    Text(
-                                        text = "Önerilen",
-                                        color = softGold,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.3.sp
-                                    )
-                                }
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -234,30 +207,12 @@ fun PaywallScreen(
                                     modifier = Modifier.weight(1f, fill = false),
                                     verticalArrangement = Arrangement.Center
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(
-                                            text = copy.planYearly,
-                                            color = Cloud,
-                                            fontSize = 16.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(Blue.copy(alpha = 0.18f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "${copy.planFreeTitle} (7 ${copy.planFreeSubtitle})",
-                                                color = Blue,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        }
-                                    }
+                                    Text(
+                                        text = copy.planYearly,
+                                        color = Cloud,
+                                        fontSize = 16.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                     Spacer(Modifier.height(4.dp))
                                     Text(
                                         text = copy.trialPricingYearlySummary,
@@ -462,6 +417,105 @@ fun PaywallScreen(
                             }
                         }
                     )
+                }
+            }
+        }
+
+        // Overlay if user is ALREADY PRO: Frosted layer with active dates
+        val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+        if (isPro) {
+            val dates = remember { net.syncswift.subscription.SubscriptionManager.getProSubscriptionDates() }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Night.copy(alpha = 0.88f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { /* block background touches */ },
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = CardSurface,
+                    border = BorderStroke(1.5.dp, SuccessGreen.copy(alpha = 0.45f)),
+                    shadowElevation = 16.dp,
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(SuccessGreen.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            net.syncswift.CrownVectorIcon(Modifier.size(32.dp), color = SuccessGreen)
+                        }
+
+                        Text(
+                            text = copy.alreadyProTitle,
+                            color = Cloud,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            letterSpacing = (-0.3).sp
+                        )
+
+                        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.35f))
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = copy.proStartDateLabel.replace("%s", dates.startDateFormatted),
+                                color = Mist,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = copy.proRenewalDateLabel
+                                    .replace("%s", dates.renewalDateFormatted)
+                                    .replace("%d", dates.daysLeft.toString()),
+                                color = Cloud,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PillButtonBg,
+                                contentColor = PillButtonText
+                            )
+                        ) {
+                            Text(
+                                text = copy.close,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }

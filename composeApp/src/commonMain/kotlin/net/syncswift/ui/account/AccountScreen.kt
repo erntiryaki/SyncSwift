@@ -37,7 +37,8 @@ fun AccountScreen(
     onOpenHelpSupport: () -> Unit,
     onLogout: () -> Unit,
     onSignInRequested: () -> Unit = {},
-    onOpenConnectedDevices: () -> Unit = {}
+    onOpenConnectedDevices: () -> Unit = {},
+    onOpenConnectDesktop: () -> Unit = {}
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showProModal by remember { mutableStateOf(false) }
@@ -295,7 +296,7 @@ fun AccountScreen(
                 title = copy.connectToDesktop,
                 subtitle = copy.connectToDesktopDesc,
                 icon = { DesktopVectorIcon(Modifier.size(20.dp), color = Blue) },
-                onClick = { showDesktopConnectModal = true }
+                onClick = onOpenConnectDesktop
             )
             HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
 

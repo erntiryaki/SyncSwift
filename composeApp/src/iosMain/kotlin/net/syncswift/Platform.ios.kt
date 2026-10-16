@@ -29,3 +29,11 @@ actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
         platform.UIKit.UIApplication.sharedApplication.openURL(filesAppUrl)
     }
 }
+
+actual fun formatEpochToDate(epochMillis: Long): String {
+    val date = platform.Foundation.NSDate.dateWithTimeIntervalSince1970(epochMillis / 1000.0)
+    val formatter = platform.Foundation.NSDateFormatter().apply {
+        dateFormat = "dd.MM.yyyy"
+    }
+    return formatter.stringFromDate(date)
+}

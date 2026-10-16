@@ -333,6 +333,9 @@ val ArabicCopy = Copy().apply {
     trialPricingMonthlySummary = "2.99 دولار/شهرياً، يمكنك الإلغاء في أي وقت"
     remindBeforeTrialEnds = "تذكيري قبل انتهاء الفترة التجريبية"
     subscriptionTerms = "شروط الاشتراك"
+    alreadyProTitle = "أنت مشترك في Pro بالفعل."
+    proStartDateLabel = "تاريخ البدء: %s"
+    proRenewalDateLabel = "تاريخ الانتهاء / التجديد: %s (متبقي %d يوم)"
 
     // شاشات النقل والحالة بملء الشاشة
     fileTransferScreenTitle = "نقل الملفات"

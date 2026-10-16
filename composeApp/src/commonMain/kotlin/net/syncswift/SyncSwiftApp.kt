@@ -84,6 +84,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     var inEditProfile by remember { mutableStateOf(false) }
     var inHelpSupport by remember { mutableStateOf(false) }
     var inConnectedDevices by remember { mutableStateOf(false) }
+    var inConnectDesktop by remember { mutableStateOf(false) }
 
     var authAlert by remember { mutableStateOf(AuthAlertState.None) }
     // Empty by default — filled when OTP is actually sent; prevents guessing before send
@@ -101,6 +102,13 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
+    val otherDevices = remember(discoveredDevices) {
+        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+        discoveredDevices.filter { dev ->
+            !dev.isSelf &&
+            (self == null || (dev.host != self.host && net.syncswift.discovery.cleanDeviceDisplayName(dev.name) != net.syncswift.discovery.cleanDeviceDisplayName(self.name)))
+        }.distinctBy { it.host to net.syncswift.discovery.cleanDeviceDisplayName(it.name) }
+    }
     val pendingPairRequest by net.syncswift.connection.ConnectionManager.pendingPairRequest.collectAsState()
     val pendingTransferRequest by net.syncswift.connection.ConnectionManager.pendingTransferRequest.collectAsState()
     val allTransfers by net.syncswift.transfer.TransferEngine.transfers.collectAsState()
@@ -126,6 +134,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
     var targetedDevice by remember { mutableStateOf<net.syncswift.discovery.DiscoveredDevice?>(null) }
     var pendingFileToSend by remember { mutableStateOf<Triple<String, ByteArray, String>?>(null) }
+    var pendingClipboardToSend by remember { mutableStateOf<String?>(null) }
     var showDeviceSelectModal by remember { mutableStateOf(false) }
 
     val pickFile = net.syncswift.transfer.rememberFilePicker { fileName, bytes, mimeType ->
@@ -146,7 +155,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 fileBytes = bytes,
                 mimeType = mimeType
             )
-        } else if (discoveredDevices.isEmpty()) {
+        } else if (otherDevices.isEmpty()) {
             showNativeToast(copy.noDevicesOnNetwork)
         } else {
             pendingFileToSend = Triple(fileName, bytes, mimeType)
@@ -186,6 +195,8 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         BackHandler { inHelpSupport = false }
     } else if (inConnectedDevices) {
         BackHandler { inConnectedDevices = false }
+    } else if (inConnectDesktop) {
+        BackHandler { inConnectDesktop = false }
     } else if (screen == AuthStep.Home && mainTab != net.syncswift.ui.components.MainNavTab.Home) {
         BackHandler { mainTab = net.syncswift.ui.components.MainNavTab.Home }
     } else if (screen == AuthStep.Email && authProvider == IdentityProvider.Local) {
@@ -384,6 +395,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     inEditProfile -> 2
                                     inHelpSupport -> 3
                                     inConnectedDevices -> 4
+                                    inConnectDesktop -> 5
                                     else -> 0
                                 }
                                 AnimatedContent(
@@ -437,6 +449,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             copy = copy,
                                             onBack = { inConnectedDevices = false }
                                         )
+                                        5 -> net.syncswift.ui.account.ConnectDesktopScreen(
+                                            copy = copy,
+                                            onDismiss = { inConnectDesktop = false }
+                                        )
                                         else -> {
                                             Column(Modifier.fillMaxSize()) {
                                                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -463,17 +479,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                     val clipText = clipboardManager.getText()?.text ?: ""
                                                                     if (clipText.isBlank()) {
                                                                         showNativeToast(copy.noTextInClipboard)
-                                                                    } else if (discoveredDevices.isEmpty()) {
+                                                                    } else if (otherDevices.isEmpty()) {
                                                                         showNativeToast(copy.noDevicesOnNetwork)
                                                                     } else {
-                                                                        discoveredDevices.forEach { dev ->
-                                                                            net.syncswift.transfer.TransferEngine.sendClipboard(
-                                                                                targetHost = dev.host,
-                                                                                targetPort = dev.port,
-                                                                                targetDeviceName = dev.name,
-                                                                                text = clipText
-                                                                            )
-                                                                        }
+                                                                        pendingClipboardToSend = clipText
                                                                     }
                                                                 },
                                                                 onDeviceClick = { dev ->
@@ -516,6 +525,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                 },
                                                                 onOpenConnectedDevices = {
                                                                     inConnectedDevices = true
+                                                                },
+                                                                onOpenConnectDesktop = {
+                                                                    inConnectDesktop = true
                                                                 }
                                                             )
                                                         }
@@ -736,7 +748,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 net.syncswift.ui.components.FileDeviceSelectScreen(
                                     fileName = fileData.first,
                                     fileSizeFormatted = formattedSize,
-                                    devices = discoveredDevices,
+                                    devices = otherDevices,
                                     copy = copy,
                                     isDeviceConnected = { dev -> net.syncswift.connection.ConnectionManager.isDeviceConnected(dev) },
                                     onSelectDevice = { dev ->
@@ -754,6 +766,42 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     onDismiss = {
                                         showDeviceSelectModal = false
                                         pendingFileToSend = null
+                                    }
+                                )
+                            }
+                        }
+
+                        // Device Selection Screen for Sending Clipboard (Full Page, No Modal)
+                        AnimatedVisibility(
+                            visible = pendingClipboardToSend != null,
+                            enter = fadeIn(animationSpec = tween(220)),
+                            exit = fadeOut(animationSpec = tween(180))
+                        ) {
+                            val clipText = pendingClipboardToSend
+                            if (clipText != null) {
+                                androidx.activity.compose.BackHandler {
+                                    pendingClipboardToSend = null
+                                }
+                                val previewText = clipText.take(35).replace("\n", " ")
+                                val sizeBytes = clipText.encodeToByteArray().size.toLong()
+                                val formattedSize = "${net.syncswift.transfer.formatBytes(sizeBytes)} · ${clipText.length} chars"
+                                net.syncswift.ui.components.FileDeviceSelectScreen(
+                                    fileName = "${copy.clipboard}: $previewText",
+                                    fileSizeFormatted = formattedSize,
+                                    devices = otherDevices,
+                                    copy = copy,
+                                    isDeviceConnected = { dev -> net.syncswift.connection.ConnectionManager.isDeviceConnected(dev) },
+                                    onSelectDevice = { dev ->
+                                        pendingClipboardToSend = null
+                                        net.syncswift.transfer.TransferEngine.sendClipboard(
+                                            targetHost = dev.host,
+                                            targetPort = dev.port,
+                                            targetDeviceName = dev.name,
+                                            text = clipText
+                                        )
+                                    },
+                                    onDismiss = {
+                                        pendingClipboardToSend = null
                                     }
                                 )
                             }

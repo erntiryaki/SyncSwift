@@ -177,4 +177,20 @@ actual object SessionManager {
     actual fun getSavedProStatus(): Boolean {
         return getPrefs()?.getBoolean("is_pro_member", false) ?: false
     }
+
+    actual fun saveProStartDateMillis(millis: Long) {
+        getPrefs()?.edit()?.putLong("pro_start_date_ms", millis)?.apply()
+    }
+
+    actual fun getProStartDateMillis(): Long {
+        return getPrefs()?.getLong("pro_start_date_ms", 0L) ?: 0L
+    }
+
+    actual fun saveProRenewalDateMillis(millis: Long) {
+        getPrefs()?.edit()?.putLong("pro_renewal_date_ms", millis)?.apply()
+    }
+
+    actual fun getProRenewalDateMillis(): Long {
+        return getPrefs()?.getLong("pro_renewal_date_ms", 0L) ?: 0L
+    }
 }

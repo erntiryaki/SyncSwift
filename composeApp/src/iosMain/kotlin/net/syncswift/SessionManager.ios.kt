@@ -131,4 +131,20 @@ actual object SessionManager {
     actual fun getSavedProStatus(): Boolean {
         return NSUserDefaults.standardUserDefaults.boolForKey("is_pro_member")
     }
+
+    actual fun saveProStartDateMillis(millis: Long) {
+        NSUserDefaults.standardUserDefaults.setInteger(millis, "pro_start_date_ms")
+    }
+
+    actual fun getProStartDateMillis(): Long {
+        return NSUserDefaults.standardUserDefaults.integerForKey("pro_start_date_ms")
+    }
+
+    actual fun saveProRenewalDateMillis(millis: Long) {
+        NSUserDefaults.standardUserDefaults.setInteger(millis, "pro_renewal_date_ms")
+    }
+
+    actual fun getProRenewalDateMillis(): Long {
+        return NSUserDefaults.standardUserDefaults.integerForKey("pro_renewal_date_ms")
+    }
 }

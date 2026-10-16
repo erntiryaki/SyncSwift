@@ -7,8 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -115,7 +117,8 @@ fun TransferStatusScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false)
-                    .padding(vertical = 32.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -307,7 +310,7 @@ private fun TransferInProgressSection(
     val percentage = (progress * 100).toInt()
 
     Box(
-        modifier = Modifier.size(160.dp),
+        modifier = Modifier.size(150.dp),
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator(
@@ -315,10 +318,13 @@ private fun TransferInProgressSection(
             modifier = Modifier.fillMaxSize(),
             color = Blue,
             trackColor = InputBg,
-            strokeWidth = 10.dp
+            strokeWidth = 9.dp
         )
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        ) {
             Text(
                 text = "$percentage%",
                 color = Cloud,
@@ -326,40 +332,51 @@ private fun TransferInProgressSection(
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.5).sp
             )
-            Text(
-                text = copy.transferringFile,
-                color = Mist,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
         }
     }
 
-    Spacer(Modifier.height(36.dp))
+    Spacer(Modifier.height(24.dp))
 
     Text(
         text = copy.sendingFileModalTitle,
         color = Cloud,
-        fontSize = 22.sp,
+        fontSize = 20.sp,
         fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = 16.dp)
     )
 
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(6.dp))
+
+    Text(
+        text = copy.transferringFile,
+        color = Mist,
+        fontSize = 13.5.sp,
+        fontWeight = FontWeight.Medium,
+        textAlign = TextAlign.Center,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = 20.dp)
+    )
+
+    Spacer(Modifier.height(8.dp))
 
     Text(
         text = "${formatBytes(state.transferredBytes)} / ${formatBytes(state.totalBytes)}",
         color = Blue,
-        fontSize = 15.sp,
+        fontSize = 14.5.sp,
         fontWeight = FontWeight.SemiBold
     )
 
     if (state.fileName != null) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = InputBg.copy(alpha = 0.5f),
-            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.2f))
+            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.2f)),
+            modifier = Modifier.padding(horizontal = 16.dp)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),

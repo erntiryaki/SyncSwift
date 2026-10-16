@@ -194,17 +194,20 @@ private fun TransferItemDetailCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val isFailed = item.status == TransferStatus.FAILED || item.status == TransferStatus.CANCELLED
+                val statusColor = if (isFailed) ErrorRed else SuccessGreen
+
                 Box(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(SuccessGreen.copy(alpha = 0.12f)),
+                        .background(statusColor.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (item.isSent) {
-                        OutgoingArrowIcon(Modifier.size(20.dp), color = SuccessGreen)
+                        OutgoingArrowIcon(Modifier.size(20.dp), color = statusColor)
                     } else {
-                        IncomingArrowIcon(Modifier.size(20.dp), color = SuccessGreen)
+                        IncomingArrowIcon(Modifier.size(20.dp), color = statusColor)
                     }
                 }
                 Spacer(Modifier.width(14.dp))
@@ -219,13 +222,13 @@ private fun TransferItemDetailCard(
                     val peer = if (item.peerName.isNotBlank()) net.syncswift.discovery.cleanDeviceDisplayName(item.peerName) else if (item.isSent) copy.transfersSent else copy.transfersReceived
                     val statusText = when (item.status) {
                         TransferStatus.COMPLETED -> "${item.formattedSize} · $peer"
-                        TransferStatus.FAILED -> "${item.formattedSize} · ${copy.transferFailedStatus}"
+                        TransferStatus.FAILED, TransferStatus.CANCELLED -> "${item.formattedSize} · ${copy.transferFailedStatus}"
                         TransferStatus.IN_PROGRESS -> "${item.formattedSize} · ${(item.progress * 100).toInt()}%"
                         else -> item.formattedSize
                     }
                     Text(
                         text = statusText,
-                        color = if (item.status == TransferStatus.FAILED) ErrorRed else Mist,
+                        color = if (isFailed) ErrorRed else Mist,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 2.dp)
                     )
@@ -247,7 +250,7 @@ private fun TransferItemDetailCard(
                             checkColor = Color.White
                         )
                     }
-                    TransferStatus.FAILED -> {
+                    TransferStatus.FAILED, TransferStatus.CANCELLED -> {
                         Box(
                             modifier = Modifier
                                 .size(32.dp)

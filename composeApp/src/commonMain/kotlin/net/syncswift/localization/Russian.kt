@@ -333,6 +333,9 @@ val RussianCopy = Copy().apply {
     trialPricingMonthlySummary = "$2.99/мес, отмена в любое время"
     remindBeforeTrialEnds = "Напомнить перед окончанием пробного периода"
     subscriptionTerms = "Условия подписки"
+    alreadyProTitle = "Вы уже являетесь подписчиком Pro."
+    proStartDateLabel = "Дата начала: %s"
+    proRenewalDateLabel = "Дата окончания / продления: %s (осталось %d дн.)"
 
     // Полноэкранные страницы передачи и статуса
     fileTransferScreenTitle = "Передача файла"
