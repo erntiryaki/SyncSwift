@@ -319,4 +319,31 @@ val TurkishCopy = Copy().apply {
     restorePurchases = "Satın Alımları Geri Yükle"
     noActiveSubscription = "Aktif abonelik bulunamadı"
 
+    // 7 Günlük Deneme Paywall Sayfası
+    designYourTrial = "Denemeni Başlat"
+    trialBenefit1 = "İlk 7 günün tadını çıkar, tamamen ücretsiz"
+    trialBenefit2 = "Uygulamadan veya mağaza hesabından dilediğin an iptal et"
+    trialBenefit3 = "Sıfır hız ve boyut sınırı ile sınırsız dosya transferi"
+    trialBenefit4 = "Farklı ağlar ve mobil veri üzerinden uzaktan transfer"
+    trialBenefit5 = "%100 Reklamsız deneyim ve arka planda otomatik teslimat"
+    planFreeTitle = "Ücretsiz"
+    planFreeSubtitle = "7 gün"
+    planMonthlyPrice = "2.99 $"
+    trialPricingYearlySummary = "7 gün ücretsiz, sonra yılda sadece 19.99 $ (~1.66 $/ay)"
+    trialPricingMonthlySummary = "2.99 $/ay, dilediğin an iptal et"
+    remindBeforeTrialEnds = "Deneme süresi bitmeden bana hatırlat"
+    subscriptionTerms = "Abonelik Şartları"
+
+    // Tam Sayfa Transfer & Durum Ekranları
+    fileTransferScreenTitle = "Dosya Transferi"
+    incomingTransferScreenTitle = "Gelen Dosya Transferi"
+    connectionScreenTitle = "Cihaz Bağlantısı"
+    transferCompleted = "Transfer Tamamlandı"
+    transferFailed = "Transfer Başarısız"
+    waitingForRecipientApproval = "Alıcının kabul etmesi bekleniyor..."
+    transferringFile = "Dosya aktarılıyor..."
+    doneAction = "Tamamla"
+    closeAction = "Kapat"
+    cancelAction = "İptal"
 }
+

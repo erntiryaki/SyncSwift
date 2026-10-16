@@ -275,10 +275,9 @@ fun AccountScreen(
 
             // Connected Devices
             val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
-            val totalConnectedCount = discoveredDevices.size + 1
             BoxlessMenuItem(
                 title = copy.connectedDevicesMenu,
-                subtitle = copy.formatDeviceCount(totalConnectedCount),
+                subtitle = copy.connectedDevicesMenuDesc,
                 icon = { DevicesIcon(Modifier.size(20.dp), color = Mist) },
                 onClick = onOpenConnectedDevices
             )

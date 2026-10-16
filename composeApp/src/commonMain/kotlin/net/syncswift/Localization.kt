@@ -31,7 +31,7 @@ class Copy {
     var apple: String = "Continue with Apple"
     var or: String = "or"
     var signIn: String = "Sign in"
-    var devices: String = "devices"
+    var devices: String = "device"
     var send: String = "Send"
     var clipboard: String = "Shared clipboard"
     var transfers: String = "Transfers"
@@ -346,6 +346,35 @@ class Copy {
     var startMonthlyCta: String = "Start Monthly ($2.99)"
     var restorePurchases: String = "Restore Purchases"
     var noActiveSubscription: String = "No active subscription found"
+
+    // Paywall 7-Day Trial Page (Design Your Trial)
+    var designYourTrial: String = "Design Your Trial"
+    var trialBenefit1: String = "Enjoy your first 7 days, it's free"
+    var trialBenefit2: String = "Cancel anytime from app or store"
+    var trialBenefit3: String = "Unlimited file transfers with zero limits"
+    var trialBenefit4: String = "Remote transfer & connect across any network"
+    var trialBenefit5: String = "100% Ad-free experience & background delivery"
+    var planFreeTitle: String = "Free"
+    var planFreeSubtitle: String = "7 days"
+    var planMonthlyPrice: String = "$2.99"
+    var trialPricingYearlySummary: String = "7 days free, then just $19.99/yr (~$1.66/mo)"
+    var trialPricingMonthlySummary: String = "$2.99/mo, cancel anytime"
+    var remindBeforeTrialEnds: String = "Remind me before the trial ends"
+    var subscriptionTerms: String = "Subscription Terms"
+
+    // Full-page Transfer & Status Screens
+    var fileTransferScreenTitle: String = "File Transfer"
+    var incomingTransferScreenTitle: String = "Incoming File Transfer"
+    var connectionScreenTitle: String = "Device Connection"
+    var privacyPolicy: String = "Privacy Policy"
+    var termsOfUse: String = "Terms of Use"
+    var transferCompleted: String = "Transfer Completed"
+    var transferFailed: String = "Transfer Failed"
+    var waitingForRecipientApproval: String = "Waiting for recipient to accept..."
+    var transferringFile: String = "Transferring file..."
+    var doneAction: String = "Done"
+    var closeAction: String = "Close"
+    var cancelAction: String = "Cancel"
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {
@@ -365,4 +394,5 @@ fun resolveInitialLanguage(code: String): AppLanguage {
     return AppLanguage.entries.firstOrNull { it.code == clean } ?: AppLanguage.English
 }
 
-fun Copy.formatDeviceCount(count: Int): String = if (count == 1) "$count $deviceSingle" else "$count $devices"
+fun Copy.formatDeviceCount(count: Int): String = "$count $deviceSingle"
+

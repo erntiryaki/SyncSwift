@@ -498,24 +498,18 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                             }
                         }
 
-                        // Global Incoming Transfer Request Modal
+                        // Global Incoming Transfer Request Full Page (No Modal)
                         if (pendingTransferRequest != null) {
                             val req = pendingTransferRequest!!
-                            net.syncswift.ui.components.SyncSwiftModal(
-                                onDismissRequest = { net.syncswift.connection.ConnectionManager.rejectTransferRequest(req) },
-                                title = copy.incomingFileTitle,
-                                confirmText = copy.accept,
-                                onConfirm = { net.syncswift.connection.ConnectionManager.acceptTransferRequest(req) },
-                                dismissText = copy.decline,
-                                onDismiss = { net.syncswift.connection.ConnectionManager.rejectTransferRequest(req) }
-                            ) {
-                                Text(
-                                    text = copy.incomingFilePrompt.replaceFirst("%s", req.senderName).replaceFirst("%s", req.fileName).replaceFirst("%s", req.formattedSize),
-                                    color = Mist,
-                                    fontSize = 15.sp,
-                                    lineHeight = 22.sp
-                                )
+                            androidx.activity.compose.BackHandler {
+                                net.syncswift.connection.ConnectionManager.rejectTransferRequest(req)
                             }
+                            net.syncswift.ui.components.IncomingTransferScreen(
+                                request = req,
+                                copy = copy,
+                                onAccept = { net.syncswift.connection.ConnectionManager.acceptTransferRequest(req) },
+                                onDecline = { net.syncswift.connection.ConnectionManager.rejectTransferRequest(req) }
+                            )
                         }
 
                         // Device Selection Modal for Sending File
@@ -593,10 +587,13 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
-            // Universal Outgoing Request & Transfer Modal (Radar / Approval / Progress / Checkmark)
+            // Universal Outgoing Request & Transfer Screen (Animated Checkmark / Cross - Full Page)
             val outgoingState by net.syncswift.connection.OutgoingStatusManager.state.collectAsState()
             if (outgoingState != null) {
-                net.syncswift.ui.components.OutgoingStatusModal(
+                androidx.activity.compose.BackHandler {
+                    net.syncswift.connection.OutgoingStatusManager.dismiss()
+                }
+                net.syncswift.ui.components.TransferStatusScreen(
                     state = outgoingState!!,
                     copy = copy,
                     onDismiss = {
@@ -605,11 +602,14 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 )
             }
 
-            // Paywall Subscription Modal
+            // Paywall 7-Day Trial Full Page Screen (No Modal)
             val showPaywall by net.syncswift.subscription.SubscriptionManager.showPaywall.collectAsState()
             val paywallReason by net.syncswift.subscription.SubscriptionManager.paywallReason.collectAsState()
             if (showPaywall) {
-                net.syncswift.ui.components.PaywallModal(
+                androidx.activity.compose.BackHandler {
+                    net.syncswift.subscription.SubscriptionManager.dismissPaywall()
+                }
+                net.syncswift.ui.components.PaywallScreen(
                     reason = paywallReason,
                     copy = copy,
                     onDismiss = {
@@ -620,4 +620,5 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         }
     }
 }
+
 
