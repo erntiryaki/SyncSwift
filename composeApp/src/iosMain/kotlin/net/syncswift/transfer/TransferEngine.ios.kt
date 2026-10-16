@@ -66,7 +66,7 @@ actual object TransferEngine {
         }
     }
 
-    actual fun startForegroundServer() {
+    fun startForegroundServer() {
         if (isListening) return
         scope.launch(Dispatchers.Default) {
             try {
