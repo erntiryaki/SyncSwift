@@ -432,7 +432,7 @@ fun HomeScreen(
     ) {
         val target = deviceToPair
         if (target != null) {
-            androidx.activity.compose.BackHandler {
+            BackHandler {
                 deviceToPair = null
             }
             SendPairRequestScreen(
@@ -471,7 +471,7 @@ fun HomeScreen(
     ) {
         val target = deviceForAction
         if (target != null) {
-            androidx.activity.compose.BackHandler {
+            BackHandler {
                 deviceForAction = null
             }
             ConnectedDeviceActionScreen(

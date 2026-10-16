@@ -734,7 +734,7 @@ fun ConnectedDevicesScreen(
                     Spacer(Modifier.height(6.dp))
 
                     Text(
-                        text = copy.codeExpiresIn.format(codeRemainingSeconds),
+                        text = copy.codeExpiresIn.replace("%s", codeRemainingSeconds.toString()),
                         color = Mist,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
@@ -838,7 +838,7 @@ fun ConnectedDevicesScreen(
     ) {
         val target = deviceToPair
         if (target != null) {
-            androidx.activity.compose.BackHandler {
+            BackHandler {
                 deviceToPair = null
             }
             SendPairRequestScreen(
@@ -875,7 +875,7 @@ fun ConnectedDevicesScreen(
     ) {
         val target = deviceForAction
         if (target != null) {
-            androidx.activity.compose.BackHandler {
+            BackHandler {
                 deviceForAction = null
             }
             ConnectedDeviceActionScreen(

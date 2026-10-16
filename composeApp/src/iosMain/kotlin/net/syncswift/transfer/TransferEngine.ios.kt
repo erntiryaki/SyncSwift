@@ -9,11 +9,11 @@ import net.syncswift.currentAppCopy
 import net.syncswift.showNativeToast
 import platform.Foundation.*
 import platform.UIKit.UIPasteboard
-import platform.darwin.dispatch_async
-import platform.darwin.dispatch_get_main_queue
+import platform.darwin.*
 import platform.posix.*
 
 actual object TransferEngine {
+    private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
     private const val PROTOCOL_VERSION: Byte = 1
     private const val TYPE_CLIPBOARD: Byte = 1
     private const val ACK: Byte = 6
@@ -60,7 +60,7 @@ actual object TransferEngine {
 
                     val serverAddr = alloc<sockaddr_in>()
                     serverAddr.sin_family = AF_INET.convert()
-                    serverAddr.sin_port = platform.posix.htons(52424.toUShort())
+                    serverAddr.sin_port = htons(52424.toUShort())
                     serverAddr.sin_addr.s_addr = INADDR_ANY
 
                     if (bind(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
@@ -253,8 +253,8 @@ actual object TransferEngine {
 
             val serverAddr = alloc<sockaddr_in>()
             serverAddr.sin_family = AF_INET.convert()
-            serverAddr.sin_port = platform.posix.htons(port.toUShort())
-            serverAddr.sin_addr.s_addr = inet_addr(host)
+            serverAddr.sin_port = htons(port.toUShort())
+            inet_pton(AF_INET, host, serverAddr.sin_addr.ptr)
 
             if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
                 close(sock)

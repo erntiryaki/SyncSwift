@@ -118,7 +118,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     LaunchedEffect(allTransfers) {
         val completedIncoming = allTransfers.firstOrNull { it.status == net.syncswift.transfer.TransferStatus.COMPLETED && !it.isSent }
         if (completedIncoming != null && completedIncoming.id != lastHandledTransferId) {
-            if (System.currentTimeMillis() - completedIncoming.timestamp < 10000L) {
+            if (currentTimeMs() - completedIncoming.timestamp < 10000L) {
                 lastHandledTransferId = completedIncoming.id
                 latestCompletedItem = completedIncoming
             }
@@ -558,7 +558,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         ) {
                             val req = pendingPairRequest
                             if (req != null) {
-                                androidx.activity.compose.BackHandler {
+                                BackHandler {
                                     net.syncswift.connection.ConnectionManager.rejectPairRequest(req)
                                 }
                                 net.syncswift.ui.components.IncomingPairScreen(
@@ -720,7 +720,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         ) {
                             val req = pendingTransferRequest
                             if (req != null) {
-                                androidx.activity.compose.BackHandler {
+                                BackHandler {
                                     net.syncswift.connection.ConnectionManager.rejectTransferRequest(req)
                                 }
                                 net.syncswift.ui.components.IncomingTransferScreen(
@@ -740,7 +740,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         ) {
                             val fileData = pendingFileToSend
                             if (fileData != null) {
-                                androidx.activity.compose.BackHandler {
+                                BackHandler {
                                     showDeviceSelectModal = false
                                     pendingFileToSend = null
                                 }
@@ -779,7 +779,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         ) {
                             val clipText = pendingClipboardToSend
                             if (clipText != null) {
-                                androidx.activity.compose.BackHandler {
+                                BackHandler {
                                     pendingClipboardToSend = null
                                 }
                                 val previewText = clipText.take(35).replace("\n", " ")
@@ -819,7 +819,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             ) {
                 val state = outgoingState
                 if (state != null) {
-                    androidx.activity.compose.BackHandler {
+                    BackHandler {
                         if (state.step == net.syncswift.connection.OutgoingStep.WAITING_APPROVAL || state.step == net.syncswift.connection.OutgoingStep.IN_PROGRESS) {
                             net.syncswift.connection.OutgoingStatusManager.cancel()
                         } else {
@@ -848,7 +848,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 exit = fadeOut(animationSpec = tween(180))
             ) {
                 if (showPaywall) {
-                    androidx.activity.compose.BackHandler {
+                    BackHandler {
                         net.syncswift.subscription.SubscriptionManager.dismissPaywall()
                     }
                     net.syncswift.ui.components.PaywallScreen(
