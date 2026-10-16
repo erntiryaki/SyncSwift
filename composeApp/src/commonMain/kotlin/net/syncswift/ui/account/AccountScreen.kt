@@ -340,7 +340,15 @@ fun AccountScreen(
             }
         }
 
-        Spacer(Modifier.height(240.dp))
+        val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+        if (!isProUser) {
+            Spacer(Modifier.height(16.dp))
+            net.syncswift.ui.components.AdBannerView(
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(Modifier.height(140.dp))
     }
 
     // SyncSwift Pro Modal

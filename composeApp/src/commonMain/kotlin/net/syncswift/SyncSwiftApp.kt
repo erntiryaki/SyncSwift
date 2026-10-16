@@ -521,24 +521,15 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                     }
                                                 }
 
-                                                // Bottom-docked Ad Banner & Navigation Bar (Ads shown above nav bar for free users)
-                                                val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
-                                                Column(
+                                                // Bottom-docked Navigation Bar
+                                                net.syncswift.ui.components.BottomNavBar(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .align(Alignment.BottomCenter)
-                                                ) {
-                                                    if (!isProUser) {
-                                                        net.syncswift.ui.components.AdBannerView(
-                                                            modifier = Modifier.fillMaxWidth()
-                                                        )
-                                                    }
-                                                    net.syncswift.ui.components.BottomNavBar(
-                                                        selectedTab = mainTab,
-                                                        onTabSelected = { mainTab = it },
-                                                        copy = copy
-                                                    )
-                                                }
+                                                        .align(Alignment.BottomCenter),
+                                                    selectedTab = mainTab,
+                                                    onTabSelected = { mainTab = it },
+                                                    copy = copy
+                                                )
                                             }
                                         }
                                     }

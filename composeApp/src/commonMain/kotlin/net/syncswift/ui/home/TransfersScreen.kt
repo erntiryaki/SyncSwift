@@ -126,7 +126,15 @@ fun TransfersScreen(
             }
         }
 
-        Spacer(Modifier.height(220.dp))
+        val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+        if (!isProUser) {
+            Spacer(Modifier.height(16.dp))
+            net.syncswift.ui.components.AdBannerView(
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(Modifier.height(140.dp))
     }
 }
 
