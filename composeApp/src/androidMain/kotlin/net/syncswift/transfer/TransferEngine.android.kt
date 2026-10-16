@@ -745,6 +745,31 @@ actual object TransferEngine {
                 try {
                     socket.connect(InetSocketAddress(targetHost, targetPort), 6000)
                 } catch (e: Exception) {
+                    val pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, targetDeviceName)
+                    if (!pushToken.isNullOrBlank()) {
+                        val copy = currentAppCopy()
+                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                        val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
+                        val sent = ConnectionManager.sendFcmNotification(
+                            token = pushToken,
+                            title = copy.syncClipboardAction,
+                            body = copy.clipboardSynced.replace("%s", text.take(30)),
+                            data = mapOf(
+                                "type" to "clipboard_sync",
+                                "text" to text,
+                                "senderName" to selfName
+                            )
+                        )
+                        if (sent) {
+                            updateTransferProgress(transferId, text.toByteArray().size.toLong(), TransferStatus.COMPLETED)
+                            withContext(Dispatchers.Main) {
+                                showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
+                                onSuccess()
+                            }
+                            return@launch
+                        }
+                    }
+
                     val copy = currentAppCopy()
                     updateTransferProgress(transferId, 0, TransferStatus.FAILED)
                     withContext(Dispatchers.Main) {

@@ -54,8 +54,8 @@ actual object SubscriptionPlatform {
         }
     }
 
-    actual fun purchasePro(activity: Any?, onResult: (Boolean, String?) -> Unit) {
-        val act = activity as? Activity
+    actual fun purchasePro(activity: Any?, isAnnual: Boolean, onResult: (Boolean, String?) -> Unit) {
+        val act = (activity as? Activity) ?: SessionManager.getCurrentActivity()
         val apiKey = PlatformConfig.revenueCatApiKey
 
         if (apiKey.isBlank() || apiKey == "goog_placeholder_api_key") {
@@ -74,7 +74,11 @@ actual object SubscriptionPlatform {
             Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {
                 override fun onReceived(offerings: Offerings) {
                     val currentOffering = offerings.current
-                    val packageToPurchase = currentOffering?.availablePackages?.firstOrNull()
+                    val packageToPurchase = if (isAnnual) {
+                        currentOffering?.annual ?: currentOffering?.availablePackages?.firstOrNull()
+                    } else {
+                        currentOffering?.monthly ?: currentOffering?.availablePackages?.getOrNull(1) ?: currentOffering?.availablePackages?.firstOrNull()
+                    }
 
                     if (packageToPurchase == null) {
                         onResult(false, "Aktif Pro abonelik paketi bulunamadı")

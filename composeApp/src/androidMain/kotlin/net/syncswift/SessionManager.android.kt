@@ -6,13 +6,23 @@ import android.content.SharedPreferences
 actual object SessionManager {
     private var prefs: SharedPreferences? = null
     private var appContext: Context? = null
+    private var currentActivityRef: java.lang.ref.WeakReference<android.app.Activity>? = null
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        if (context is android.app.Activity) {
+            currentActivityRef = java.lang.ref.WeakReference(context)
+        }
         if (prefs == null) {
             prefs = context.getSharedPreferences("syncswift_session_prefs", Context.MODE_PRIVATE)
         }
     }
+
+    fun setCurrentActivity(activity: android.app.Activity?) {
+        currentActivityRef = if (activity != null) java.lang.ref.WeakReference(activity) else null
+    }
+
+    fun getCurrentActivity(): android.app.Activity? = currentActivityRef?.get()
 
     fun getAppContext(): Context? = appContext
 

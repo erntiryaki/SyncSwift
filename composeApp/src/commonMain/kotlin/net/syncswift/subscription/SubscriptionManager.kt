@@ -111,8 +111,8 @@ object SubscriptionManager {
         return !_isPro.value
     }
 
-    fun purchasePro(activity: Any?, onResult: (Boolean, String?) -> Unit) {
-        SubscriptionPlatform.purchasePro(activity, onResult)
+    fun purchasePro(activity: Any? = null, isAnnual: Boolean = true, onResult: (Boolean, String?) -> Unit) {
+        SubscriptionPlatform.purchasePro(activity, isAnnual, onResult)
     }
 
     fun restorePurchases(onResult: (Boolean, String?) -> Unit) {
@@ -122,6 +122,6 @@ object SubscriptionManager {
 
 expect object SubscriptionPlatform {
     fun init()
-    fun purchasePro(activity: Any?, onResult: (Boolean, String?) -> Unit)
+    fun purchasePro(activity: Any?, isAnnual: Boolean = true, onResult: (Boolean, String?) -> Unit)
     fun restorePurchases(onResult: (Boolean, String?) -> Unit)
 }

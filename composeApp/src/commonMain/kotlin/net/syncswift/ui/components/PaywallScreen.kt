@@ -351,7 +351,7 @@ fun PaywallScreen(
                         if (isProcessing) return@Button
                         isProcessing = true
                         errorMessage = null
-                        SubscriptionManager.purchasePro(null) { success, err ->
+                        SubscriptionManager.purchasePro(null, isAnnual = (selectedPlan == 0)) { success, err ->
                             isProcessing = false
                             if (success) {
                                 onDismiss()

@@ -56,6 +56,21 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
         val body = remoteMessage.notification?.body ?: data["body"] ?: copy.notificationPairRequestBody.replace("%s", senderName)
 
         when (type) {
+            "clipboard_sync" -> {
+                val clipText = data["text"] ?: ""
+                if (clipText.isNotBlank()) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        try {
+                            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("SyncSwift", clipText)
+                            cm?.setPrimaryClip(clip)
+                            net.syncswift.showNativeToast(copy.clipboardSynced.replace("%s", clipText.take(30)))
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to set clipboard: ${e.message}")
+                        }
+                    }
+                }
+            }
             "pair_request" -> {
                 val senderId = data["senderId"] ?: ""
                 val senderHost = data["senderHost"] ?: ""

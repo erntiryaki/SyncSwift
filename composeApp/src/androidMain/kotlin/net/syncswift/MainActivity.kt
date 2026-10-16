@@ -50,6 +50,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        SessionManager.setCurrentActivity(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        SessionManager.setCurrentActivity(null)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -59,7 +69,20 @@ class MainActivity : ComponentActivity() {
     private fun handleNotificationIntent(intent: Intent?) {
         val type = intent?.getStringExtra("type") ?: return
         val senderName = intent.getStringExtra("senderName") ?: "SyncSwift Cihazı"
-        if (type == "pair_request") {
+        if (type == "clipboard_sync") {
+            val clipText = intent.getStringExtra("text") ?: ""
+            if (clipText.isNotBlank()) {
+                try {
+                    val cm = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("SyncSwift", clipText)
+                    cm?.setPrimaryClip(clip)
+                    val copy = currentAppCopy()
+                    showNativeToast(copy.clipboardSynced.replace("%s", clipText.take(30)))
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "Failed to set clipboard: ${e.message}")
+                }
+            }
+        } else if (type == "pair_request") {
             val senderHost = intent.getStringExtra("senderHost") ?: ""
             val senderPort = intent.getIntExtra("senderPort", 52424)
             val senderId = intent.getStringExtra("senderId") ?: ""
