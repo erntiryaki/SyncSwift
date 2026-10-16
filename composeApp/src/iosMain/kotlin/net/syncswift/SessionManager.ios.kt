@@ -91,19 +91,27 @@ actual object SessionManager {
     }
 
     actual fun saveConnectedDeviceKeys(keys: Set<String>) {
-        NSUserDefaults.standardUserDefaults.setObject(keys.toList(), "connected_devices_keys")
+        NSUserDefaults.standardUserDefaults.setObject(keys.joinToString(";;;"), "connected_devices_keys")
     }
 
     actual fun getSavedConnectedDeviceKeys(): Set<String> {
+        val str = NSUserDefaults.standardUserDefaults.stringForKey("connected_devices_keys")
+        if (!str.isNullOrBlank()) {
+            return str.split(";;;").filter { it.isNotBlank() }.toSet()
+        }
         val list = NSUserDefaults.standardUserDefaults.stringArrayForKey("connected_devices_keys")
         return list?.mapNotNull { it as? String }?.toSet() ?: emptySet()
     }
 
     actual fun saveRemoteConnectedDeviceKeys(keys: Set<String>) {
-        NSUserDefaults.standardUserDefaults.setObject(keys.toList(), "remote_connected_devices_keys")
+        NSUserDefaults.standardUserDefaults.setObject(keys.joinToString(";;;"), "remote_connected_devices_keys")
     }
 
     actual fun getSavedRemoteConnectedDeviceKeys(): Set<String> {
+        val str = NSUserDefaults.standardUserDefaults.stringForKey("remote_connected_devices_keys")
+        if (!str.isNullOrBlank()) {
+            return str.split(";;;").filter { it.isNotBlank() }.toSet()
+        }
         val list = NSUserDefaults.standardUserDefaults.stringArrayForKey("remote_connected_devices_keys")
         return list?.mapNotNull { it as? String }?.toSet() ?: emptySet()
     }

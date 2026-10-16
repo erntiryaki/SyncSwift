@@ -139,3 +139,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+compose.resources {
+    packageOfResClass = "net.syncswift.resources"
+}

@@ -1,19 +1,19 @@
 package net.syncswift.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import org.jetbrains.compose.resources.painterResource
+import net.syncswift.resources.Res
+import net.syncswift.resources.paywall_hero
 
 @Composable
 actual fun PaywallHeroImage(modifier: Modifier) {
-    Box(
-        modifier = modifier.background(
-            Brush.verticalGradient(
-                listOf(Color(0xFF0F172A), Color(0xFF0284C7), Color(0xFF0F172A))
-            )
-        )
+    Image(
+        painter = painterResource(Res.drawable.paywall_hero),
+        contentDescription = "SyncSwift Pro",
+        modifier = modifier,
+        contentScale = ContentScale.Crop
     )
 }

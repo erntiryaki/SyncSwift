@@ -63,10 +63,17 @@ private class AppleSignInHandler(
     override fun presentationAnchorForAuthorizationController(
         controller: ASAuthorizationController
     ): UIWindow {
-        val window = UIApplication.sharedApplication.keyWindow 
-            ?: UIApplication.sharedApplication.windows.firstOrNull() as? UIWindow
-            ?: UIWindow()
-        return window
+        val scenes = UIApplication.sharedApplication.connectedScenes
+        for (scene in scenes) {
+            val windowScene = scene as? platform.UIKit.UIWindowScene ?: continue
+            val keyWin = windowScene.windows.mapNotNull { it as? UIWindow }.firstOrNull { it.isKeyWindow() }
+            if (keyWin != null) return keyWin
+            val anyWin = windowScene.windows.firstOrNull() as? UIWindow
+            if (anyWin != null) return anyWin
+        }
+        val appWindows = UIApplication.sharedApplication.windows
+        val fallback = (appWindows.firstOrNull() as? UIWindow) ?: UIApplication.sharedApplication.keyWindow
+        return fallback ?: UIWindow()
     }
 }
 

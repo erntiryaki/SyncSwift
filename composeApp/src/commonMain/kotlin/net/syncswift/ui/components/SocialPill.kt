@@ -46,13 +46,14 @@ fun SocialPill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            SocialProviderIcon(provider, Modifier.size(22.dp), if (light) DeepInk else Cloud)
-            Spacer(Modifier.width(10.dp))
+            SocialProviderIcon(provider, Modifier.size(19.dp), if (light) DeepInk else Cloud)
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = label,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 14.sp,
-                maxLines = 1
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }

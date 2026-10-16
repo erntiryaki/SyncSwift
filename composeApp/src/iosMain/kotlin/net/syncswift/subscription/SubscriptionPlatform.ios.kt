@@ -43,6 +43,9 @@ actual object SubscriptionPlatform {
         }
     }
 
+    private var activeProductsRequest: SKProductsRequest? = null
+    private var activeProductsDelegate: SKProductsRequestDelegateProtocol? = null
+
     actual fun purchasePro(activity: Any?, isAnnual: Boolean, onResult: (Boolean, String?) -> Unit) {
         val apiKey = PlatformConfig.revenueCatApiKey
         val productId = if (isAnnual) PRODUCT_ANNUAL else PRODUCT_MONTHLY
@@ -62,9 +65,12 @@ actual object SubscriptionPlatform {
         try {
             val productIdentifiers = setOf(productId)
             val request = SKProductsRequest(productIdentifiers)
+            activeProductsRequest = request
             
             val requestDelegate = object : NSObject(), SKProductsRequestDelegateProtocol {
                 override fun productsRequest(request: SKProductsRequest, didReceiveResponse: SKProductsResponse) {
+                    activeProductsRequest = null
+                    activeProductsDelegate = null
                     val products = didReceiveResponse.products
                     val targetProduct = products.firstOrNull() as? SKProduct
                     if (targetProduct != null) {
@@ -80,11 +86,14 @@ actual object SubscriptionPlatform {
                 }
 
                 override fun request(request: platform.StoreKit.SKRequest, didFailWithError: platform.Foundation.NSError) {
+                    activeProductsRequest = null
+                    activeProductsDelegate = null
                     // Fallback to test mode if network/credentials fail in dev
                     SubscriptionManager.setProState(true)
                     onResult(true, null)
                 }
             }
+            activeProductsDelegate = requestDelegate
             request.delegate = requestDelegate
             request.start()
         } catch (e: Exception) {

@@ -249,9 +249,16 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides LayoutDirection.Ltr) {
         SyncSwiftTheme(themeMode = themeMode) {
-            CompositionLocalProvider(LocalTextStyle provides TextStyle(fontFamily = platformFontFamily(), textAlign = textAlign)) {
-                Surface(Modifier.fillMaxSize(), color = Night) {
-                    Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .edgeSwipeToBack(enabled = BackDispatcher.canGoBack()) {
+                        BackDispatcher.handleBack()
+                    }
+            ) {
+                CompositionLocalProvider(LocalTextStyle provides TextStyle(fontFamily = platformFontFamily(), textAlign = textAlign)) {
+                    Surface(Modifier.fillMaxSize(), color = Night) {
+                        Box(Modifier.fillMaxSize()) {
                         AnimatedContent(
                             targetState = screen,
                             transitionSpec = {
@@ -860,8 +867,45 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                     )
                 }
             }
+
+            // Modern Minimalist Flat Black Toast (bottom slide-up, no emojis, clean matte pill)
+            val currentToastMessage by ToastNotifier.currentToast.collectAsState()
+            LaunchedEffect(currentToastMessage) {
+                if (currentToastMessage != null) {
+                    kotlinx.coroutines.delay(2600)
+                    ToastNotifier.dismiss()
+                }
+            }
+
+            AnimatedVisibility(
+                visible = currentToastMessage != null,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(animationSpec = tween(220)),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(animationSpec = tween(220)),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 56.dp, start = 20.dp, end = 20.dp)
+                    .zIndex(20000f)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(26.dp),
+                    color = Color(0xF2121214),
+                    border = BorderStroke(1.dp, Color(0x28FFFFFF)),
+                    shadowElevation = 10.dp
+                ) {
+                    Text(
+                        text = currentToastMessage ?: "",
+                        color = Color(0xFFF2F2F5),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 18.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp)
+                    )
+                }
+            }
         }
     }
+}
 }
 
 

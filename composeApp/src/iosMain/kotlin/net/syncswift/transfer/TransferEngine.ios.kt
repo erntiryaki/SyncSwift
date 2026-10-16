@@ -27,6 +27,9 @@ actual object TransferEngine {
     private var isListening = false
 
     init {
+        try {
+            signal(SIGPIPE, SIG_IGN)
+        } catch (_: Throwable) {}
         startForegroundServer()
     }
 
@@ -48,7 +51,7 @@ actual object TransferEngine {
     @OptIn(ExperimentalForeignApi::class)
     private fun startForegroundServer() {
         if (isListening) return
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             try {
                 val sock = socket(AF_INET, SOCK_STREAM, 0)
                 if (sock < 0) return@launch
@@ -58,6 +61,8 @@ actual object TransferEngine {
                     val opt = alloc<IntVar>()
                     opt.value = 1
                     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, opt.ptr, sizeOf<IntVar>().convert())
+                    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, opt.ptr, sizeOf<IntVar>().convert())
+                    setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, opt.ptr, sizeOf<IntVar>().convert())
 
                     val serverAddr = alloc<sockaddr_in>()
                     serverAddr.sin_family = AF_INET.convert()
@@ -66,28 +71,43 @@ actual object TransferEngine {
 
                     if (bind(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
                         close(sock)
+                        serverSocketFd = -1
                         return@launch
                     }
 
-                    if (listen(sock, 5) != 0) {
+                    if (listen(sock, 10) != 0) {
                         close(sock)
+                        serverSocketFd = -1
                         return@launch
                     }
+                }
 
-                    isListening = true
+                isListening = true
 
-                    while (isListening && serverSocketFd >= 0) {
+                while (isListening && serverSocketFd >= 0) {
+                    val clientSock = memScoped {
                         val clientAddr = alloc<sockaddr_in>()
                         val clientLen = alloc<socklen_tVar>()
                         clientLen.value = sizeOf<sockaddr_in>().convert()
+                        accept(serverSocketFd, clientAddr.ptr.reinterpret(), clientLen.ptr)
+                    }
 
-                        val clientSock = accept(serverSocketFd, clientAddr.ptr.reinterpret(), clientLen.ptr)
-                        if (clientSock >= 0) {
-                            handleIncomingClient(clientSock)
+                    if (clientSock >= 0) {
+                        memScoped {
+                            val opt = alloc<IntVar>()
+                            opt.value = 1
+                            setsockopt(clientSock, SOL_SOCKET, SO_NOSIGPIPE, opt.ptr, sizeOf<IntVar>().convert())
                         }
+                        handleIncomingClient(clientSock)
+                    } else {
+                        val err = errno
+                        if (err == EBADF || err == ENOTSOCK || err == EINVAL || serverSocketFd < 0) {
+                            break
+                        }
+                        delay(500)
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 isListening = false
             }
         }
@@ -95,7 +115,7 @@ actual object TransferEngine {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun handleIncomingClient(clientSock: Int) {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             try {
                 memScoped {
                     val header = ByteArray(4)

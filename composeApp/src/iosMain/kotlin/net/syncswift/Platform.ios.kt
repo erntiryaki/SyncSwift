@@ -18,6 +18,7 @@ actual fun getSystemLanguageCode(): String {
     }
 }
 actual fun showNativeToast(message: String) {
+    ToastNotifier.show(message)
     println("[SyncSwift Native Toast] $message")
 }
 
