@@ -130,6 +130,8 @@ jobs:
         run: |
           chmod +x gradlew
           sed -i '' '/org.gradle.java.home/d' gradle.properties 2>/dev/null || true
+          mkdir -p iosApp/iosApp
+          cp iosApp/Info.plist iosApp/iosApp/Info.plist 2>/dev/null || true
 
       - name: Create ExportOptions.plist
         run: |
