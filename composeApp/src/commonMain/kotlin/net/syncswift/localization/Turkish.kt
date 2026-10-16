@@ -381,5 +381,7 @@ val TurkishCopy = Copy().apply {
     showFileLocationAction = "Dosya Konumunu Gör"
     remoteTransferUploading = "Güvenli bulut rölesine yükleniyor..."
     remoteTransferUploaded = "Dosya uzak cihaza iletildi!"
+    requestCancelledBySender = "Bağlantı isteği gönderen tarafından iptal edildi."
+    transferCancelledBySender = "Dosya aktarımı gönderen tarafından iptal edildi."
 }
 

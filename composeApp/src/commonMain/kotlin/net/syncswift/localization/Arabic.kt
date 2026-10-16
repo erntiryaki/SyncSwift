@@ -381,4 +381,6 @@ val ArabicCopy = Copy().apply {
     showFileLocationAction = "عرض موقع الملف"
     remoteTransferUploading = "جارٍ الرفع إلى ترحيل السحابة الآمن..."
     remoteTransferUploaded = "تم إرسال الملف إلى الجهاز البعيد!"
+    requestCancelledBySender = "تم إلغاء طلب الاتصال من قبل المرسل."
+    transferCancelledBySender = "تم إلغاء نقل الملف من قبل المرسل."
 }

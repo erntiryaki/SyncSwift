@@ -66,6 +66,8 @@ expect object ConnectionManager {
     fun rejectPairRequest(request: IncomingPairRequest)
     fun acceptTransferRequest(request: IncomingTransferRequest)
     fun rejectTransferRequest(request: IncomingTransferRequest)
+    fun cancelIncomingPairRequest()
+    fun cancelIncomingTransferRequest(transferId: String? = null)
     fun markDeviceConnected(deviceKey: String, isRemote: Boolean = false)
     fun markDeviceDisconnected(deviceKey: String)
     fun generateOrRotatePairingCode()

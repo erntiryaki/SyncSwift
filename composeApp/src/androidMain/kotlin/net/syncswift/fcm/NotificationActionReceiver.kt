@@ -52,122 +52,44 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         when (intent.action) {
             ACTION_ACCEPT_PAIR -> {
+                val pending = ConnectionManager.pendingPairRequest.value
                 val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
                 val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
                 val senderPort = intent.getIntExtra(EXTRA_SENDER_PORT, 52424)
                 val senderId = intent.getStringExtra(EXTRA_SENDER_ID) ?: ""
 
-                if (senderHost.isNotBlank()) {
-                    ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
-                }
-                if (senderId.isNotBlank()) {
-                    ConnectionManager.markDeviceConnected(senderId)
+                if (pending == null) {
+                    showToast(copy.requestCancelledBySender)
+                    return
                 }
 
-                // Notify sender that their request was accepted
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    val senderToken = ConnectionManager.queryPushTokenFromSupabase(senderHost, senderName)
-                    if (!senderToken.isNullOrBlank()) {
-                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
-                        val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
-                        val selfHost = self?.host ?: ""
-                        val selfPort = self?.port ?: 52424
-                        val selfId = java.util.UUID.nameUUIDFromBytes("${android.os.Build.MANUFACTURER}_${android.os.Build.MODEL}_${android.os.Build.ID}".toByteArray()).toString()
-
-                        ConnectionManager.sendFcmNotification(
-                            token = senderToken,
-                            title = copy.connectionAccepted,
-                            body = copy.notificationPairAcceptedStatus.replace("%s", selfName),
-                            data = mapOf(
-                                "type" to "pair_accepted",
-                                "senderName" to selfName,
-                                "senderHost" to selfHost,
-                                "senderPort" to "$selfPort",
-                                "senderId" to selfId
-                            )
-                        )
-                    }
-                }
-
+                ConnectionManager.acceptPairRequest(pending)
                 showToast(copy.operationCompletedDesc.replace("%s", senderName))
             }
             ACTION_REJECT_PAIR -> {
-                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
-                val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    val senderToken = ConnectionManager.queryPushTokenFromSupabase(senderHost, senderName)
-                    if (!senderToken.isNullOrBlank()) {
-                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
-                        val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
-                        ConnectionManager.sendFcmNotification(
-                            token = senderToken,
-                            title = copy.connectionRejected,
-                            body = copy.notificationPairRejectedStatus.replace("%s", selfName),
-                            data = mapOf(
-                                "type" to "pair_rejected",
-                                "senderName" to selfName
-                            )
-                        )
-                    }
+                val pending = ConnectionManager.pendingPairRequest.value
+                if (pending != null) {
+                    ConnectionManager.rejectPairRequest(pending)
                 }
                 showToast(copy.connectionRequestRejected)
             }
             ACTION_ACCEPT_FILE -> {
                 val transferId = intent.getStringExtra(EXTRA_TRANSFER_ID) ?: ""
-                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
-                val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
-                val senderPort = intent.getIntExtra(EXTRA_SENDER_PORT, 52424)
-                val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "File"
-                val fileSize = intent.getLongExtra(EXTRA_FILE_SIZE, 0L)
-                val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE) ?: "application/octet-stream"
-                val downloadUrl = intent.getStringExtra(EXTRA_DOWNLOAD_URL) ?: ""
-                val isRemote = intent.getBooleanExtra(EXTRA_IS_REMOTE, false)
+                val pending = ConnectionManager.pendingTransferRequest.value
 
-                showToast("${copy.transferringFile} ($fileName)")
-
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    if (isRemote && downloadUrl.isNotBlank()) {
-                        net.syncswift.transfer.TransferEngine.downloadRemoteFile(
-                            downloadUrl = downloadUrl,
-                            fileName = fileName,
-                            fileSize = fileSize,
-                            mimeType = mimeType,
-                            transferId = transferId,
-                            senderName = senderName
-                        )
-                    } else {
-                        net.syncswift.transfer.TransferEngine.downloadStagedFile(
-                            senderHost = senderHost,
-                            senderPort = senderPort,
-                            senderName = senderName,
-                            transferId = transferId,
-                            fileName = fileName,
-                            fileSize = fileSize,
-                            mimeType = mimeType
-                        )
-                    }
+                if (pending == null || (transferId.isNotBlank() && pending.transferId != transferId && pending.requestId != transferId)) {
+                    showToast(copy.transferCancelledBySender)
+                    return
                 }
+
+                val fileName = pending.fileName
+                showToast("${copy.transferringFile} ($fileName)")
+                ConnectionManager.acceptTransferRequest(pending)
             }
             ACTION_REJECT_FILE -> {
-                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
-                val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
-                val transferId = intent.getStringExtra(EXTRA_TRANSFER_ID) ?: ""
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    val senderToken = ConnectionManager.queryPushTokenFromSupabase(senderHost, senderName)
-                    if (!senderToken.isNullOrBlank()) {
-                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
-                        val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
-                        ConnectionManager.sendFcmNotification(
-                            token = senderToken,
-                            title = copy.transferRejectedByRecipient,
-                            body = copy.notificationFileRejectedStatus.replace("%s", selfName),
-                            data = mapOf(
-                                "type" to "file_rejected",
-                                "transferId" to transferId,
-                                "senderName" to selfName
-                            )
-                        )
-                    }
+                val pending = ConnectionManager.pendingTransferRequest.value
+                if (pending != null) {
+                    ConnectionManager.rejectTransferRequest(pending)
                 }
                 showToast(copy.transferDeclined)
             }

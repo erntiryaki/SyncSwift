@@ -24,6 +24,9 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
         private const val PREFS_NAME = "syncswift_fcm_prefs"
         private const val KEY_FCM_TOKEN = "fcm_token"
 
+        const val NOTIFICATION_PAIR_ID = 2001
+        const val NOTIFICATION_FILE_ID = 2002
+
         fun getSavedToken(context: Context): String? {
             return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getString(KEY_FCM_TOKEN, null)
@@ -48,14 +51,28 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
 
+        net.syncswift.SessionManager.init(applicationContext)
         val copy = net.syncswift.currentAppCopy()
         val data = remoteMessage.data
         val type = data["type"] ?: ""
-        val senderName = data["senderName"] ?: copy.deviceSingle
-        val title = remoteMessage.notification?.title ?: data["title"] ?: copy.notificationPairRequestTitle
-        val body = remoteMessage.notification?.body ?: data["body"] ?: copy.notificationPairRequestBody.replace("%s", senderName)
+        val senderName = data["senderName"]?.ifBlank { null } ?: copy.deviceSingle
 
         when (type) {
+            "pair_cancelled" -> {
+                ConnectionManager.cancelIncomingPairRequest()
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(NOTIFICATION_PAIR_ID)
+                net.syncswift.showNativeToast(copy.requestCancelledBySender)
+                return
+            }
+            "file_cancelled" -> {
+                val transferId = data["transferId"] ?: ""
+                ConnectionManager.cancelIncomingTransferRequest(transferId)
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(NOTIFICATION_FILE_ID)
+                net.syncswift.showNativeToast(copy.transferCancelledBySender)
+                return
+            }
             "clipboard_sync" -> {
                 val clipText = data["text"] ?: ""
                 if (clipText.isNotBlank()) {
@@ -129,14 +146,63 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
             }
         }
 
+        // Generate title and message purely in receiver's own selected language
+        val title: String
+        val body: String
+        val notificationId: Int
+
+        when (type) {
+            "pair_request" -> {
+                title = copy.notificationPairRequestTitle
+                body = copy.notificationPairRequestBody.replace("%s", senderName)
+                notificationId = NOTIFICATION_PAIR_ID
+            }
+            "file_request" -> {
+                title = copy.notificationFileRequestTitle
+                val fileName = data["fileName"] ?: "File"
+                val fileSize = data["fileSize"]?.toLongOrNull() ?: 0L
+                val sizeStr = if (fileSize > 0) " (${net.syncswift.transfer.formatBytes(fileSize)})" else ""
+                body = copy.notificationFileRequestBody
+                    .replace("%s", senderName)
+                    .replace("%s", fileName)
+                    .replace("(%s)", sizeStr)
+                notificationId = NOTIFICATION_FILE_ID
+            }
+            "pair_accepted" -> {
+                title = copy.connectionAccepted
+                body = copy.notificationPairAcceptedStatus.replace("%s", senderName)
+                notificationId = (System.currentTimeMillis() % 100000).toInt()
+            }
+            "pair_rejected" -> {
+                title = copy.connectionRejected
+                body = copy.notificationPairRejectedStatus.replace("%s", senderName)
+                notificationId = (System.currentTimeMillis() % 100000).toInt()
+            }
+            "file_rejected" -> {
+                title = copy.transferRejectedByRecipient
+                body = copy.notificationFileRejectedStatus.replace("%s", senderName)
+                notificationId = (System.currentTimeMillis() % 100000).toInt()
+            }
+            "clipboard_sync" -> {
+                title = copy.syncClipboardAction
+                val clipText = data["text"] ?: ""
+                body = copy.clipboardSynced.replace("%s", clipText.take(30))
+                notificationId = (System.currentTimeMillis() % 100000).toInt()
+            }
+            else -> {
+                title = remoteMessage.notification?.title ?: data["title"] ?: copy.notificationPairRequestTitle
+                body = remoteMessage.notification?.body ?: data["body"] ?: copy.notificationPairRequestBody.replace("%s", senderName)
+                notificationId = (System.currentTimeMillis() % 100000).toInt()
+            }
+        }
+
         // Show native Android system notification with localized actions
-        showSystemNotification(title, body, data)
+        showSystemNotification(title, body, data, notificationId)
     }
 
-    private fun showSystemNotification(title: String, message: String, data: Map<String, String>) {
+    private fun showSystemNotification(title: String, message: String, data: Map<String, String>, notificationId: Int) {
         val copy = net.syncswift.currentAppCopy()
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val notificationId = (System.currentTimeMillis() % 100000).toInt()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(

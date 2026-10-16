@@ -50,7 +50,8 @@ import kotlin.math.round
 fun TransferStatusScreen(
     state: OutgoingRequestState,
     copy: Copy,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit = onDismiss
 ) {
     // Auto-dismiss on SUCCESS after 2.5 seconds
     LaunchedEffect(state.step) {
@@ -96,7 +97,13 @@ fun TransferStatusScreen(
                         .size(36.dp)
                         .clip(CircleShape)
                         .background(InputBg)
-                        .clickable { onDismiss() },
+                        .clickable {
+                            if (state.step == OutgoingStep.WAITING_APPROVAL || state.step == OutgoingStep.IN_PROGRESS) {
+                                onCancel()
+                            } else {
+                                onDismiss()
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     CrossVectorIcon(Modifier.size(16.dp), color = Mist)
@@ -137,7 +144,7 @@ fun TransferStatusScreen(
                 when (state.step) {
                     OutgoingStep.WAITING_APPROVAL, OutgoingStep.IN_PROGRESS -> {
                         Button(
-                            onClick = onDismiss,
+                            onClick = onCancel,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),

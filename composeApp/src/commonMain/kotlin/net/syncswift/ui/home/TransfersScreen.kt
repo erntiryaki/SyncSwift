@@ -126,7 +126,7 @@ fun TransfersScreen(
             }
         }
 
-        Spacer(Modifier.height(160.dp))
+        Spacer(Modifier.height(220.dp))
     }
 }
 

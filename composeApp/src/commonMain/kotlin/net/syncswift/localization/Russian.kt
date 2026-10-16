@@ -381,4 +381,6 @@ val RussianCopy = Copy().apply {
     showFileLocationAction = "Показать в папке"
     remoteTransferUploading = "Загрузка в защищенное облачное реле..."
     remoteTransferUploaded = "Файл отправлен на удаленное устройство!"
+    requestCancelledBySender = "Запрос на подключение отменен отправителем."
+    transferCancelledBySender = "Передача файла отменена отправителем."
 }

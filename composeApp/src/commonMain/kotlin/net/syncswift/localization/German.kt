@@ -381,5 +381,7 @@ val GermanCopy = Copy().apply {
     showFileLocationAction = "Dateispeicherort anzeigen"
     remoteTransferUploading = "Wird in das sichere Cloud-Relay hochgeladen..."
     remoteTransferUploaded = "Datei an Remote-Gerät gesendet!"
+    requestCancelledBySender = "Verbindungsanfrage wurde vom Absender abgebrochen."
+    transferCancelledBySender = "Dateiübertragung wurde vom Absender abgebrochen."
 }
 

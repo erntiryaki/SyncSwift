@@ -24,12 +24,15 @@ data class OutgoingRequestState(
     val transferredBytes: Long = 0L,
     val progress: Float = 0f,
     val step: OutgoingStep = OutgoingStep.WAITING_APPROVAL,
-    val message: String = ""
+    val message: String = "",
+    val onCancel: (() -> Unit)? = null
 )
 
 object OutgoingStatusManager {
     private val _state = MutableStateFlow<OutgoingRequestState?>(null)
     val state: StateFlow<OutgoingRequestState?> = _state.asStateFlow()
+
+    private var currentCancelAction: (() -> Unit)? = null
 
     fun show(
         type: OutgoingStatusType,
@@ -37,8 +40,10 @@ object OutgoingStatusManager {
         fileName: String? = null,
         totalBytes: Long = 0L,
         step: OutgoingStep = OutgoingStep.WAITING_APPROVAL,
-        message: String = ""
+        message: String = "",
+        onCancel: (() -> Unit)? = null
     ) {
+        currentCancelAction = onCancel
         _state.value = OutgoingRequestState(
             type = type,
             deviceName = deviceName,
@@ -47,7 +52,8 @@ object OutgoingStatusManager {
             transferredBytes = 0L,
             progress = 0f,
             step = step,
-            message = message
+            message = message,
+            onCancel = onCancel
         )
     }
 
@@ -65,6 +71,7 @@ object OutgoingStatusManager {
 
     fun completeSuccess(message: String = "") {
         val current = _state.value ?: return
+        currentCancelAction = null
         _state.value = current.copy(
             step = OutgoingStep.SUCCESS,
             progress = 1f,
@@ -75,13 +82,24 @@ object OutgoingStatusManager {
 
     fun fail(message: String = "") {
         val current = _state.value ?: return
+        currentCancelAction = null
         _state.value = current.copy(
             step = OutgoingStep.REJECTED_OR_FAILED,
             message = message
         )
     }
 
+    fun cancel() {
+        val action = currentCancelAction
+        currentCancelAction = null
+        _state.value = null
+        try {
+            action?.invoke()
+        } catch (_: Exception) {}
+    }
+
     fun dismiss() {
+        currentCancelAction = null
         _state.value = null
     }
 }

@@ -39,6 +39,9 @@ import net.syncswift.ui.components.QrCodeView
 import net.syncswift.ui.components.rememberQrImagePicker
 import net.syncswift.ui.components.rememberQrScanner
 import net.syncswift.ui.components.SyncSwiftModal
+import net.syncswift.ui.components.SendPairRequestScreen
+import net.syncswift.ui.components.ConnectedDeviceActionScreen
+import androidx.compose.animation.core.tween
 import net.syncswift.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -814,64 +817,66 @@ fun ConnectedDevicesScreen(
         }
     }
 
-    if (deviceToPair != null) {
-        val target = deviceToPair!!
-        SyncSwiftModal(
-            onDismissRequest = { deviceToPair = null },
-            title = copy.connectionRequestTitle,
-            confirmText = copy.sendConnectionRequestAction,
-            onConfirm = {
-                if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
-                    deviceToPair = null
-                    net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                        net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
-                    )
-                    return@SyncSwiftModal
-                }
+    AnimatedVisibility(
+        visible = deviceToPair != null,
+        enter = fadeIn(animationSpec = tween(220)),
+        exit = fadeOut(animationSpec = tween(180))
+    ) {
+        val target = deviceToPair
+        if (target != null) {
+            androidx.activity.compose.BackHandler {
                 deviceToPair = null
-                showNativeToast(copy.sendingConnectionRequest)
-                ConnectionManager.requestPairing(target) { result ->
-                    when (result) {
-                        PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                        PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
-                        PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
-                        PairResult.PENDING_APPROVAL -> {}
+            }
+            SendPairRequestScreen(
+                device = target,
+                copy = copy,
+                onSendRequest = {
+                    if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
+                        deviceToPair = null
+                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                            net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
+                        )
+                        return@SendPairRequestScreen
                     }
-                }
-            },
-            dismissText = copy.otpCancelAction,
-            onDismiss = { deviceToPair = null }
-        ) {
-            Text(
-                text = copy.sendConnectionRequestPrompt.replace("%s", cleanDeviceDisplayName(target.name)),
-                color = Mist,
-                fontSize = 15.sp,
-                lineHeight = 22.sp
+                    deviceToPair = null
+                    showNativeToast(copy.sendingConnectionRequest)
+                    ConnectionManager.requestPairing(target) { result ->
+                        when (result) {
+                            PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
+                            PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                            PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
+                            PairResult.PENDING_APPROVAL -> {}
+                        }
+                    }
+                },
+                onDismiss = { deviceToPair = null }
             )
         }
     }
 
-    if (deviceForAction != null) {
-        val target = deviceForAction!!
-        SyncSwiftModal(
-            onDismissRequest = { deviceForAction = null },
-            title = cleanDeviceDisplayName(target.name),
-            confirmText = copy.disconnect,
-            confirmColor = ErrorRed,
-            onConfirm = {
+    AnimatedVisibility(
+        visible = deviceForAction != null,
+        enter = fadeIn(animationSpec = tween(220)),
+        exit = fadeOut(animationSpec = tween(180))
+    ) {
+        val target = deviceForAction
+        if (target != null) {
+            androidx.activity.compose.BackHandler {
                 deviceForAction = null
-                ConnectionManager.disconnectDevice(target)
-                showNativeToast(copy.disconnected)
-            },
-            dismissText = copy.otpCancelAction,
-            onDismiss = { deviceForAction = null }
-        ) {
-            val status = if (target.isOnline) copy.connectedStatus else copy.offlineSleeping
-            Text(
-                text = "${cleanDeviceDisplayName(target.name)} · $status",
-                color = Blue,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
+            }
+            ConnectedDeviceActionScreen(
+                device = target,
+                copy = copy,
+                onSendFile = {
+                    deviceForAction = null
+                    onBack()
+                },
+                onDisconnect = {
+                    deviceForAction = null
+                    ConnectionManager.disconnectDevice(target)
+                    showNativeToast(copy.disconnected)
+                },
+                onDismiss = { deviceForAction = null }
             )
         }
     }

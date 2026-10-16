@@ -381,4 +381,6 @@ val FrenchCopy = Copy().apply {
     showFileLocationAction = "Afficher l'emplacement"
     remoteTransferUploading = "Téléversement vers le relais cloud sécurisé..."
     remoteTransferUploaded = "Fichier envoyé à l'appareil distant !"
+    requestCancelledBySender = "La demande de connexion a été annulée par l'expéditeur."
+    transferCancelledBySender = "Le transfert de fichier a été annulé par l'expéditeur."
 }

@@ -8,6 +8,15 @@ actual object SessionManager {
     private var appContext: Context? = null
     private var currentActivityRef: java.lang.ref.WeakReference<android.app.Activity>? = null
 
+    private fun getPrefs(): SharedPreferences? {
+        if (prefs != null) return prefs
+        val ctx = appContext
+        if (ctx != null) {
+            prefs = ctx.getSharedPreferences("syncswift_session_prefs", Context.MODE_PRIVATE)
+        }
+        return prefs
+    }
+
     fun init(context: Context) {
         appContext = context.applicationContext
         if (context is android.app.Activity) {
@@ -27,7 +36,7 @@ actual object SessionManager {
     fun getAppContext(): Context? = appContext
 
     actual fun saveSession(email: String, provider: IdentityProvider) {
-        prefs?.edit()
+        getPrefs()?.edit()
             ?.putBoolean("is_logged_in", true)
             ?.putString("logged_email", email.lowercase().trim())
             ?.putString("logged_provider", provider.name)
@@ -35,7 +44,7 @@ actual object SessionManager {
     }
 
     actual fun saveSession(email: String, provider: IdentityProvider, firstName: String, lastName: String) {
-        prefs?.edit()
+        getPrefs()?.edit()
             ?.putBoolean("is_logged_in", true)
             ?.putString("logged_email", email.lowercase().trim())
             ?.putString("logged_provider", provider.name)
@@ -45,7 +54,7 @@ actual object SessionManager {
     }
 
     actual fun saveLocalSession() {
-        prefs?.edit()
+        getPrefs()?.edit()
             ?.putBoolean("is_logged_in", true)
             ?.putString("logged_email", "")
             ?.putString("logged_provider", IdentityProvider.Local.name)
@@ -55,7 +64,7 @@ actual object SessionManager {
     }
 
     actual fun clearSession() {
-        prefs?.edit()
+        getPrefs()?.edit()
             ?.putBoolean("is_logged_in", false)
             ?.remove("logged_email")
             ?.remove("logged_provider")
@@ -65,28 +74,28 @@ actual object SessionManager {
     }
 
     actual fun isLoggedIn(): Boolean {
-        return prefs?.getBoolean("is_logged_in", false) ?: false
+        return getPrefs()?.getBoolean("is_logged_in", false) ?: false
     }
 
     actual fun getLoggedInEmail(): String? {
-        return prefs?.getString("logged_email", null)
+        return getPrefs()?.getString("logged_email", null)
     }
 
     actual fun getLoggedInProvider(): IdentityProvider? {
-        val name = prefs?.getString("logged_provider", null) ?: return null
+        val name = getPrefs()?.getString("logged_provider", null) ?: return null
         return try { IdentityProvider.valueOf(name) } catch (e: Exception) { null }
     }
 
     actual fun getUserFirstName(): String {
-        return prefs?.getString("first_name", "") ?: ""
+        return getPrefs()?.getString("first_name", "") ?: ""
     }
 
     actual fun getUserLastName(): String {
-        return prefs?.getString("last_name", "") ?: ""
+        return getPrefs()?.getString("last_name", "") ?: ""
     }
 
     actual fun updateUserProfile(firstName: String, lastName: String) {
-        prefs?.edit()
+        getPrefs()?.edit()
             ?.putString("first_name", firstName)
             ?.putString("last_name", lastName)
             ?.apply()
@@ -94,7 +103,7 @@ actual object SessionManager {
 
     actual fun saveActiveOtp(email: String, code: String, timestampMs: Long) {
         val key = email.lowercase().trim()
-        prefs?.edit()
+        getPrefs()?.edit()
             ?.putString("otp_code_$key", code)
             ?.putLong("otp_time_$key", timestampMs)
             ?.apply()
@@ -102,8 +111,8 @@ actual object SessionManager {
 
     actual fun getActiveOtp(email: String, nowMs: Long): OtpData? {
         val key = email.lowercase().trim()
-        val code = prefs?.getString("otp_code_$key", null) ?: return null
-        val time = prefs?.getLong("otp_time_$key", 0L) ?: 0L
+        val code = getPrefs()?.getString("otp_code_$key", null) ?: return null
+        val time = getPrefs()?.getLong("otp_time_$key", 0L) ?: 0L
 
         val otp = OtpData(code, time)
         return if (otp.isExpired(nowMs)) {
@@ -114,58 +123,58 @@ actual object SessionManager {
     }
 
     actual fun saveLanguage(languageCode: String) {
-        prefs?.edit()?.putString("app_language", languageCode)?.apply()
+        getPrefs()?.edit()?.putString("app_language", languageCode)?.apply()
     }
 
     actual fun getSavedLanguage(): String? {
-        return prefs?.getString("app_language", null)
+        return getPrefs()?.getString("app_language", null)
     }
 
     actual fun saveThemeMode(themeMode: String) {
-        prefs?.edit()?.putString("app_theme_mode", themeMode)?.apply()
+        getPrefs()?.edit()?.putString("app_theme_mode", themeMode)?.apply()
     }
 
     actual fun getSavedThemeMode(): String? {
-        return prefs?.getString("app_theme_mode", null)
+        return getPrefs()?.getString("app_theme_mode", null)
     }
 
     actual fun saveConnectedDeviceKeys(keys: Set<String>) {
-        prefs?.edit()?.putStringSet("connected_devices_keys", keys)?.apply()
+        getPrefs()?.edit()?.putStringSet("connected_devices_keys", keys)?.apply()
     }
 
     actual fun getSavedConnectedDeviceKeys(): Set<String> {
-        return prefs?.getStringSet("connected_devices_keys", emptySet())?.toSet() ?: emptySet()
+        return getPrefs()?.getStringSet("connected_devices_keys", emptySet())?.toSet() ?: emptySet()
     }
 
     actual fun saveRemoteConnectedDeviceKeys(keys: Set<String>) {
-        prefs?.edit()?.putStringSet("remote_connected_devices_keys", keys)?.apply()
+        getPrefs()?.edit()?.putStringSet("remote_connected_devices_keys", keys)?.apply()
     }
 
     actual fun getSavedRemoteConnectedDeviceKeys(): Set<String> {
-        return prefs?.getStringSet("remote_connected_devices_keys", emptySet())?.toSet() ?: emptySet()
+        return getPrefs()?.getStringSet("remote_connected_devices_keys", emptySet())?.toSet() ?: emptySet()
     }
 
     actual fun saveManualDevicesJson(json: String) {
-        prefs?.edit()?.putString("manual_devices_json", json)?.apply()
+        getPrefs()?.edit()?.putString("manual_devices_json", json)?.apply()
     }
 
     actual fun getSavedManualDevicesJson(): String? {
-        return prefs?.getString("manual_devices_json", null)
+        return getPrefs()?.getString("manual_devices_json", null)
     }
 
     actual fun saveTransfersJson(json: String) {
-        prefs?.edit()?.putString("transfers_history_json", json)?.apply()
+        getPrefs()?.edit()?.putString("transfers_history_json", json)?.apply()
     }
 
     actual fun getSavedTransfersJson(): String? {
-        return prefs?.getString("transfers_history_json", null)
+        return getPrefs()?.getString("transfers_history_json", null)
     }
 
     actual fun saveProStatus(isPro: Boolean) {
-        prefs?.edit()?.putBoolean("is_pro_member", isPro)?.apply()
+        getPrefs()?.edit()?.putBoolean("is_pro_member", isPro)?.apply()
     }
 
     actual fun getSavedProStatus(): Boolean {
-        return prefs?.getBoolean("is_pro_member", false) ?: false
+        return getPrefs()?.getBoolean("is_pro_member", false) ?: false
     }
 }

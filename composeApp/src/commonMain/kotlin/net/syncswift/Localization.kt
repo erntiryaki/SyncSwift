@@ -411,6 +411,8 @@ class Copy {
     var showFileLocationAction: String = "Show in Files"
     var remoteTransferUploading: String = "Uploading to secure cloud relay..."
     var remoteTransferUploaded: String = "File sent to remote device!"
+    var requestCancelledBySender: String = "Connection request was cancelled by sender."
+    var transferCancelledBySender: String = "File transfer was cancelled by sender."
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {
@@ -433,7 +435,7 @@ fun resolveInitialLanguage(code: String): AppLanguage {
 fun Copy.formatDeviceCount(count: Int): String = "$count $deviceSingle"
 
 fun currentAppCopy(): Copy {
-    val langCode = SessionManager.getSavedLanguage() ?: "en"
+    val langCode = SessionManager.getSavedLanguage() ?: getSystemLanguageCode()
     return copyFor(resolveInitialLanguage(langCode))
 }
 

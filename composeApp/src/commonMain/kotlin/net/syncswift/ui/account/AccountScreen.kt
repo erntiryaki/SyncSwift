@@ -340,7 +340,7 @@ fun AccountScreen(
             }
         }
 
-        Spacer(Modifier.height(140.dp))
+        Spacer(Modifier.height(240.dp))
     }
 
     // SyncSwift Pro Modal

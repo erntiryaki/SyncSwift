@@ -381,4 +381,6 @@ val ItalianCopy = Copy().apply {
     showFileLocationAction = "Mostra posizione"
     remoteTransferUploading = "Caricamento sul relay cloud sicuro..."
     remoteTransferUploaded = "File inviato al dispositivo remoto!"
+    requestCancelledBySender = "La richiesta di connessione è stata annullata dal mittente."
+    transferCancelledBySender = "Il trasferimento file è stato annullato dal mittente."
 }

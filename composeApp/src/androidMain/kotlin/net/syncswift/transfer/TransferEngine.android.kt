@@ -191,13 +191,28 @@ actual object TransferEngine {
 
                         ConnectionManager.dispatchIncomingPairRequest(request)
 
+                        // Launch watcher to monitor client disconnection / cancellation in real time
+                        val watchJob = scope.launch(Dispatchers.IO) {
+                            try {
+                                val b = input.read()
+                                if (b == -1 || b == 10) { // EOF or TYPE_CANCEL
+                                    ConnectionManager.cancelIncomingPairRequest()
+                                }
+                            } catch (_: Exception) {
+                                ConnectionManager.cancelIncomingPairRequest()
+                            }
+                        }
+
                         // Wait for user to accept or reject in UI (max 30 seconds)
                         val accepted = try {
                             withTimeout(30000) {
                                 request.deferredResponse.await()
                             }
                         } catch (e: Exception) {
+                            ConnectionManager.cancelIncomingPairRequest()
                             false
+                        } finally {
+                            watchJob.cancel()
                         }
 
                         if (accepted) {
@@ -205,8 +220,10 @@ actual object TransferEngine {
                             output.flush()
                             ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
                         } else {
-                            output.writeByte(RESP_REJECTED.toInt())
-                            output.flush()
+                            try {
+                                output.writeByte(RESP_REJECTED.toInt())
+                                output.flush()
+                            } catch (_: Exception) {}
                         }
                     }
 
@@ -268,18 +285,35 @@ actual object TransferEngine {
 
                         ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
+                        // Launch watcher to monitor client disconnection / cancellation in real time
+                        val watchJob = scope.launch(Dispatchers.IO) {
+                            try {
+                                val b = input.read()
+                                if (b == -1 || b == 10) { // EOF or TYPE_CANCEL
+                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                }
+                            } catch (_: Exception) {
+                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                            }
+                        }
+
                         // Wait for user to accept or reject in UI (max 35 seconds)
                         val accepted = try {
                             withTimeout(35000) {
                                 transferRequest.deferredResponse.await()
                             }
                         } catch (e: Exception) {
+                            ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                             false
+                        } finally {
+                            watchJob.cancel()
                         }
 
                         if (!accepted) {
-                            output.writeByte(RESP_REJECTED.toInt())
-                            output.flush()
+                            try {
+                                output.writeByte(RESP_REJECTED.toInt())
+                                output.flush()
+                            } catch (_: Exception) {}
                             return
                         }
 
@@ -576,20 +610,53 @@ actual object TransferEngine {
                 return@launch
             }
 
+            var activeSocket: Socket? = null
+            val cancelTransfer: () -> Unit = {
+                try {
+                    activeSocket?.close()
+                } catch (_: Exception) {}
+                updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+                val cleanTarget = net.syncswift.discovery.cleanDeviceDisplayName(targetDeviceName)
+                val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+                    net.syncswift.discovery.cleanDeviceDisplayName(it.name) == cleanTarget
+                }
+                var pushToken = targetDev?.pushToken
+                if (pushToken.isNullOrBlank() && targetHost.isNotBlank()) {
+                    pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+                }
+                if (!pushToken.isNullOrBlank()) {
+                    scope.launch {
+                        ConnectionManager.sendFcmNotification(
+                            token = pushToken,
+                            title = "SyncSwift",
+                            body = "",
+                            data = mapOf(
+                                "type" to "file_cancelled",
+                                "transferId" to transferId,
+                                "senderName" to Build.MODEL
+                            )
+                        )
+                    }
+                }
+            }
+
             OutgoingStatusManager.show(
                 type = OutgoingStatusType.FILE,
                 deviceName = targetDeviceName,
                 fileName = fileName,
                 totalBytes = fileBytes.size.toLong(),
                 step = OutgoingStep.WAITING_APPROVAL,
-                message = copy.waitingForRecipientApproval
+                message = copy.waitingForRecipientApproval,
+                onCancel = cancelTransfer
             )
 
             try {
                 val socket = Socket()
+                activeSocket = socket
                 try {
                     socket.connect(InetSocketAddress(targetHost, targetPort), 5000)
                 } catch (e: Exception) {
+                    activeSocket = null
                     // Local socket unreachable: Fallback to remote transfer if allowed
                     if (!net.syncswift.subscription.SubscriptionManager.canRemoteTransfer()) {
                         updateTransferProgress(transferId, 0, TransferStatus.FAILED)
@@ -707,13 +774,40 @@ actual object TransferEngine {
         onError: (String) -> Unit
     ) {
         val copy = currentAppCopy()
+        val cancelRemote: () -> Unit = {
+            updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+            val cleanTarget = net.syncswift.discovery.cleanDeviceDisplayName(targetDeviceName)
+            val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+                net.syncswift.discovery.cleanDeviceDisplayName(it.name) == cleanTarget
+            }
+            var pushToken = targetDev?.pushToken
+            if (pushToken.isNullOrBlank()) {
+                pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+            }
+            if (!pushToken.isNullOrBlank()) {
+                scope.launch {
+                    ConnectionManager.sendFcmNotification(
+                        token = pushToken,
+                        title = "SyncSwift",
+                        body = "",
+                        data = mapOf(
+                            "type" to "file_cancelled",
+                            "transferId" to transferId,
+                            "senderName" to Build.MODEL
+                        )
+                    )
+                }
+            }
+        }
+
         OutgoingStatusManager.show(
             type = OutgoingStatusType.FILE,
             deviceName = targetDeviceName,
             fileName = fileName,
             totalBytes = fileBytes.size.toLong(),
             step = OutgoingStep.IN_PROGRESS,
-            message = copy.remoteTransferUploading
+            message = copy.remoteTransferUploading,
+            onCancel = cancelRemote
         )
 
         val downloadUrl = uploadToSupabaseStorage(transferId, fileName, fileBytes, mimeType)

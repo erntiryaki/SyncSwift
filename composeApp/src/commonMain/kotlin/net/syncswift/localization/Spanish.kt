@@ -381,4 +381,6 @@ val SpanishCopy = Copy().apply {
     showFileLocationAction = "Ver ubicación"
     remoteTransferUploading = "Subiendo al relé seguro en la nube..."
     remoteTransferUploaded = "¡Archivo enviado al dispositivo remoto!"
+    requestCancelledBySender = "La solicitud de conexión fue cancelada por el remitente."
+    transferCancelledBySender = "La transferencia de archivos fue cancelada por el remitente."
 }

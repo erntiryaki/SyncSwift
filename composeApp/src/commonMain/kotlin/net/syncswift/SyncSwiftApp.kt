@@ -547,22 +547,22 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         }
                     }
 
-                        // Global Incoming Pair Request Modal
-                        if (pendingPairRequest != null) {
-                            val req = pendingPairRequest!!
-                            net.syncswift.ui.components.SyncSwiftModal(
-                                onDismissRequest = { net.syncswift.connection.ConnectionManager.rejectPairRequest(req) },
-                                title = copy.connectionRequestTitle,
-                                confirmText = copy.accept,
-                                onConfirm = { net.syncswift.connection.ConnectionManager.acceptPairRequest(req) },
-                                dismissText = copy.decline,
-                                onDismiss = { net.syncswift.connection.ConnectionManager.rejectPairRequest(req) }
-                            ) {
-                                Text(
-                                    text = "${req.senderName} ${copy.wantsToConnect}",
-                                    color = Mist,
-                                    fontSize = 15.sp,
-                                    lineHeight = 22.sp
+                        // Global Incoming Pair Request Full Page (No Modal)
+                        AnimatedVisibility(
+                            visible = pendingPairRequest != null,
+                            enter = fadeIn(animationSpec = tween(220)),
+                            exit = fadeOut(animationSpec = tween(180))
+                        ) {
+                            val req = pendingPairRequest
+                            if (req != null) {
+                                androidx.activity.compose.BackHandler {
+                                    net.syncswift.connection.ConnectionManager.rejectPairRequest(req)
+                                }
+                                net.syncswift.ui.components.IncomingPairScreen(
+                                    request = req,
+                                    copy = copy,
+                                    onAccept = { net.syncswift.connection.ConnectionManager.acceptPairRequest(req) },
+                                    onDecline = { net.syncswift.connection.ConnectionManager.rejectPairRequest(req) }
                                 )
                             }
                         }
@@ -729,75 +729,42 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                             }
                         }
 
-                        // Device Selection Modal for Sending File
-                        if (showDeviceSelectModal && pendingFileToSend != null) {
-                            val fileData = pendingFileToSend!!
-                            net.syncswift.ui.components.SyncSwiftModal(
-                                onDismissRequest = {
-                                    showDeviceSelectModal = false
-                                    pendingFileToSend = null
-                                },
-                                title = copy.selectDeviceToSend,
-                                dismissText = copy.otpCancelAction,
-                                onDismiss = {
+                        // Device Selection Screen for Sending File (Full Page, No Modal)
+                        AnimatedVisibility(
+                            visible = showDeviceSelectModal && pendingFileToSend != null,
+                            enter = fadeIn(animationSpec = tween(220)),
+                            exit = fadeOut(animationSpec = tween(180))
+                        ) {
+                            val fileData = pendingFileToSend
+                            if (fileData != null) {
+                                androidx.activity.compose.BackHandler {
                                     showDeviceSelectModal = false
                                     pendingFileToSend = null
                                 }
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text(
-                                        text = "${fileData.first} (${net.syncswift.transfer.TransferItem("", fileData.first, fileData.second.size.toLong(), fileData.third).formattedSize})",
-                                        color = Mist,
-                                        fontSize = 13.sp
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    discoveredDevices.forEach { dev ->
-                                        val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                                        Surface(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    showDeviceSelectModal = false
-                                                    pendingFileToSend = null
-                                                    net.syncswift.transfer.TransferEngine.sendFile(
-                                                        targetHost = dev.host,
-                                                        targetPort = dev.port,
-                                                        targetDeviceName = dev.name,
-                                                        fileName = fileData.first,
-                                                        fileBytes = fileData.second,
-                                                        mimeType = fileData.third
-                                                    )
-                                                },
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = InputBg.copy(alpha = 0.7f),
-                                            border = BorderStroke(1.dp, if (isConnected) Blue.copy(alpha = 0.5f) else InputBorder.copy(alpha = 0.4f))
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Column {
-                                                    Text(dev.name, color = Cloud, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                                                    Text(
-                                                        if (isConnected) copy.connectedStatus else if (dev.isOnline) copy.deviceOnline else copy.deviceSleepMode,
-                                                        color = if (isConnected) Blue else Mist,
-                                                        fontSize = 12.sp
-                                                    )
-                                                }
-                                                ChevronRightIcon(Modifier.size(16.dp), color = Mist)
-                                            }
-                                        }
+                                val formattedSize = net.syncswift.transfer.TransferItem("", fileData.first, fileData.second.size.toLong(), fileData.third).formattedSize
+                                net.syncswift.ui.components.FileDeviceSelectScreen(
+                                    fileName = fileData.first,
+                                    fileSizeFormatted = formattedSize,
+                                    devices = discoveredDevices,
+                                    copy = copy,
+                                    isDeviceConnected = { dev -> net.syncswift.connection.ConnectionManager.isDeviceConnected(dev) },
+                                    onSelectDevice = { dev ->
+                                        showDeviceSelectModal = false
+                                        pendingFileToSend = null
+                                        net.syncswift.transfer.TransferEngine.sendFile(
+                                            targetHost = dev.host,
+                                            targetPort = dev.port,
+                                            targetDeviceName = dev.name,
+                                            fileName = fileData.first,
+                                            fileBytes = fileData.second,
+                                            mimeType = fileData.third
+                                        )
+                                    },
+                                    onDismiss = {
+                                        showDeviceSelectModal = false
+                                        pendingFileToSend = null
                                     }
-                                }
+                                )
                             }
                         }
                     }
@@ -814,13 +781,20 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 val state = outgoingState
                 if (state != null) {
                     androidx.activity.compose.BackHandler {
-                        net.syncswift.connection.OutgoingStatusManager.dismiss()
+                        if (state.step == net.syncswift.connection.OutgoingStep.WAITING_APPROVAL || state.step == net.syncswift.connection.OutgoingStep.IN_PROGRESS) {
+                            net.syncswift.connection.OutgoingStatusManager.cancel()
+                        } else {
+                            net.syncswift.connection.OutgoingStatusManager.dismiss()
+                        }
                     }
                     net.syncswift.ui.components.TransferStatusScreen(
                         state = state,
                         copy = copy,
                         onDismiss = {
                             net.syncswift.connection.OutgoingStatusManager.dismiss()
+                        },
+                        onCancel = {
+                            net.syncswift.connection.OutgoingStatusManager.cancel()
                         }
                     )
                 }

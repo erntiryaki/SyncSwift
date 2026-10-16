@@ -41,6 +41,14 @@ actual object ConnectionManager {
 
     actual fun rejectTransferRequest(request: IncomingTransferRequest) {}
 
+    actual fun cancelIncomingPairRequest() {
+        _pendingPairRequest.value = null
+    }
+
+    actual fun cancelIncomingTransferRequest(transferId: String?) {
+        _pendingTransferRequest.value = null
+    }
+
     actual fun markDeviceConnected(deviceKey: String, isRemote: Boolean) {}
 
     actual fun markDeviceDisconnected(deviceKey: String) {}

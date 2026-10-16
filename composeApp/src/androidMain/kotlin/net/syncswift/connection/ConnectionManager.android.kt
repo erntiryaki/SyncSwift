@@ -1,10 +1,13 @@
 package net.syncswift.connection
 
+import android.content.Context
+import android.app.NotificationManager
 import android.os.Build
 import android.util.Log
 import net.syncswift.SessionManager
 import net.syncswift.SyncSwiftConfig
 import net.syncswift.currentAppCopy
+import net.syncswift.showNativeToast
 import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
@@ -111,9 +114,11 @@ actual object ConnectionManager {
     }
 
     actual fun acceptPairRequest(request: IncomingPairRequest) {
-        if (_pendingPairRequest.value?.requestId == request.requestId) {
-            _pendingPairRequest.value = null
+        if (_pendingPairRequest.value?.requestId != request.requestId) {
+            showNativeToast(currentAppCopy().requestCancelledBySender)
+            return
         }
+        _pendingPairRequest.value = null
         val key = deviceKey(request.senderHost, request.senderPort)
         markDeviceConnected(key)
         markDeviceConnected(request.senderId)
@@ -171,10 +176,38 @@ actual object ConnectionManager {
         }
     }
 
-    actual fun acceptTransferRequest(request: IncomingTransferRequest) {
-        if (_pendingTransferRequest.value?.requestId == request.requestId) {
-            _pendingTransferRequest.value = null
+    actual fun cancelIncomingPairRequest() {
+        val req = _pendingPairRequest.value
+        if (req != null) {
+            req.deferredResponse.complete(false)
+            _pendingPairRequest.value = null
         }
+        SessionManager.getAppContext()?.let { ctx: Context ->
+            val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.cancel(net.syncswift.fcm.SyncSwiftFirebaseMessagingService.NOTIFICATION_PAIR_ID)
+        }
+    }
+
+    actual fun cancelIncomingTransferRequest(transferId: String?) {
+        val req = _pendingTransferRequest.value
+        if (req != null) {
+            if (transferId.isNullOrBlank() || req.transferId == transferId || req.requestId == transferId) {
+                req.deferredResponse.complete(false)
+                _pendingTransferRequest.value = null
+            }
+        }
+        SessionManager.getAppContext()?.let { ctx: Context ->
+            val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.cancel(net.syncswift.fcm.SyncSwiftFirebaseMessagingService.NOTIFICATION_FILE_ID)
+        }
+    }
+
+    actual fun acceptTransferRequest(request: IncomingTransferRequest) {
+        if (_pendingTransferRequest.value?.requestId != request.requestId) {
+            showNativeToast(currentAppCopy().transferCancelledBySender)
+            return
+        }
+        _pendingTransferRequest.value = null
         request.deferredResponse.complete(true)
         if (request.isRemote && request.downloadUrl.isNotBlank()) {
             net.syncswift.transfer.TransferEngine.downloadRemoteFile(
@@ -373,24 +406,57 @@ actual object ConnectionManager {
     }
 
     actual fun requestPairing(target: DiscoveredDevice, onResult: (PairResult) -> Unit) {
+        val copy = currentAppCopy()
+        val self = DeviceDiscoveryManager.getSelfDevice()
+        val selfName = self?.name ?: Build.MODEL
+        val selfHost = self?.host ?: ""
+        val selfPort = self?.port ?: 52424
+        val selfOs = self?.osType ?: "Android"
+
+        var activeSocket: Socket? = null
+        var pairJob: Job? = null
+
+        val cancelPairing: () -> Unit = {
+            try {
+                activeSocket?.close()
+            } catch (_: Exception) {}
+            pairJob?.cancel()
+
+            // If target has push token, send pair_cancelled via FCM so peer dialog/notification closes instantly
+            scope.launch {
+                var tok = target.pushToken
+                if (tok.isNullOrBlank() && target.host.isNotBlank()) {
+                    tok = queryPushTokenFromSupabase(target.host, target.name)
+                }
+                if (!tok.isNullOrBlank()) {
+                    sendFcmNotification(
+                        token = tok,
+                        title = "SyncSwift",
+                        body = "",
+                        data = mapOf(
+                            "type" to "pair_cancelled",
+                            "senderName" to selfName,
+                            "senderHost" to selfHost
+                        )
+                    )
+                }
+            }
+        }
+
         OutgoingStatusManager.show(
             type = OutgoingStatusType.CONNECTION,
             deviceName = target.name,
             step = OutgoingStep.WAITING_APPROVAL,
-            message = "Cihazın onay vermesi bekleniyor..."
+            message = copy.waitingForRecipientApproval,
+            onCancel = cancelPairing
         )
 
-        scope.launch {
-            val self = DeviceDiscoveryManager.getSelfDevice()
-            val selfName = self?.name ?: Build.MODEL
-            val selfHost = self?.host ?: ""
-            val selfPort = self?.port ?: 52424
-            val selfOs = self?.osType ?: "Android"
-
+        pairJob = scope.launch {
             // 1. Direct TCP handshake if valid IP
             if (target.host.isNotBlank() && !target.host.startsWith("remote-")) {
                 try {
                     val socket = Socket()
+                    activeSocket = socket
                     socket.connect(InetSocketAddress(target.host, target.port), 3000)
                     socket.soTimeout = 25000
                     socket.use { s ->
@@ -406,17 +472,17 @@ actual object ConnectionManager {
                         out.flush()
 
                         val response = input.readByte()
-                        val copy = currentAppCopy()
+                        val currentCopy = currentAppCopy()
                         if (response == RESP_ACCEPTED) {
                             markDeviceConnected(deviceKey(target.host, target.port), isRemote = target.isRemote)
                             markDeviceConnected(target.id, isRemote = target.isRemote)
-                            OutgoingStatusManager.completeSuccess(copy.connectionAccepted)
+                            OutgoingStatusManager.completeSuccess(currentCopy.connectionAccepted)
                             withContext(Dispatchers.Main) {
                                 onResult(PairResult.ACCEPTED)
                             }
                             return@launch
                         } else {
-                            OutgoingStatusManager.fail(copy.connectionRequestRejected)
+                            OutgoingStatusManager.fail(currentCopy.connectionRequestRejected)
                             withContext(Dispatchers.Main) {
                                 onResult(PairResult.REJECTED)
                             }
@@ -425,6 +491,8 @@ actual object ConnectionManager {
                     }
                 } catch (e: Exception) {
                     Log.d(TAG, "Direct socket pair failed: ${e.message}")
+                } finally {
+                    activeSocket = null
                 }
             }
 
@@ -433,13 +501,13 @@ actual object ConnectionManager {
             if (token.isNullOrBlank() && target.host.isNotBlank()) {
                 token = queryPushTokenFromSupabase(target.host, target.name)
             }
-            val copy = currentAppCopy()
+            val currentCopy = currentAppCopy()
             if (!token.isNullOrBlank()) {
                 Log.d(TAG, "Sending FCM wake-up pairing request to token: $token")
                 val fcmSent = sendFcmNotification(
                     token = token,
-                    title = copy.notificationPairRequestTitle,
-                    body = copy.notificationPairRequestBody.replace("%s", selfName),
+                    title = currentCopy.notificationPairRequestTitle,
+                    body = currentCopy.notificationPairRequestBody.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_request",
                         "senderId" to (self?.id ?: ""),
@@ -454,11 +522,12 @@ actual object ConnectionManager {
                         type = OutgoingStatusType.CONNECTION,
                         deviceName = target.name,
                         step = OutgoingStep.WAITING_APPROVAL,
-                        message = copy.transferNotificationSentWaiting
+                        message = currentCopy.transferNotificationSentWaiting,
+                        onCancel = cancelPairing
                     )
                     withContext(Dispatchers.Main) {
                         SessionManager.getAppContext()?.let { ctx ->
-                            android.widget.Toast.makeText(ctx, copy.transferNotificationSentWaiting, android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(ctx, currentCopy.transferNotificationSentWaiting, android.widget.Toast.LENGTH_SHORT).show()
                         }
                         onResult(PairResult.PENDING_APPROVAL)
                     }
@@ -466,7 +535,7 @@ actual object ConnectionManager {
                 }
             }
 
-            OutgoingStatusManager.fail(copy.deviceDidNotRespond)
+            OutgoingStatusManager.fail(currentCopy.deviceDidNotRespond)
             withContext(Dispatchers.Main) {
                 onResult(PairResult.UNAVAILABLE)
             }
