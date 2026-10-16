@@ -16,6 +16,16 @@ import kotlin.Byte
 @OptIn(ExperimentalForeignApi::class)
 actual object TransferEngine {
     private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
+    private fun parseIpv4(ip: String): UInt? {
+        val parts = ip.split('.')
+        if (parts.size != 4) return null
+        val b0 = parts[0].toUIntOrNull() ?: return null
+        val b1 = parts[1].toUIntOrNull() ?: return null
+        val b2 = parts[2].toUIntOrNull() ?: return null
+        val b3 = parts[3].toUIntOrNull() ?: return null
+        if (b0 > 255u || b1 > 255u || b2 > 255u || b3 > 255u) return null
+        return b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
+    }
     private const val PROTOCOL_VERSION: kotlin.Byte = 1
     private const val TYPE_CLIPBOARD: kotlin.Byte = 1
     private const val ACK: kotlin.Byte = 6
@@ -276,7 +286,12 @@ actual object TransferEngine {
             val serverAddr = alloc<sockaddr_in>()
             serverAddr.sin_family = AF_INET.convert()
             serverAddr.sin_port = htons(port.toUShort())
-            inet_pton(AF_INET, host, serverAddr.sin_addr.ptr)
+            val parsedIp = parseIpv4(host)
+            if (parsedIp == null) {
+                close(sock)
+                return@memScoped false
+            }
+            serverAddr.sin_addr.s_addr = parsedIp.convert()
 
             if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
                 close(sock)

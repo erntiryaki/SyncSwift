@@ -14,6 +14,25 @@ import platform.posix.*
 
 private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
 
+private fun formatIpv4(s_addr: UInt): String {
+    val b0 = (s_addr and 0xFFu).toLong()
+    val b1 = ((s_addr shr 8) and 0xFFu).toLong()
+    val b2 = ((s_addr shr 16) and 0xFFu).toLong()
+    val b3 = ((s_addr shr 24) and 0xFFu).toLong()
+    return "$b0.$b1.$b2.$b3"
+}
+
+private fun parseIpv4(ip: String): UInt? {
+    val parts = ip.split('.')
+    if (parts.size != 4) return null
+    val b0 = parts[0].toUIntOrNull() ?: return null
+    val b1 = parts[1].toUIntOrNull() ?: return null
+    val b2 = parts[2].toUIntOrNull() ?: return null
+    val b3 = parts[3].toUIntOrNull() ?: return null
+    if (b0 > 255u || b1 > 255u || b2 > 255u || b3 > 255u) return null
+    return b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
+}
+
 @OptIn(ExperimentalForeignApi::class)
 private class ServiceBrowserDelegate(
     private val onFound: (NSNetService) -> Unit,
@@ -48,8 +67,8 @@ private class ServiceResolverDelegate(
                 val bytes = data.bytes ?: continue
                 val sa = bytes.reinterpret<sockaddr_in>().pointed
                 if (sa.sin_family.toInt() == AF_INET) {
-                    val ip = inet_ntoa(sa.sin_addr)?.toKString()
-                    if (!ip.isNullOrBlank() && ip != "127.0.0.1") {
+                    val ip = formatIpv4(sa.sin_addr.s_addr.toLong().toUInt())
+                    if (ip.isNotBlank() && ip != "127.0.0.1" && ip != "0.0.0.0") {
                         hostIp = ip
                         break
                     }
@@ -263,14 +282,14 @@ actual object DeviceDiscoveryManager {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun getLocalWifiIp(): String? {
+        val sock = socket(AF_INET, SOCK_DGRAM, 0)
+        if (sock < 0) return null
         return try {
-            val sock = socket(AF_INET, SOCK_DGRAM, 0)
-            if (sock < 0) return null
             memScoped {
                 val destAddr = alloc<sockaddr_in>()
                 destAddr.sin_family = AF_INET.convert()
                 destAddr.sin_port = htons(53.toUShort())
-                inet_pton(AF_INET, "8.8.8.8", destAddr.sin_addr.ptr)
+                destAddr.sin_addr.s_addr = 0x08080808u.convert()
 
                 if (connect(sock, destAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
                     close(sock)
@@ -287,10 +306,11 @@ actual object DeviceDiscoveryManager {
                 }
 
                 close(sock)
-                val ipStr = inet_ntoa(localAddr.sin_addr)?.toKString()
-                if (ipStr.isNullOrBlank() || ipStr == "0.0.0.0") null else ipStr
+                val ipStr = formatIpv4(localAddr.sin_addr.s_addr.toLong().toUInt())
+                if (ipStr.isBlank() || ipStr == "0.0.0.0" || ipStr == "127.0.0.1") null else ipStr
             }
         } catch (_: Exception) {
+            close(sock)
             null
         }
     }
