@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
+import net.syncswift.SyncSwiftConfig
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -309,8 +310,8 @@ actual object TransferEngine {
                             input = input
                         )
 
-                        if (savedSuccessfully) {
-                            updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED)
+                        if (savedSuccessfully != null) {
+                            updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED, savedSuccessfully)
                             output.writeByte(ACK.toInt())
                             output.flush()
 
@@ -352,8 +353,8 @@ actual object TransferEngine {
                             input = input
                         )
 
-                        if (saved) {
-                            updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED)
+                        if (saved != null) {
+                            updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED, saved)
                             output.writeByte(ACK.toInt())
                             output.flush()
                             Handler(Looper.getMainLooper()).post {
@@ -431,11 +432,12 @@ actual object TransferEngine {
         fileSize: Long,
         mimeType: String,
         transferId: String,
-        input: DataInputStream
-    ): Boolean {
-        val ctx = appContext ?: return false
+        input: java.io.InputStream
+    ): String? {
+        val ctx = appContext ?: return null
         var targetUri: Uri? = null
         var outputStream: OutputStream? = null
+        var fallbackPath: String? = null
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -459,6 +461,7 @@ actual object TransferEngine {
                     File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "SyncSwift").apply { mkdirs() }
                 }
                 val destFile = File(targetDir, fileName)
+                fallbackPath = destFile.absolutePath
                 outputStream = FileOutputStream(destFile)
             }
 
@@ -466,13 +469,15 @@ actual object TransferEngine {
             var totalRead = 0L
 
             outputStream.use { out ->
-                while (totalRead < fileSize) {
-                    val toRead = minOf(buffer.size.toLong(), fileSize - totalRead).toInt()
+                while (totalRead < fileSize || fileSize <= 0) {
+                    val toRead = if (fileSize > 0) minOf(buffer.size.toLong(), fileSize - totalRead).toInt() else buffer.size
                     val read = input.read(buffer, 0, toRead)
                     if (read == -1) break
                     out.write(buffer, 0, read)
                     totalRead += read
-                    updateTransferProgress(transferId, totalRead, TransferStatus.IN_PROGRESS)
+                    if (fileSize > 0) {
+                        updateTransferProgress(transferId, totalRead, TransferStatus.IN_PROGRESS)
+                    }
                 }
                 out.flush()
             }
@@ -486,10 +491,16 @@ actual object TransferEngine {
                 } catch (_: Exception) {}
             }
 
-            return totalRead == fileSize
+            val isOk = if (fileSize > 0) totalRead == fileSize else totalRead > 0
+            if (isOk) {
+                val savedLocation = targetUri?.toString() ?: fallbackPath
+                showFileCompletedNotification(fileName, mimeType, savedLocation)
+                return savedLocation
+            }
+            return null
         } catch (e: Exception) {
             Log.e(TAG, "Failed saving incoming file: ${e.message}", e)
-            return false
+            return null
         }
     }
 
@@ -550,6 +561,21 @@ actual object TransferEngine {
             recordTransfer(item)
             stagedTransfers[transferId] = StagedFileTransfer(fileName, fileBytes, mimeType, targetDeviceName)
 
+            // If not local network, directly execute Remote Delivery via Supabase Storage & Push Notification
+            if (!isLocalNetwork) {
+                executeRemoteTransfer(
+                    targetDeviceName = targetDeviceName,
+                    targetHost = targetHost,
+                    fileName = fileName,
+                    fileBytes = fileBytes,
+                    mimeType = mimeType,
+                    transferId = transferId,
+                    onSuccess = onSuccess,
+                    onError = onError
+                )
+                return@launch
+            }
+
             OutgoingStatusManager.show(
                 type = OutgoingStatusType.FILE,
                 deviceName = targetDeviceName,
@@ -564,77 +590,30 @@ actual object TransferEngine {
                 try {
                     socket.connect(InetSocketAddress(targetHost, targetPort), 5000)
                 } catch (e: Exception) {
-                    // 3. Pro Limit: Background wake when receiving app is closed
-                    if (!net.syncswift.subscription.SubscriptionManager.canBackgroundWake()) {
+                    // Local socket unreachable: Fallback to remote transfer if allowed
+                    if (!net.syncswift.subscription.SubscriptionManager.canRemoteTransfer()) {
                         updateTransferProgress(transferId, 0, TransferStatus.FAILED)
-                        OutgoingStatusManager.fail(copy.receiverAppMustBeOpen)
+                        OutgoingStatusManager.fail(copy.remoteTransferProRequired)
                         net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                            net.syncswift.subscription.PaywallReason.BACKGROUND_WAKE
+                            net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
                         )
                         withContext(Dispatchers.Main) {
-                            showNativeToast(copy.receiverAppMustBeOpen)
-                            onError(copy.receiverAppMustBeOpen)
+                            showNativeToast(copy.remoteTransferProRequired)
+                            onError(copy.remoteTransferProRequired)
                         }
                         return@launch
                     }
 
-                    val cleanTarget = net.syncswift.discovery.cleanDeviceDisplayName(targetDeviceName)
-                    val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull { 
-                        (it.host == targetHost && it.port == targetPort) || 
-                        (targetHost.isNotBlank() && it.host == targetHost) || 
-                        net.syncswift.discovery.cleanDeviceDisplayName(it.name) == cleanTarget
-                    }
-                    var pushToken = targetDev?.pushToken
-                    if (pushToken.isNullOrBlank()) {
-                        pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
-                    }
-                    if (!pushToken.isNullOrBlank()) {
-                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
-                        val selfHost = self?.host ?: ""
-                        val selfPort = getServerPort()
-                        val fcmSent = ConnectionManager.sendFcmNotification(
-                            token = pushToken,
-                            title = copy.notificationFileRequestTitle,
-                            body = copy.notificationFileRequestBody
-                                .replace("%s", Build.MODEL)
-                                .replace("%s", fileName)
-                                .replace("(%s)", "(${formatBytes(fileBytes.size.toLong())})"),
-                            data = mapOf(
-                                "type" to "file_request",
-                                "transferId" to transferId,
-                                "senderName" to Build.MODEL,
-                                "senderHost" to selfHost,
-                                "senderPort" to "$selfPort",
-                                "fileName" to fileName,
-                                "fileSize" to "${fileBytes.size}",
-                                "mimeType" to mimeType
-                            )
-                        )
-                        withContext(Dispatchers.Main) {
-                            if (fcmSent) {
-                                OutgoingStatusManager.show(
-                                    type = OutgoingStatusType.FILE,
-                                    deviceName = targetDeviceName,
-                                    fileName = fileName,
-                                    totalBytes = fileBytes.size.toLong(),
-                                    step = OutgoingStep.WAITING_APPROVAL,
-                                    message = copy.transferNotificationSentWaiting
-                                )
-                                showNativeToast(copy.transferNotificationSentWaiting)
-                            } else {
-                                OutgoingStatusManager.fail(copy.deviceNotificationFailed)
-                                showNativeToast(copy.deviceNotificationFailed)
-                                onError(copy.deviceNotificationFailed)
-                            }
-                        }
-                    } else {
-                        updateTransferProgress(transferId, 0, TransferStatus.FAILED)
-                        OutgoingStatusManager.fail(copy.deviceOfflineOrNotFound)
-                        withContext(Dispatchers.Main) {
-                            showNativeToast(copy.deviceNotAvailable)
-                            onError(copy.deviceNotAvailable)
-                        }
-                    }
+                    executeRemoteTransfer(
+                        targetDeviceName = targetDeviceName,
+                        targetHost = targetHost,
+                        fileName = fileName,
+                        fileBytes = fileBytes,
+                        mimeType = mimeType,
+                        transferId = transferId,
+                        onSuccess = onSuccess,
+                        onError = onError
+                    )
                     return@launch
                 }
 
@@ -714,6 +693,263 @@ actual object TransferEngine {
                     onError(msg)
                 }
             }
+        }
+    }
+
+    private suspend fun executeRemoteTransfer(
+        targetDeviceName: String,
+        targetHost: String,
+        fileName: String,
+        fileBytes: ByteArray,
+        mimeType: String,
+        transferId: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val copy = currentAppCopy()
+        OutgoingStatusManager.show(
+            type = OutgoingStatusType.FILE,
+            deviceName = targetDeviceName,
+            fileName = fileName,
+            totalBytes = fileBytes.size.toLong(),
+            step = OutgoingStep.IN_PROGRESS,
+            message = copy.remoteTransferUploading
+        )
+
+        val downloadUrl = uploadToSupabaseStorage(transferId, fileName, fileBytes, mimeType)
+        if (downloadUrl == null) {
+            updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+            OutgoingStatusManager.fail(copy.transferFailed)
+            withContext(Dispatchers.Main) {
+                showNativeToast(copy.transferFailed)
+                onError(copy.transferFailed)
+            }
+            return
+        }
+
+        val cleanTarget = net.syncswift.discovery.cleanDeviceDisplayName(targetDeviceName)
+        val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+            net.syncswift.discovery.cleanDeviceDisplayName(it.name) == cleanTarget
+        }
+        var pushToken = targetDev?.pushToken
+        if (pushToken.isNullOrBlank()) {
+            pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+        }
+
+        if (!pushToken.isNullOrBlank()) {
+            val fcmSent = ConnectionManager.sendFcmNotification(
+                token = pushToken,
+                title = copy.notificationFileRequestTitle,
+                body = copy.notificationFileRequestBody
+                    .replace("%s", Build.MODEL)
+                    .replace("%s", fileName)
+                    .replace("(%s)", "(${formatBytes(fileBytes.size.toLong())})"),
+                data = mapOf(
+                    "type" to "file_request",
+                    "transferId" to transferId,
+                    "senderName" to Build.MODEL,
+                    "fileName" to fileName,
+                    "fileSize" to "${fileBytes.size}",
+                    "mimeType" to mimeType,
+                    "downloadUrl" to downloadUrl,
+                    "isRemote" to "true"
+                )
+            )
+
+            withContext(Dispatchers.Main) {
+                if (fcmSent) {
+                    updateTransferProgress(transferId, fileBytes.size.toLong(), TransferStatus.COMPLETED)
+                    OutgoingStatusManager.completeSuccess(copy.remoteTransferUploaded)
+                    showNativeToast(copy.remoteTransferUploaded)
+                    onSuccess()
+                } else {
+                    updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                    OutgoingStatusManager.fail(copy.deviceNotificationFailed)
+                    showNativeToast(copy.deviceNotificationFailed)
+                    onError(copy.deviceNotificationFailed)
+                }
+            }
+        } else {
+            updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+            OutgoingStatusManager.fail(copy.deviceOfflineOrNotFound)
+            withContext(Dispatchers.Main) {
+                showNativeToast(copy.deviceNotAvailable)
+                onError(copy.deviceNotAvailable)
+            }
+        }
+    }
+
+    private suspend fun uploadToSupabaseStorage(
+        transferId: String,
+        fileName: String,
+        fileBytes: ByteArray,
+        mimeType: String
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val safeName = java.net.URLEncoder.encode(fileName, "UTF-8").replace("+", "%20")
+            val objectPath = "${transferId}_$safeName"
+            val uploadUrl = java.net.URL("${SyncSwiftConfig.SUPABASE_URL}/storage/v1/object/syncswift_transfers/$objectPath")
+            val conn = (uploadUrl.openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 30000
+                readTimeout = 60000
+                setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
+                setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                setRequestProperty("Content-Type", if (mimeType.isNotBlank()) mimeType else "application/octet-stream")
+                setFixedLengthStreamingMode(fileBytes.size)
+            }
+            conn.outputStream.use { os ->
+                os.write(fileBytes)
+                os.flush()
+            }
+            val code = conn.responseCode
+            if (code in 200..299) {
+                "${SyncSwiftConfig.SUPABASE_URL}/storage/v1/object/public/syncswift_transfers/$objectPath"
+            } else {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Supabase storage upload failed ($code): $err")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Supabase storage upload exception: ${e.message}", e)
+            null
+        }
+    }
+
+    fun downloadRemoteFile(
+        downloadUrl: String,
+        fileName: String,
+        fileSize: Long,
+        mimeType: String,
+        transferId: String,
+        senderName: String
+    ) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val item = TransferItem(
+                    id = transferId,
+                    fileName = fileName,
+                    fileSizeBytes = fileSize,
+                    mimeType = mimeType,
+                    bytesTransferred = 0,
+                    isSent = false,
+                    peerName = senderName,
+                    status = TransferStatus.IN_PROGRESS,
+                    timestamp = System.currentTimeMillis()
+                )
+                recordTransfer(item)
+
+                val conn = (java.net.URL(downloadUrl).openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 20000
+                    readTimeout = 60000
+                }
+                if (conn.responseCode !in 200..299) {
+                    Log.e(TAG, "Failed to connect to remote download URL: ${conn.responseCode}")
+                    updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                    return@launch
+                }
+
+                val totalSize = if (fileSize > 0) fileSize else conn.contentLengthLong
+                val input = conn.inputStream
+                val savedLocation = saveIncomingStream(
+                    fileName = fileName,
+                    fileSize = totalSize,
+                    mimeType = mimeType,
+                    transferId = transferId,
+                    input = input
+                )
+
+                if (savedLocation != null) {
+                    updateTransferProgress(transferId, totalSize, TransferStatus.COMPLETED, savedLocation)
+                    withContext(Dispatchers.Main) {
+                        val copy = currentAppCopy()
+                        showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))
+                    }
+                } else {
+                    updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Remote file download error: ${e.message}", e)
+                updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+            }
+        }
+    }
+
+    fun showFileCompletedNotification(fileName: String, mimeType: String, localFilePath: String?) {
+        val ctx = appContext ?: return
+        try {
+            val copy = currentAppCopy()
+            val notificationManager = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val channelId = "syncswift_transfers_channel"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = android.app.NotificationChannel(
+                    channelId,
+                    copy.notificationChannelName,
+                    android.app.NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = copy.notificationChannelDesc
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val notificationId = (System.currentTimeMillis() % 100000).toInt()
+
+            val openIntent = android.content.Intent(ctx, net.syncswift.fcm.NotificationActionReceiver::class.java).apply {
+                action = net.syncswift.fcm.NotificationActionReceiver.ACTION_OPEN_FILE
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_FILE_PATH, localFilePath)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_FILE_NAME, fileName)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_MIME_TYPE, mimeType)
+            }
+            val openPending = android.app.PendingIntent.getBroadcast(
+                ctx,
+                notificationId + 10,
+                openIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val openActionIntent = android.content.Intent(ctx, net.syncswift.fcm.NotificationActionReceiver::class.java).apply {
+                action = net.syncswift.fcm.NotificationActionReceiver.ACTION_OPEN_FILE
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_FILE_PATH, localFilePath)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_FILE_NAME, fileName)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_MIME_TYPE, mimeType)
+            }
+            val openActionPending = android.app.PendingIntent.getBroadcast(
+                ctx,
+                notificationId + 11,
+                openActionIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val showLocationIntent = android.content.Intent(ctx, net.syncswift.fcm.NotificationActionReceiver::class.java).apply {
+                action = net.syncswift.fcm.NotificationActionReceiver.ACTION_SHOW_LOCATION
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_FILE_PATH, localFilePath)
+                putExtra(net.syncswift.fcm.NotificationActionReceiver.EXTRA_FILE_NAME, fileName)
+            }
+            val showLocationPending = android.app.PendingIntent.getBroadcast(
+                ctx,
+                notificationId + 12,
+                showLocationIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val builder = androidx.core.app.NotificationCompat.Builder(ctx, channelId)
+                .setSmallIcon(net.syncswift.R.mipmap.ic_launcher)
+                .setContentTitle(copy.fileReceived.replace("%s", fileName))
+                .setContentText("${copy.openFileAction} · ${copy.showFileLocationAction}")
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(openPending)
+                .addAction(android.R.drawable.ic_menu_view, copy.openFileAction, openActionPending)
+                .addAction(android.R.drawable.ic_menu_agenda, copy.showFileLocationAction, showLocationPending)
+
+            notificationManager.notify(notificationId, builder.build())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show file completed notification: ${e.message}", e)
         }
     }
 
@@ -871,10 +1107,10 @@ actual object TransferEngine {
                         input = input
                     )
 
-                    if (saved) {
+                    if (saved != null) {
                         out.writeByte(ACK.toInt())
                         out.flush()
-                        updateTransferProgress(transferId, if (incomingSize > 0) incomingSize else fileSize, TransferStatus.COMPLETED)
+                        updateTransferProgress(transferId, if (incomingSize > 0) incomingSize else fileSize, TransferStatus.COMPLETED, saved)
                         withContext(Dispatchers.Main) {
                             val copy = currentAppCopy()
                             showNativeToast(copy.fileDownloadSuccess.replace("%s", fileName))
@@ -900,13 +1136,15 @@ actual object TransferEngine {
         saveTransfers()
     }
 
-    private fun updateTransferProgress(id: String, bytes: Long, status: TransferStatus) {
+    private fun updateTransferProgress(id: String, bytes: Long, status: TransferStatus, localFilePath: String? = null) {
         val current = _transfers.value.toMutableList()
         val index = current.indexOfFirst { it.id == id }
         if (index >= 0) {
-            current[index] = current[index].copy(
+            val existing = current[index]
+            current[index] = existing.copy(
                 bytesTransferred = bytes,
-                status = status
+                status = status,
+                localFilePath = localFilePath ?: existing.localFilePath
             )
             _transfers.value = current
             if (status == TransferStatus.COMPLETED || status == TransferStatus.FAILED || status == TransferStatus.CANCELLED) {
@@ -934,7 +1172,8 @@ actual object TransferEngine {
                         isSent = obj.optBoolean("isSent", false),
                         peerName = obj.optString("peerName", ""),
                         status = status,
-                        timestamp = obj.optLong("timestamp", 0L)
+                        timestamp = obj.optLong("timestamp", 0L),
+                        localFilePath = if (obj.has("localFilePath")) obj.optString("localFilePath").takeIf { it.isNotBlank() } else null
                     )
                 )
             }
@@ -960,6 +1199,7 @@ actual object TransferEngine {
                 obj.put("peerName", item.peerName)
                 obj.put("status", item.status.name)
                 obj.put("timestamp", item.timestamp)
+                obj.put("localFilePath", item.localFilePath ?: "")
                 arr.put(obj)
             }
             SessionManager.saveTransfersJson(arr.toString())

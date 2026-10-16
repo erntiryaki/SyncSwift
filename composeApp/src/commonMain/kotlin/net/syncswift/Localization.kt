@@ -407,6 +407,10 @@ class Copy {
     var notificationPairAcceptedStatus: String = "%s approved your connection request!"
     var notificationPairRejectedStatus: String = "%s rejected the connection request."
     var notificationFileRejectedStatus: String = "%s rejected the file transfer."
+    var openFileAction: String = "Open"
+    var showFileLocationAction: String = "Show in Files"
+    var remoteTransferUploading: String = "Uploading to secure cloud relay..."
+    var remoteTransferUploaded: String = "File sent to remote device!"
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {

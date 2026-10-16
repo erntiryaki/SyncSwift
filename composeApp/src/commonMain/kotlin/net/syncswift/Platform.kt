@@ -7,4 +7,6 @@ expect fun getSystemLanguageCode(): String
 expect fun showNativeToast(message: String)
 @androidx.compose.runtime.Composable
 expect fun UpdateSystemBars(isDark: Boolean)
+expect fun openFile(filePathOrUri: String?, fileName: String, mimeType: String)
+expect fun showFileLocation(filePathOrUri: String?, fileName: String)
 

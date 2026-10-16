@@ -261,6 +261,80 @@ private fun TransferItemDetailCard(
                     trackColor = InputBg
                 )
             }
+
+            if (item.status == TransferStatus.COMPLETED && !item.isSent) {
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // 1. Dosya Konumunu Gör
+                    Surface(
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(19.dp))
+                            .clickable {
+                                net.syncswift.showFileLocation(item.localFilePath, item.fileName)
+                            },
+                        shape = RoundedCornerShape(19.dp),
+                        color = InputBg,
+                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            FolderOutlineIcon(Modifier.size(16.dp), color = Mist)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = copy.showFileLocationAction,
+                                color = Cloud,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    // 2. Aç
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(19.dp))
+                            .clickable {
+                                net.syncswift.openFile(item.localFilePath, item.fileName, item.mimeType)
+                            },
+                        shape = RoundedCornerShape(19.dp),
+                        color = PillButtonBg,
+                        border = BorderStroke(1.dp, PillButtonBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            OpenExternalIcon(Modifier.size(15.dp), color = PillButtonText)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = copy.openFileAction,
+                                color = PillButtonText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

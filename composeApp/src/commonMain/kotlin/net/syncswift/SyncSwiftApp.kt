@@ -20,6 +20,10 @@ import net.syncswift.ui.auth.*
 import net.syncswift.ui.home.HomeScreen
 import net.syncswift.ui.onboarding.OnboardingScreen
 import net.syncswift.ui.theme.*
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
@@ -99,6 +103,26 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
     val pendingPairRequest by net.syncswift.connection.ConnectionManager.pendingPairRequest.collectAsState()
     val pendingTransferRequest by net.syncswift.connection.ConnectionManager.pendingTransferRequest.collectAsState()
+    val allTransfers by net.syncswift.transfer.TransferEngine.transfers.collectAsState()
+    var latestCompletedItem by remember { mutableStateOf<net.syncswift.transfer.TransferItem?>(null) }
+    var lastHandledTransferId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(allTransfers) {
+        val completedIncoming = allTransfers.firstOrNull { it.status == net.syncswift.transfer.TransferStatus.COMPLETED && !it.isSent }
+        if (completedIncoming != null && completedIncoming.id != lastHandledTransferId) {
+            if (System.currentTimeMillis() - completedIncoming.timestamp < 10000L) {
+                lastHandledTransferId = completedIncoming.id
+                latestCompletedItem = completedIncoming
+            }
+        }
+    }
+
+    LaunchedEffect(latestCompletedItem) {
+        if (latestCompletedItem != null) {
+            kotlinx.coroutines.delay(6500)
+            latestCompletedItem = null
+        }
+    }
 
     var targetedDevice by remember { mutableStateOf<net.syncswift.discovery.DiscoveredDevice?>(null) }
     var pendingFileToSend by remember { mutableStateOf<Triple<String, ByteArray, String>?>(null) }
@@ -540,6 +564,148 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     fontSize = 15.sp,
                                     lineHeight = 22.sp
                                 )
+                            }
+                        }
+
+                        // Global Floating Received File Banner with "Dosya Konumunu Gör" & "Aç"
+                        AnimatedVisibility(
+                            visible = latestCompletedItem != null,
+                            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .zIndex(99f)
+                        ) {
+                            val item = latestCompletedItem
+                            if (item != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = CardSurface,
+                                    border = BorderStroke(1.dp, Blue.copy(alpha = 0.5f)),
+                                    shadowElevation = 8.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                AnimatedCheckCircleIcon(
+                                                    modifier = Modifier.size(28.dp),
+                                                    circleColor = SuccessGreen,
+                                                    checkColor = Color.White
+                                                )
+                                                Spacer(Modifier.width(10.dp))
+                                                Column {
+                                                    Text(
+                                                        text = item.fileName,
+                                                        color = Cloud,
+                                                        fontSize = 14.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = "${item.formattedSize} · ${copy.fileReceivedSuccessfully.replace("%s", "").trim(' ', ':')}",
+                                                        color = Mist,
+                                                        fontSize = 12.sp,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(28.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable { latestCompletedItem = null },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CrossVectorIcon(Modifier.size(12.dp), color = Mist)
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(12.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            // 1. Dosya Konumunu Gör
+                                            Surface(
+                                                modifier = Modifier
+                                                    .weight(1.3f)
+                                                    .height(36.dp)
+                                                    .clip(RoundedCornerShape(18.dp))
+                                                    .clickable {
+                                                        latestCompletedItem = null
+                                                        net.syncswift.showFileLocation(item.localFilePath, item.fileName)
+                                                    },
+                                                shape = RoundedCornerShape(18.dp),
+                                                color = InputBg,
+                                                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
+                                                ) {
+                                                    FolderOutlineIcon(Modifier.size(15.dp), color = Mist)
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text(
+                                                        text = copy.showFileLocationAction,
+                                                        color = Cloud,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+
+                                            // 2. Aç
+                                            Surface(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(36.dp)
+                                                    .clip(RoundedCornerShape(18.dp))
+                                                    .clickable {
+                                                        latestCompletedItem = null
+                                                        net.syncswift.openFile(item.localFilePath, item.fileName, item.mimeType)
+                                                    },
+                                                shape = RoundedCornerShape(18.dp),
+                                                color = PillButtonBg,
+                                                border = BorderStroke(1.dp, PillButtonBorder)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
+                                                ) {
+                                                    OpenExternalIcon(Modifier.size(14.dp), color = PillButtonText)
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text(
+                                                        text = copy.openFileAction,
+                                                        color = PillButtonText,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 

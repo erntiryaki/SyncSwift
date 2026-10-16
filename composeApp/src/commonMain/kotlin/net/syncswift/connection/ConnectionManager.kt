@@ -36,6 +36,8 @@ data class IncomingTransferRequest(
     val senderHost: String = "",
     val senderPort: Int = 52424,
     val transferId: String = "",
+    val downloadUrl: String = "",
+    val isRemote: Boolean = false,
     val deferredResponse: CompletableDeferred<Boolean> = CompletableDeferred()
 ) {
     val formattedSize: String

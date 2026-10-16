@@ -93,6 +93,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val fileName = data["fileName"] ?: "File"
                 val fileSize = data["fileSize"]?.toLongOrNull() ?: 0L
                 val mimeType = data["mimeType"] ?: "application/octet-stream"
+                val downloadUrl = data["downloadUrl"] ?: ""
+                val isRemote = data["isRemote"] == "true"
 
                 val request = IncomingTransferRequest(
                     senderName = senderName,
@@ -101,7 +103,9 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     mimeType = mimeType,
                     senderHost = senderHost,
                     senderPort = senderPort,
-                    transferId = transferId
+                    transferId = transferId,
+                    downloadUrl = downloadUrl,
+                    isRemote = isRemote
                 )
                 ConnectionManager.dispatchIncomingTransferRequest(request)
             }
@@ -227,6 +231,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 putExtra(NotificationActionReceiver.EXTRA_FILE_NAME, fileName)
                 putExtra(NotificationActionReceiver.EXTRA_FILE_SIZE, fileSize)
                 putExtra(NotificationActionReceiver.EXTRA_MIME_TYPE, mimeType)
+                putExtra(NotificationActionReceiver.EXTRA_DOWNLOAD_URL, data["downloadUrl"] ?: "")
+                putExtra(NotificationActionReceiver.EXTRA_IS_REMOTE, data["isRemote"] == "true")
             }
             val acceptFilePending = PendingIntent.getBroadcast(
                 this,

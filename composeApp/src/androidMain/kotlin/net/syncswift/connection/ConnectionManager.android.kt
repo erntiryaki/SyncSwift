@@ -176,7 +176,16 @@ actual object ConnectionManager {
             _pendingTransferRequest.value = null
         }
         request.deferredResponse.complete(true)
-        if (request.senderHost.isNotBlank() && request.transferId.isNotBlank()) {
+        if (request.isRemote && request.downloadUrl.isNotBlank()) {
+            net.syncswift.transfer.TransferEngine.downloadRemoteFile(
+                downloadUrl = request.downloadUrl,
+                fileName = request.fileName,
+                fileSize = request.fileSize,
+                mimeType = request.mimeType,
+                transferId = request.transferId,
+                senderName = request.senderName
+            )
+        } else if (request.senderHost.isNotBlank() && request.transferId.isNotBlank()) {
             net.syncswift.transfer.TransferEngine.downloadStagedFile(
                 senderHost = request.senderHost,
                 senderPort = request.senderPort,

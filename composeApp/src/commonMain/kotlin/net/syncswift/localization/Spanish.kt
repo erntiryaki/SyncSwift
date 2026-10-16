@@ -377,4 +377,8 @@ val SpanishCopy = Copy().apply {
     notificationPairAcceptedStatus = "¡%s aprobó tu solicitud de conexión!"
     notificationPairRejectedStatus = "%s rechazó la solicitud de conexión."
     notificationFileRejectedStatus = "%s rechazó la transferencia de archivo."
+    openFileAction = "Abrir"
+    showFileLocationAction = "Ver ubicación"
+    remoteTransferUploading = "Subiendo al relé seguro en la nube..."
+    remoteTransferUploaded = "¡Archivo enviado al dispositivo remoto!"
 }

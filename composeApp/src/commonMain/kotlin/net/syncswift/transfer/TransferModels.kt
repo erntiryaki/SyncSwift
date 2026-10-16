@@ -23,7 +23,8 @@ data class TransferItem(
     val isSent: Boolean = false,
     val peerName: String = "",
     val status: TransferStatus = TransferStatus.PENDING,
-    val timestamp: Long = 0L
+    val timestamp: Long = 0L,
+    val localFilePath: String? = null
 ) {
     val progress: Float
         get() = if (fileSizeBytes > 0) (bytesTransferred.toFloat() / fileSizeBytes.toFloat()).coerceIn(0f, 1f) else 1f

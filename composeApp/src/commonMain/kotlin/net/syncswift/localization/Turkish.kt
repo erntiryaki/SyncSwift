@@ -377,5 +377,9 @@ val TurkishCopy = Copy().apply {
     notificationPairAcceptedStatus = "%s bağlantı isteğinizi onayladı!"
     notificationPairRejectedStatus = "%s bağlantı isteğini reddetti."
     notificationFileRejectedStatus = "%s dosya aktarımını reddetti."
+    openFileAction = "Aç"
+    showFileLocationAction = "Dosya Konumunu Gör"
+    remoteTransferUploading = "Güvenli bulut rölesine yükleniyor..."
+    remoteTransferUploaded = "Dosya uzak cihaza iletildi!"
 }
 

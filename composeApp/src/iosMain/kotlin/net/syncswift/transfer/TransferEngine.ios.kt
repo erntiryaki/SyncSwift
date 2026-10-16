@@ -36,10 +36,10 @@ actual object TransferEngine {
         _transfers.value = current.take(50)
     }
 
-    private fun updateTransferProgress(id: String, bytes: Long, status: TransferStatus) {
+    private fun updateTransferProgress(id: String, bytes: Long, status: TransferStatus, localFilePath: String? = null) {
         _transfers.value = _transfers.value.map {
             if (it.id == id) {
-                it.copy(bytesTransferred = bytes, status = status)
+                it.copy(bytesTransferred = bytes, status = status, localFilePath = localFilePath ?: it.localFilePath)
             } else it
         }
     }

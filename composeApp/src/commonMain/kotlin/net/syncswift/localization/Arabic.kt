@@ -377,4 +377,8 @@ val ArabicCopy = Copy().apply {
     notificationPairAcceptedStatus = "وافق %s على طلب الاتصال الخاص بك!"
     notificationPairRejectedStatus = "رفض %s طلب الاتصال."
     notificationFileRejectedStatus = "رفض %s نقل الملف."
+    openFileAction = "فتح"
+    showFileLocationAction = "عرض موقع الملف"
+    remoteTransferUploading = "جارٍ الرفع إلى ترحيل السحابة الآمن..."
+    remoteTransferUploaded = "تم إرسال الملف إلى الجهاز البعيد!"
 }

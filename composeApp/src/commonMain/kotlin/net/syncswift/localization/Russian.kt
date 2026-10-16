@@ -377,4 +377,8 @@ val RussianCopy = Copy().apply {
     notificationPairAcceptedStatus = "%s принял ваш запрос на подключение!"
     notificationPairRejectedStatus = "%s отклонил запрос на подключение."
     notificationFileRejectedStatus = "%s отклонил передачу файла."
+    openFileAction = "Открыть"
+    showFileLocationAction = "Показать в папке"
+    remoteTransferUploading = "Загрузка в защищенное облачное реле..."
+    remoteTransferUploaded = "Файл отправлен на удаленное устройство!"
 }

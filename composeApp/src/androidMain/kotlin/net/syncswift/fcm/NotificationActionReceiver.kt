@@ -15,6 +15,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val ACTION_REJECT_PAIR = "net.syncswift.ACTION_REJECT_PAIR"
         const val ACTION_ACCEPT_FILE = "net.syncswift.ACTION_ACCEPT_FILE"
         const val ACTION_REJECT_FILE = "net.syncswift.ACTION_REJECT_FILE"
+        const val ACTION_OPEN_FILE = "net.syncswift.ACTION_OPEN_FILE"
+        const val ACTION_SHOW_LOCATION = "net.syncswift.ACTION_SHOW_LOCATION"
         const val EXTRA_NOTIFICATION_ID = "notification_id"
         const val EXTRA_SENDER_NAME = "sender_name"
         const val EXTRA_SENDER_HOST = "sender_host"
@@ -24,6 +26,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_FILE_NAME = "file_name"
         const val EXTRA_FILE_SIZE = "file_size"
         const val EXTRA_MIME_TYPE = "mime_type"
+        const val EXTRA_DOWNLOAD_URL = "download_url"
+        const val EXTRA_IS_REMOTE = "is_remote"
+        const val EXTRA_FILE_PATH = "file_path"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -115,19 +120,32 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "File"
                 val fileSize = intent.getLongExtra(EXTRA_FILE_SIZE, 0L)
                 val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE) ?: "application/octet-stream"
+                val downloadUrl = intent.getStringExtra(EXTRA_DOWNLOAD_URL) ?: ""
+                val isRemote = intent.getBooleanExtra(EXTRA_IS_REMOTE, false)
 
                 showToast("${copy.transferringFile} ($fileName)")
 
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    net.syncswift.transfer.TransferEngine.downloadStagedFile(
-                        senderHost = senderHost,
-                        senderPort = senderPort,
-                        senderName = senderName,
-                        transferId = transferId,
-                        fileName = fileName,
-                        fileSize = fileSize,
-                        mimeType = mimeType
-                    )
+                    if (isRemote && downloadUrl.isNotBlank()) {
+                        net.syncswift.transfer.TransferEngine.downloadRemoteFile(
+                            downloadUrl = downloadUrl,
+                            fileName = fileName,
+                            fileSize = fileSize,
+                            mimeType = mimeType,
+                            transferId = transferId,
+                            senderName = senderName
+                        )
+                    } else {
+                        net.syncswift.transfer.TransferEngine.downloadStagedFile(
+                            senderHost = senderHost,
+                            senderPort = senderPort,
+                            senderName = senderName,
+                            transferId = transferId,
+                            fileName = fileName,
+                            fileSize = fileSize,
+                            mimeType = mimeType
+                        )
+                    }
                 }
             }
             ACTION_REJECT_FILE -> {
@@ -152,6 +170,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     }
                 }
                 showToast(copy.transferDeclined)
+            }
+            ACTION_OPEN_FILE -> {
+                val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
+                val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "File"
+                val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE) ?: "*/*"
+                net.syncswift.openFile(filePath, fileName, mimeType)
+            }
+            ACTION_SHOW_LOCATION -> {
+                val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
+                val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "File"
+                net.syncswift.showFileLocation(filePath, fileName)
             }
         }
     }

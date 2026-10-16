@@ -15,3 +15,17 @@ actual fun UpdateSystemBars(isDark: Boolean) {
     // Handled by iOS UIViewController preferredStatusBarStyle
 }
 
+actual fun openFile(filePathOrUri: String?, fileName: String, mimeType: String) {
+    println("[SyncSwift iOS] Opening file $fileName at $filePathOrUri")
+    val path = filePathOrUri ?: return
+    val url = platform.Foundation.NSURL.fileURLWithPath(path)
+    platform.UIKit.UIApplication.sharedApplication.openURL(url)
+}
+
+actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
+    println("[SyncSwift iOS] Showing file location for $fileName at $filePathOrUri")
+    val filesAppUrl = platform.Foundation.NSURL.URLWithString("shareddocuments://")
+    if (filesAppUrl != null && platform.UIKit.UIApplication.sharedApplication.canOpenURL(filesAppUrl)) {
+        platform.UIKit.UIApplication.sharedApplication.openURL(filesAppUrl)
+    }
+}

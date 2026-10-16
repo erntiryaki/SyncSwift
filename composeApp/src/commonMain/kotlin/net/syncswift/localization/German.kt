@@ -377,5 +377,9 @@ val GermanCopy = Copy().apply {
     notificationPairAcceptedStatus = "%s hat Ihre Verbindungsanfrage bestätigt!"
     notificationPairRejectedStatus = "%s hat die Verbindungsanfrage abgelehnt."
     notificationFileRejectedStatus = "%s hat die Dateiübertragung abgelehnt."
+    openFileAction = "Öffnen"
+    showFileLocationAction = "Dateispeicherort anzeigen"
+    remoteTransferUploading = "Wird in das sichere Cloud-Relay hochgeladen..."
+    remoteTransferUploaded = "Datei an Remote-Gerät gesendet!"
 }
 

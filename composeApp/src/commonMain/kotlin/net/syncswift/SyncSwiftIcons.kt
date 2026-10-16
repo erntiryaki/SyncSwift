@@ -1372,5 +1372,57 @@ fun AnimatedCheckCircleIcon(
     }
 }
 
+/** Vector Folder Outline Icon */
+@Composable
+fun FolderOutlineIcon(modifier: Modifier = Modifier, color: Color = Color.White) = Canvas(modifier) {
+    val sw = size.minDimension * 0.08f
+    val w = size.width
+    val h = size.height
+
+    val path = Path().apply {
+        moveTo(w * 0.15f, h * 0.25f)
+        lineTo(w * 0.40f, h * 0.25f)
+        lineTo(w * 0.50f, h * 0.35f)
+        lineTo(w * 0.85f, h * 0.35f)
+        lineTo(w * 0.85f, h * 0.78f)
+        lineTo(w * 0.15f, h * 0.78f)
+        close()
+    }
+    drawPath(path, color = color, style = Stroke(width = sw, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+}
+
+/** Vector Open / External Link Icon */
+@Composable
+fun OpenExternalIcon(modifier: Modifier = Modifier, color: Color = Color.White) = Canvas(modifier) {
+    val sw = size.minDimension * 0.10f
+    val w = size.width
+    val h = size.height
+
+    // Square box with open top-right corner
+    val boxPath = Path().apply {
+        moveTo(w * 0.52f, h * 0.22f)
+        lineTo(w * 0.22f, h * 0.22f)
+        lineTo(w * 0.22f, h * 0.78f)
+        lineTo(w * 0.78f, h * 0.78f)
+        lineTo(w * 0.78f, h * 0.48f)
+    }
+    drawPath(boxPath, color = color, style = Stroke(width = sw, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+
+    // Arrow pointing top right
+    drawLine(
+        color = color,
+        start = Offset(w * 0.44f, h * 0.56f),
+        end = Offset(w * 0.78f, h * 0.22f),
+        strokeWidth = sw,
+        cap = StrokeCap.Round
+    )
+    val arrowHead = Path().apply {
+        moveTo(w * 0.58f, h * 0.22f)
+        lineTo(w * 0.78f, h * 0.22f)
+        lineTo(w * 0.78f, h * 0.42f)
+    }
+    drawPath(arrowHead, color = color, style = Stroke(width = sw, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+}
+
 
 
