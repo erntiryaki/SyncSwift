@@ -20,6 +20,8 @@ import net.syncswift.ui.auth.*
 import net.syncswift.ui.home.HomeScreen
 import net.syncswift.ui.onboarding.OnboardingScreen
 import net.syncswift.ui.theme.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
 
 enum class AuthAlertState { None, WrongPassword, CrossProviderEmailToGoogle }
@@ -215,8 +217,15 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             CompositionLocalProvider(LocalTextStyle provides TextStyle(fontFamily = platformFontFamily(), textAlign = textAlign)) {
                 Surface(Modifier.fillMaxSize(), color = Night) {
                     Box(Modifier.fillMaxSize()) {
-                        when (screen) {
-                            AuthStep.Onboarding -> OnboardingScreen(
+                        AnimatedContent(
+                            targetState = screen,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                            },
+                            label = "ScreenTransition"
+                        ) { currentScreen ->
+                            when (currentScreen) {
+                                AuthStep.Onboarding -> OnboardingScreen(
                                 copy = copy,
                                 language = language,
                                 setLanguage = ::updateLanguage,
@@ -346,153 +355,173 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 setLanguage = ::updateLanguage
                             )
                             AuthStep.Home -> {
-                                if (inSettings) {
-                                    net.syncswift.ui.account.SettingsScreen(
-                                        copy = copy,
-                                        language = language,
-                                        setLanguage = ::updateLanguage,
-                                        themeMode = themeMode,
-                                        setThemeMode = ::updateThemeMode,
-                                        userEmail = email,
-                                        provider = authProvider,
-                                        onBack = { inSettings = false },
-                                        onAccountDeleted = {
-                                            inSettings = false
-                                            email = ""
-                                            firstName = ""
-                                            lastName = ""
-                                            authDraftEmail = ""
-                                            authProvider = IdentityProvider.EmailPassword
-                                            SessionManager.clearSession()
-                                            mainTab = net.syncswift.ui.components.MainNavTab.Home
-                                            screen = AuthStep.Email
-                                        }
-                                    )
-                                } else if (inEditProfile) {
-                                    net.syncswift.ui.account.EditProfileScreen(
-                                        copy = copy,
-                                        currentFirstName = firstName,
-                                        currentLastName = lastName,
-                                        currentEmail = email,
-                                        provider = authProvider,
-                                        onBack = { inEditProfile = false },
-                                        onProfileUpdated = { newFirst, newLast, newEmail ->
-                                            firstName = newFirst
-                                            lastName = newLast
-                                            email = newEmail
-                                            SessionManager.saveSession(newEmail, authProvider, newFirst, newLast)
-                                        }
-                                    )
-                                } else if (inHelpSupport) {
-                                    net.syncswift.ui.account.HelpSupportScreen(
-                                        copy = copy,
-                                        onBack = { inHelpSupport = false }
-                                    )
-                                } else if (inConnectedDevices) {
-                                    net.syncswift.ui.account.ConnectedDevicesScreen(
-                                        copy = copy,
-                                        onBack = { inConnectedDevices = false }
-                                    )
-                                } else {
-                                    Box(Modifier.fillMaxSize()) {
-                                        when (mainTab) {
-                                            net.syncswift.ui.components.MainNavTab.Home -> {
-                                                HomeScreen(
-                                                    copy = copy,
-                                                    onSendClick = {
-                                                        targetedDevice = null
-                                                        pickFile()
-                                                    },
-                                                    onClipboardClick = {
-                                                        if (!net.syncswift.subscription.SubscriptionManager.canSyncClipboard()) {
-                                                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                                                net.syncswift.subscription.PaywallReason.CLIPBOARD_SYNC
+                                val currentSubScreen = when {
+                                    inSettings -> 1
+                                    inEditProfile -> 2
+                                    inHelpSupport -> 3
+                                    inConnectedDevices -> 4
+                                    else -> 0
+                                }
+                                AnimatedContent(
+                                    targetState = currentSubScreen,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(160))
+                                    },
+                                    label = "SubScreenTransition"
+                                ) { subIndex ->
+                                    when (subIndex) {
+                                        1 -> net.syncswift.ui.account.SettingsScreen(
+                                            copy = copy,
+                                            language = language,
+                                            setLanguage = ::updateLanguage,
+                                            themeMode = themeMode,
+                                            setThemeMode = ::updateThemeMode,
+                                            userEmail = email,
+                                            provider = authProvider,
+                                            onBack = { inSettings = false },
+                                            onAccountDeleted = {
+                                                inSettings = false
+                                                email = ""
+                                                firstName = ""
+                                                lastName = ""
+                                                authDraftEmail = ""
+                                                authProvider = IdentityProvider.EmailPassword
+                                                SessionManager.clearSession()
+                                                mainTab = net.syncswift.ui.components.MainNavTab.Home
+                                                screen = AuthStep.Email
+                                            }
+                                        )
+                                        2 -> net.syncswift.ui.account.EditProfileScreen(
+                                            copy = copy,
+                                            currentFirstName = firstName,
+                                            currentLastName = lastName,
+                                            currentEmail = email,
+                                            provider = authProvider,
+                                            onBack = { inEditProfile = false },
+                                            onProfileUpdated = { newFirst, newLast, newEmail ->
+                                                firstName = newFirst
+                                                lastName = newLast
+                                                email = newEmail
+                                                SessionManager.saveSession(newEmail, authProvider, newFirst, newLast)
+                                            }
+                                        )
+                                        3 -> net.syncswift.ui.account.HelpSupportScreen(
+                                            copy = copy,
+                                            onBack = { inHelpSupport = false }
+                                        )
+                                        4 -> net.syncswift.ui.account.ConnectedDevicesScreen(
+                                            copy = copy,
+                                            onBack = { inConnectedDevices = false }
+                                        )
+                                        else -> {
+                                            Box(Modifier.fillMaxSize()) {
+                                                Crossfade(
+                                                    targetState = mainTab,
+                                                    animationSpec = tween(180),
+                                                    label = "MainTabCrossfade"
+                                                ) { tab ->
+                                                    when (tab) {
+                                                        net.syncswift.ui.components.MainNavTab.Home -> {
+                                                            HomeScreen(
+                                                                copy = copy,
+                                                                onSendClick = {
+                                                                    targetedDevice = null
+                                                                    pickFile()
+                                                                },
+                                                                onClipboardClick = {
+                                                                    if (!net.syncswift.subscription.SubscriptionManager.canSyncClipboard()) {
+                                                                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                                                            net.syncswift.subscription.PaywallReason.CLIPBOARD_SYNC
+                                                                        )
+                                                                        return@HomeScreen
+                                                                    }
+                                                                    val clipText = clipboardManager.getText()?.text ?: ""
+                                                                    if (clipText.isBlank()) {
+                                                                        showNativeToast(copy.noTextInClipboard)
+                                                                    } else if (discoveredDevices.isEmpty()) {
+                                                                        showNativeToast(copy.noDevicesOnNetwork)
+                                                                    } else {
+                                                                        discoveredDevices.forEach { dev ->
+                                                                            net.syncswift.transfer.TransferEngine.sendClipboard(
+                                                                                targetHost = dev.host,
+                                                                                targetPort = dev.port,
+                                                                                targetDeviceName = dev.name,
+                                                                                text = clipText
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                },
+                                                                onDeviceClick = { dev ->
+                                                                    targetedDevice = dev
+                                                                    pickFile()
+                                                                },
+                                                                onViewAllTransfers = {
+                                                                    mainTab = net.syncswift.ui.components.MainNavTab.Transfers
+                                                                }
                                                             )
-                                                            return@HomeScreen
                                                         }
-                                                        val clipText = clipboardManager.getText()?.text ?: ""
-                                                        if (clipText.isBlank()) {
-                                                            showNativeToast(copy.noTextInClipboard)
-                                                        } else if (discoveredDevices.isEmpty()) {
-                                                            showNativeToast(copy.noDevicesOnNetwork)
-                                                        } else {
-                                                            discoveredDevices.forEach { dev ->
-                                                                net.syncswift.transfer.TransferEngine.sendClipboard(
-                                                                    targetHost = dev.host,
-                                                                    targetPort = dev.port,
-                                                                    targetDeviceName = dev.name,
-                                                                    text = clipText
-                                                                )
-                                                            }
+                                                        net.syncswift.ui.components.MainNavTab.Transfers -> {
+                                                            net.syncswift.ui.home.TransfersScreen(
+                                                                copy = copy
+                                                            )
                                                         }
-                                                    },
-                                                    onDeviceClick = { dev ->
-                                                        targetedDevice = dev
-                                                        pickFile()
-                                                    },
-                                                    onViewAllTransfers = {
-                                                        mainTab = net.syncswift.ui.components.MainNavTab.Transfers
+                                                        net.syncswift.ui.components.MainNavTab.Account -> {
+                                                            net.syncswift.ui.account.AccountScreen(
+                                                                copy = copy,
+                                                                userEmail = email,
+                                                                firstName = firstName,
+                                                                lastName = lastName,
+                                                                provider = authProvider,
+                                                                onOpenEditProfile = { inEditProfile = true },
+                                                                onOpenSettings = { inSettings = true },
+                                                                onOpenHelpSupport = { inHelpSupport = true },
+                                                                onLogout = {
+                                                                    email = ""
+                                                                    firstName = ""
+                                                                    lastName = ""
+                                                                    authDraftEmail = ""
+                                                                    authProvider = IdentityProvider.EmailPassword
+                                                                    SessionManager.clearSession()
+                                                                    mainTab = net.syncswift.ui.components.MainNavTab.Home
+                                                                    screen = AuthStep.Email
+                                                                },
+                                                                onSignInRequested = {
+                                                                    authDraftEmail = ""
+                                                                    screen = AuthStep.Email
+                                                                },
+                                                                onOpenConnectedDevices = {
+                                                                    inConnectedDevices = true
+                                                                }
+                                                            )
+                                                        }
                                                     }
-                                                )
-                                            }
-                                            net.syncswift.ui.components.MainNavTab.Transfers -> {
-                                                net.syncswift.ui.home.TransfersScreen(
-                                                    copy = copy
-                                                )
-                                            }
-                                            net.syncswift.ui.components.MainNavTab.Account -> {
-                                                net.syncswift.ui.account.AccountScreen(
-                                                    copy = copy,
-                                                    userEmail = email,
-                                                    firstName = firstName,
-                                                    lastName = lastName,
-                                                    provider = authProvider,
-                                                    onOpenEditProfile = { inEditProfile = true },
-                                                    onOpenSettings = { inSettings = true },
-                                                    onOpenHelpSupport = { inHelpSupport = true },
-                                                    onLogout = {
-                                                        email = ""
-                                                        firstName = ""
-                                                        lastName = ""
-                                                        authDraftEmail = ""
-                                                        authProvider = IdentityProvider.EmailPassword
-                                                        SessionManager.clearSession()
-                                                        mainTab = net.syncswift.ui.components.MainNavTab.Home
-                                                        screen = AuthStep.Email
-                                                    },
-                                                    onSignInRequested = {
-                                                        authDraftEmail = ""
-                                                        screen = AuthStep.Email
-                                                    },
-                                                    onOpenConnectedDevices = {
-                                                        inConnectedDevices = true
-                                                    }
-                                                )
-                                            }
-                                        }
+                                                }
 
-                                        // Bottom-docked Ad Banner & Navigation Bar (Ads shown above nav bar for free users)
-                                        val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .align(Alignment.BottomCenter)
-                                        ) {
-                                            if (!isProUser) {
-                                                net.syncswift.ui.components.AdBannerView(
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                                // Bottom-docked Ad Banner & Navigation Bar (Ads shown above nav bar for free users)
+                                                val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .align(Alignment.BottomCenter)
+                                                ) {
+                                                    if (!isProUser) {
+                                                        net.syncswift.ui.components.AdBannerView(
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                    }
+                                                    net.syncswift.ui.components.BottomNavBar(
+                                                        selectedTab = mainTab,
+                                                        onTabSelected = { mainTab = it },
+                                                        copy = copy
+                                                    )
+                                                }
                                             }
-                                            net.syncswift.ui.components.BottomNavBar(
-                                                selectedTab = mainTab,
-                                                onTabSelected = { mainTab = it },
-                                                copy = copy
-                                            )
                                         }
                                     }
                                 }
                             }
                         }
+                    }
 
                         // Global Incoming Pair Request Modal
                         if (pendingPairRequest != null) {
@@ -515,17 +544,23 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         }
 
                         // Global Incoming Transfer Request Full Page (No Modal)
-                        if (pendingTransferRequest != null) {
-                            val req = pendingTransferRequest!!
-                            androidx.activity.compose.BackHandler {
-                                net.syncswift.connection.ConnectionManager.rejectTransferRequest(req)
+                        AnimatedVisibility(
+                            visible = pendingTransferRequest != null,
+                            enter = fadeIn(animationSpec = tween(220)),
+                            exit = fadeOut(animationSpec = tween(180))
+                        ) {
+                            val req = pendingTransferRequest
+                            if (req != null) {
+                                androidx.activity.compose.BackHandler {
+                                    net.syncswift.connection.ConnectionManager.rejectTransferRequest(req)
+                                }
+                                net.syncswift.ui.components.IncomingTransferScreen(
+                                    request = req,
+                                    copy = copy,
+                                    onAccept = { net.syncswift.connection.ConnectionManager.acceptTransferRequest(req) },
+                                    onDecline = { net.syncswift.connection.ConnectionManager.rejectTransferRequest(req) }
+                                )
                             }
-                            net.syncswift.ui.components.IncomingTransferScreen(
-                                request = req,
-                                copy = copy,
-                                onAccept = { net.syncswift.connection.ConnectionManager.acceptTransferRequest(req) },
-                                onDecline = { net.syncswift.connection.ConnectionManager.rejectTransferRequest(req) }
-                            )
                         }
 
                         // Device Selection Modal for Sending File
@@ -605,33 +640,46 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
             // Universal Outgoing Request & Transfer Screen (Animated Checkmark / Cross - Full Page)
             val outgoingState by net.syncswift.connection.OutgoingStatusManager.state.collectAsState()
-            if (outgoingState != null) {
-                androidx.activity.compose.BackHandler {
-                    net.syncswift.connection.OutgoingStatusManager.dismiss()
-                }
-                net.syncswift.ui.components.TransferStatusScreen(
-                    state = outgoingState!!,
-                    copy = copy,
-                    onDismiss = {
+            AnimatedVisibility(
+                visible = outgoingState != null,
+                enter = fadeIn(animationSpec = tween(220)),
+                exit = fadeOut(animationSpec = tween(180))
+            ) {
+                val state = outgoingState
+                if (state != null) {
+                    androidx.activity.compose.BackHandler {
                         net.syncswift.connection.OutgoingStatusManager.dismiss()
                     }
-                )
+                    net.syncswift.ui.components.TransferStatusScreen(
+                        state = state,
+                        copy = copy,
+                        onDismiss = {
+                            net.syncswift.connection.OutgoingStatusManager.dismiss()
+                        }
+                    )
+                }
             }
 
             // Paywall 7-Day Trial Full Page Screen (No Modal)
             val showPaywall by net.syncswift.subscription.SubscriptionManager.showPaywall.collectAsState()
             val paywallReason by net.syncswift.subscription.SubscriptionManager.paywallReason.collectAsState()
-            if (showPaywall) {
-                androidx.activity.compose.BackHandler {
-                    net.syncswift.subscription.SubscriptionManager.dismissPaywall()
-                }
-                net.syncswift.ui.components.PaywallScreen(
-                    reason = paywallReason,
-                    copy = copy,
-                    onDismiss = {
+            AnimatedVisibility(
+                visible = showPaywall,
+                enter = fadeIn(animationSpec = tween(220)),
+                exit = fadeOut(animationSpec = tween(180))
+            ) {
+                if (showPaywall) {
+                    androidx.activity.compose.BackHandler {
                         net.syncswift.subscription.SubscriptionManager.dismissPaywall()
                     }
-                )
+                    net.syncswift.ui.components.PaywallScreen(
+                        reason = paywallReason,
+                        copy = copy,
+                        onDismiss = {
+                            net.syncswift.subscription.SubscriptionManager.dismissPaywall()
+                        }
+                    )
+                }
             }
         }
     }
