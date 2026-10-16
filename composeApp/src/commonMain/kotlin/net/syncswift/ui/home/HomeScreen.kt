@@ -114,11 +114,16 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .nestedScroll(nestedScrollConnection)
-            .padding(horizontal = 24.dp)
-            .verticalScroll(scrollState)
     ) {
-        Spacer(Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .nestedScroll(nestedScrollConnection)
+                .padding(horizontal = 24.dp)
+                .verticalScroll(scrollState)
+        ) {
+            Spacer(Modifier.height(16.dp))
 
         // Top Bar: Clean Minimalist Page Header (P2P removed)
         Row(
@@ -409,15 +414,15 @@ fun HomeScreen(
             }
         }
 
+            Spacer(Modifier.height(24.dp))
+        }
+
         val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
         if (!isProUser) {
-            Spacer(Modifier.height(16.dp))
             net.syncswift.ui.components.AdBannerView(
                 modifier = Modifier.fillMaxWidth()
             )
         }
-
-        Spacer(Modifier.height(140.dp))
     }
 
     AnimatedVisibility(

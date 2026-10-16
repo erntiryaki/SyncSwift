@@ -164,7 +164,7 @@ fun SendPairRequestScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 56.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(

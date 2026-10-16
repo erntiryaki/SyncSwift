@@ -101,51 +101,16 @@ actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
             targetDir.mkdirs()
         }
 
-        // 1. Samsung "Dosyalarım" (My Files) Native Intent
-        if (ctx.packageManager.getLaunchIntentForPackage("com.sec.android.app.myfiles") != null) {
-            try {
-                val samsungIntent = Intent("com.sec.android.app.myfiles.VIEW_DIRECTORY").apply {
-                    data = Uri.parse("file://${targetDir.absolutePath}")
-                    putExtra("folder_path", targetDir.absolutePath)
-                    putExtra("START_PATH", targetDir.absolutePath)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                if (samsungIntent.resolveActivity(ctx.packageManager) != null) {
-                    ctx.startActivity(samsungIntent)
-                    return
-                }
-            } catch (_: Exception) {}
+        // 1. DownloadManager (Standard Android Downloads viewer)
+        try {
+            val dmIntent = Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(dmIntent)
+            return
+        } catch (_: Exception) {}
 
-            try {
-                val samsungLaunch = ctx.packageManager.getLaunchIntentForPackage("com.sec.android.app.myfiles")?.apply {
-                    putExtra("folder_path", targetDir.absolutePath)
-                    putExtra("START_PATH", targetDir.absolutePath)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                if (samsungLaunch != null) {
-                    ctx.startActivity(samsungLaunch)
-                    return
-                }
-            } catch (_: Exception) {}
-        }
-
-        // 2. Xiaomi File Explorer
-        if (ctx.packageManager.getLaunchIntentForPackage("com.mi.android.globalFileexplorer") != null) {
-            try {
-                val miIntent = Intent(Intent.ACTION_VIEW).apply {
-                    setPackage("com.mi.android.globalFileexplorer")
-                    putExtra("explorer_path", targetDir.absolutePath)
-                    setDataAndType(Uri.fromFile(targetDir), "resource/folder")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                if (miIntent.resolveActivity(ctx.packageManager) != null) {
-                    ctx.startActivity(miIntent)
-                    return
-                }
-            } catch (_: Exception) {}
-        }
-
-        // 3. Android System DocumentsUI (Files / Dosyalar) - Target Downloads/SyncSwift
+        // 2. DocumentsUI / System Files at Downloads/SyncSwift
         try {
             val folderUri = Uri.parse("content://com.android.externalstorage.documents/document/primary:Download%2FSyncSwift")
             val docIntent = Intent(Intent.ACTION_VIEW).apply {
@@ -153,63 +118,80 @@ actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
                 addCategory(Intent.CATEGORY_DEFAULT)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            if (docIntent.resolveActivity(ctx.packageManager) != null) {
-                ctx.startActivity(docIntent)
-                return
-            }
+            ctx.startActivity(docIntent)
+            return
         } catch (_: Exception) {}
 
-        // 4. Android System DocumentsUI - Root Download
+        // 3. Samsung "Dosyalarım" (My Files) Native Intent
         try {
-            val rootDownloadUri = Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
-            val docRootIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(rootDownloadUri, "vnd.android.document/directory")
-                addCategory(Intent.CATEGORY_DEFAULT)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            if (docRootIntent.resolveActivity(ctx.packageManager) != null) {
-                ctx.startActivity(docRootIntent)
-                return
-            }
-        } catch (_: Exception) {}
-
-        // 5. System DownloadManager view
-        try {
-            val downloadsIntent = Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
+            val samsungIntent = Intent("com.sec.android.app.myfiles.VIEW_DIRECTORY").apply {
+                data = Uri.parse("file://${targetDir.absolutePath}")
+                putExtra("folder_path", targetDir.absolutePath)
+                putExtra("START_PATH", targetDir.absolutePath)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            if (downloadsIntent.resolveActivity(ctx.packageManager) != null) {
-                ctx.startActivity(downloadsIntent)
+            ctx.startActivity(samsungIntent)
+            return
+        } catch (_: Exception) {}
+
+        try {
+            val samsungLaunch = ctx.packageManager.getLaunchIntentForPackage("com.sec.android.app.myfiles")?.apply {
+                putExtra("folder_path", targetDir.absolutePath)
+                putExtra("START_PATH", targetDir.absolutePath)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (samsungLaunch != null) {
+                ctx.startActivity(samsungLaunch)
                 return
             }
         } catch (_: Exception) {}
 
-        // 6. Generic File Provider / Chooser
+        // 4. Xiaomi File Explorer
         try {
-            val dirUri = try {
-                androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", targetDir)
-            } catch (e: Exception) {
-                Uri.fromFile(targetDir)
+            val miIntent = Intent(Intent.ACTION_VIEW).apply {
+                setPackage("com.mi.android.globalFileexplorer")
+                putExtra("explorer_path", targetDir.absolutePath)
+                setDataAndType(Uri.fromFile(targetDir), "resource/folder")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            ctx.startActivity(miIntent)
+            return
+        } catch (_: Exception) {}
+
+        // 5. Google Files (Files by Google)
+        try {
+            val gFiles = ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.nbu.files")?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (gFiles != null) {
+                ctx.startActivity(gFiles)
+                return
+            }
+        } catch (_: Exception) {}
+
+        // 6. Generic File Provider / Folder
+        try {
+            val dirUri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", targetDir)
             val genericIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(dirUri, "resource/folder")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            if (genericIntent.resolveActivity(ctx.packageManager) != null) {
-                ctx.startActivity(genericIntent)
-                return
-            }
+            ctx.startActivity(genericIntent)
+            return
         } catch (_: Exception) {}
+
+        // 7. If folder cannot be opened directly, open the file itself
+        if (!filePathOrUri.isNullOrBlank()) {
+            openFile(filePathOrUri, fileName, "*/*")
+            return
+        }
 
         showNativeToast("Downloads/SyncSwift")
     } catch (e: Exception) {
         Log.e("PlatformAndroid", "Failed to open file location: ${e.message}", e)
-        try {
-            val downloadsIntent = Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            ctx.startActivity(downloadsIntent)
-        } catch (_: Exception) {
+        if (!filePathOrUri.isNullOrBlank()) {
+            openFile(filePathOrUri, fileName, "*/*")
+        } else {
             showNativeToast("Downloads/SyncSwift")
         }
     }

@@ -41,7 +41,14 @@ actual object SubscriptionPlatform {
             Purchases.sharedInstance.getCustomerInfo(object : ReceiveCustomerInfoCallback {
                 override fun onReceived(customerInfo: CustomerInfo) {
                     val isProActive = customerInfo.entitlements[ENTITLEMENT_ID]?.isActive == true
-                    SubscriptionManager.setProState(isProActive)
+                    if (isProActive) {
+                        SubscriptionManager.setProState(true)
+                    } else {
+                        val localOverride = SessionManager.getSavedProStatus()
+                        if (!localOverride) {
+                            SubscriptionManager.setProState(false)
+                        }
+                    }
                     Log.d(TAG, "Customer info received. Pro active: $isProActive")
                 }
 

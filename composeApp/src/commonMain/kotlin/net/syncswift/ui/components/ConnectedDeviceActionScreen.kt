@@ -87,12 +87,12 @@ fun ConnectedDeviceActionScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 32.dp),
+                    .padding(vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .size(120.dp)
+                        .size(110.dp)
                         .clip(CircleShape)
                         .background(SuccessGreen.copy(alpha = 0.12f))
                         .border(BorderStroke(1.5.dp, SuccessGreen.copy(alpha = 0.4f)), CircleShape),
@@ -100,16 +100,16 @@ fun ConnectedDeviceActionScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
+                            .size(68.dp)
                             .clip(CircleShape)
                             .background(SuccessGreen),
                         contentAlignment = Alignment.Center
                     ) {
-                        LaptopVectorIcon(Modifier.size(36.dp), color = Color.White)
+                        LaptopVectorIcon(Modifier.size(34.dp), color = Color.White)
                     }
                 }
 
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(20.dp))
 
                 Text(
                     text = cleanName,
@@ -131,11 +131,11 @@ fun ConnectedDeviceActionScreen(
                 )
             }
 
-            // BOTTOM ACTIONS
+            // BOTTOM ACTIONS (Lifted up clearly above navbar)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 56.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 1. Dosya Gönder

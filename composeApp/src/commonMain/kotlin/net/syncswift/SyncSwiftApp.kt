@@ -438,8 +438,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             onBack = { inConnectedDevices = false }
                                         )
                                         else -> {
-                                            Box(Modifier.fillMaxSize()) {
-                                                Crossfade(
+                                            Column(Modifier.fillMaxSize()) {
+                                                Box(Modifier.weight(1f).fillMaxWidth()) {
+                                                    Crossfade(
                                                     targetState = mainTab,
                                                     animationSpec = tween(180),
                                                     label = "MainTabCrossfade"
@@ -520,12 +521,11 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                         }
                                                     }
                                                 }
+                                            }
 
-                                                // Bottom-docked Navigation Bar
+                                            // Bottom Navigation Bar
                                                 net.syncswift.ui.components.BottomNavBar(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .align(Alignment.BottomCenter),
+                                                    modifier = Modifier.fillMaxWidth(),
                                                     selectedTab = mainTab,
                                                     onTabSelected = { mainTab = it },
                                                     copy = copy

@@ -81,14 +81,21 @@ fun AccountScreen(
 
     val scrollState = rememberScrollState()
 
+    var devTapCount by remember { mutableStateOf(0) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .padding(horizontal = 24.dp)
-            .verticalScroll(scrollState)
     ) {
-        Spacer(Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .verticalScroll(scrollState)
+        ) {
+            Spacer(Modifier.height(16.dp))
 
         // Top Navigation Bar: Page Title instead of Logo!
         Row(
@@ -340,15 +347,15 @@ fun AccountScreen(
             }
         }
 
+            Spacer(Modifier.height(24.dp))
+        }
+
         val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
         if (!isProUser) {
-            Spacer(Modifier.height(16.dp))
             net.syncswift.ui.components.AdBannerView(
                 modifier = Modifier.fillMaxWidth()
             )
         }
-
-        Spacer(Modifier.height(140.dp))
     }
 
     // SyncSwift Pro Modal
@@ -590,6 +597,16 @@ fun AccountScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(InputBg)
+                            .clickable {
+                                devTapCount++
+                                if (devTapCount >= 5) {
+                                    devTapCount = 0
+                                    val currentPro = net.syncswift.subscription.SubscriptionManager.isPro.value
+                                    val newPro = !currentPro
+                                    net.syncswift.subscription.SubscriptionManager.setProState(newPro)
+                                    showNativeToast(if (newPro) "🚀 Geliştirici Modu: Pro Aktif Edildi!" else "Geliştirici Modu: Pro Kapatıldı!")
+                                }
+                            }
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(

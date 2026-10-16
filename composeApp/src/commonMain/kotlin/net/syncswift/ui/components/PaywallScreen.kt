@@ -172,91 +172,138 @@ fun PaywallScreen(
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(20.dp))
 
-                // 2-BOX PLAN SELECTOR (Flexible height for long language strings)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                val softGold = Color(0xFFE5B95F)
+
+                // FULL-WIDTH STACKED PLAN SELECTOR (Alt alta, geniş, yıl üstte, ay altta)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Option 0: Free / 7 days (Selected by default)
+                    // 1. YEARLY PLAN (Önerilen - Üstte)
                     Surface(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
                             .clickable { selectedPlan = 0 },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = if (selectedPlan == 0) CardSurface else InputBg.copy(alpha = 0.35f),
                         border = BorderStroke(
                             width = if (selectedPlan == 0) 1.5.dp else 1.dp,
-                            color = if (selectedPlan == 0) themeColor else InputBorder.copy(alpha = 0.25f)
+                            color = if (selectedPlan == 0) softGold else InputBorder.copy(alpha = 0.25f)
                         )
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.weight(1f, fill = false),
-                                verticalArrangement = Arrangement.Center
+                            // Centered "Önerilen" Badge with Crown Icon (Soft Gold)
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = copy.planFreeTitle,
-                                    color = Cloud,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = copy.planFreeSubtitle,
-                                    color = Mist,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    lineHeight = 16.sp
-                                )
-                            }
-
-                            Spacer(Modifier.width(6.dp))
-
-                            if (selectedPlan == 0) {
-                                Box(
+                                Row(
                                     modifier = Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(themeColor),
-                                    contentAlignment = Alignment.Center
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(softGold.copy(alpha = 0.14f))
+                                        .border(1.dp, softGold.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                                        .padding(horizontal = 12.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
+                                    net.syncswift.CrownVectorIcon(Modifier.size(13.dp), color = softGold)
                                     Text(
-                                        text = "✓",
-                                        color = DeepInk,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold
+                                        text = "Önerilen",
+                                        color = softGold,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.3.sp
                                     )
                                 }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Transparent)
-                                        .border(BorderStroke(1.5.dp, Mist.copy(alpha = 0.5f)), CircleShape)
-                                )
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = copy.planYearly,
+                                            color = Cloud,
+                                            fontSize = 16.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Blue.copy(alpha = 0.18f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "${copy.planFreeTitle} (7 ${copy.planFreeSubtitle})",
+                                                color = Blue,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = copy.trialPricingYearlySummary,
+                                        color = Mist,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+
+                                Spacer(Modifier.width(10.dp))
+
+                                if (selectedPlan == 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(softGold),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "✓",
+                                            color = DeepInk,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Transparent)
+                                            .border(BorderStroke(1.5.dp, Mist.copy(alpha = 0.5f)), CircleShape)
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // Option 1: 1 Month
+                    // 2. MONTHLY PLAN (Altta)
                     Surface(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
                             .clickable { selectedPlan = 1 },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = if (selectedPlan == 1) CardSurface else InputBg.copy(alpha = 0.35f),
                         border = BorderStroke(
                             width = if (selectedPlan == 1) 1.5.dp else 1.dp,
@@ -265,8 +312,8 @@ fun PaywallScreen(
                     ) {
                         Row(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -277,12 +324,12 @@ fun PaywallScreen(
                                 Text(
                                     text = copy.planMonthly,
                                     color = Cloud,
-                                    fontSize = 16.sp,
+                                    fontSize = 16.5.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = copy.planMonthlyPrice,
+                                    text = copy.trialPricingMonthlySummary,
                                     color = Mist,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Normal,
@@ -290,12 +337,12 @@ fun PaywallScreen(
                                 )
                             }
 
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(10.dp))
 
                             if (selectedPlan == 1) {
                                 Box(
                                     modifier = Modifier
-                                        .size(22.dp)
+                                        .size(24.dp)
                                         .clip(CircleShape)
                                         .background(themeColor),
                                     contentAlignment = Alignment.Center
@@ -303,14 +350,14 @@ fun PaywallScreen(
                                     Text(
                                         text = "✓",
                                         color = DeepInk,
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             } else {
                                 Box(
                                     modifier = Modifier
-                                        .size(22.dp)
+                                        .size(24.dp)
                                         .clip(CircleShape)
                                         .background(Color.Transparent)
                                         .border(BorderStroke(1.5.dp, Mist.copy(alpha = 0.5f)), CircleShape)
