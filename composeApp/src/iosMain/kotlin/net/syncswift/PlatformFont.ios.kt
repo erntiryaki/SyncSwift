@@ -8,9 +8,5 @@ import net.syncswift.resources.nunito_variable
 
 @Composable
 actual fun platformFontFamily(): FontFamily {
-    return try {
-        FontFamily(Font(Res.font.nunito_variable))
-    } catch (e: Throwable) {
-        FontFamily.SansSerif
-    }
+    return FontFamily(Font(Res.font.nunito_variable))
 }

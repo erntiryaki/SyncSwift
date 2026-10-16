@@ -13,6 +13,7 @@ import platform.darwin.*
 import platform.posix.*
 import kotlin.Byte
 
+@OptIn(ExperimentalForeignApi::class)
 actual object TransferEngine {
     private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
     private const val PROTOCOL_VERSION: kotlin.Byte = 1

@@ -2,6 +2,7 @@ package net.syncswift.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import kotlinx.cinterop.ExperimentalForeignApi
 import platform.AVFoundation.*
 import platform.CoreGraphics.CGRectMake
 import platform.CoreImage.CIDetector
@@ -90,6 +91,7 @@ actual fun rememberQrScanner(
     }
 }
 
+@OptIn(ExperimentalForeignApi::class)
 private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) -> Unit) {
     try {
         val captureSession = AVCaptureSession()
@@ -130,7 +132,7 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         val closeButton = UIButton.buttonWithType(UIButtonTypeSystem)
         closeButton.setTitle("Kapat", forState = UIControlStateNormal)
         closeButton.setTitleColor(UIColor.whiteColor, forState = UIControlStateNormal)
-        closeButton.frame = CGRectMake(20.0, 50.0, 80.0, 40.0)
+        closeButton.setFrame(CGRectMake(20.0, 50.0, 80.0, 40.0))
         closeButton.addTarget(
             scannerVc,
             platform.objc.sel_registerName("dismissScanner"),
@@ -140,7 +142,7 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
 
         val rootVc = findRootViewController()
         rootVc?.presentViewController(scannerVc, animated = true) {
-            previewLayer.frame = scannerVc.view.bounds
+            previewLayer.setFrame(scannerVc.view.bounds)
             captureSession.startRunning()
         }
     } catch (e: Exception) {
@@ -148,6 +150,7 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
     }
 }
 
+@OptIn(ExperimentalForeignApi::class)
 @Composable
 actual fun rememberQrImagePicker(
     onSuccess: (String) -> Unit,
@@ -167,7 +170,12 @@ actual fun rememberQrImagePicker(
             val delegate = ImagePickerDelegate(
                 onImagePicked = { image ->
                     try {
-                        val ciImage = CIImage(image = image)
+                        val cgImage = image.CGImage
+                        if (cgImage == null) {
+                            onError("Görsel okunamadı.")
+                            return@ImagePickerDelegate
+                        }
+                        val ciImage = CIImage.imageWithCGImage(cgImage)
                         val detector = CIDetector.detectorOfType(
                             CIDetectorTypeQRCode,
                             context = null,

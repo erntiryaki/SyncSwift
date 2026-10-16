@@ -12,15 +12,19 @@ import platform.UIKit.UIDevice
 import platform.darwin.NSObject
 import platform.posix.*
 
+private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
+
 @OptIn(ExperimentalForeignApi::class)
 private class ServiceBrowserDelegate(
     private val onFound: (NSNetService) -> Unit,
     private val onLost: (NSNetService) -> Unit
 ) : NSObject(), NSNetServiceBrowserDelegateProtocol {
+    @ObjCSignatureOverride
     override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindService: NSNetService, moreComing: Boolean) {
         onFound(didFindService)
     }
 
+    @ObjCSignatureOverride
     override fun netServiceBrowser(browser: NSNetServiceBrowser, didRemoveService: NSNetService, moreComing: Boolean) {
         onLost(didRemoveService)
     }
@@ -44,12 +48,8 @@ private class ServiceResolverDelegate(
                 val bytes = data.bytes ?: continue
                 val sa = bytes.reinterpret<sockaddr_in>().pointed
                 if (sa.sin_family.toInt() == AF_INET) {
-                    val buf = ByteArray(INET_ADDRSTRLEN)
-                    buf.usePinned { pinned ->
-                        inet_ntop(AF_INET, sa.sin_addr.ptr, pinned.addressOf(0), INET_ADDRSTRLEN.convert())
-                    }
-                    val ip = buf.toKString()
-                    if (ip.isNotBlank() && ip != "127.0.0.1") {
+                    val ip = inet_ntoa(sa.sin_addr)?.toKString()
+                    if (!ip.isNullOrBlank() && ip != "127.0.0.1") {
                         hostIp = ip
                         break
                     }
@@ -104,7 +104,6 @@ actual object DeviceDiscoveryManager {
 
     private fun loadSavedManualDevices() {
         val saved = SessionManager.getSavedManualDevicesJson() ?: return
-        // Parse simple json records
         try {
             val regex = Regex("""\{"id":"([^"]*)","name":"([^"]*)","host":"([^"]*)","port":(\d+),"osType":"([^"]*)"""")
             val restored = regex.findAll(saved).map { match ->
@@ -264,31 +263,35 @@ actual object DeviceDiscoveryManager {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun getLocalWifiIp(): String? {
-        memScoped {
-            val ifap = alloc<CPointerVar<ifaddrs>>()
-            if (getifaddrs(ifap.ptr) != 0) return null
-            var curr = ifap.value
-            var ip: String? = null
-            while (curr != null) {
-                val ifa = curr.pointed
-                val name = ifa.ifa_name?.toKString() ?: ""
-                val family = ifa.ifa_addr?.pointed?.sa_family?.toInt()
-                if (name == "en0" && family == AF_INET) {
-                    val saIn = ifa.ifa_addr!!.reinterpret<sockaddr_in>().pointed
-                    val addrBuf = ByteArray(INET_ADDRSTRLEN)
-                    addrBuf.usePinned { pinned ->
-                        inet_ntop(AF_INET, saIn.sin_addr.ptr, pinned.addressOf(0), INET_ADDRSTRLEN.convert())
-                    }
-                    val found = addrBuf.toKString()
-                    if (found.isNotBlank() && found != "0.0.0.0") {
-                        ip = found
-                        break
-                    }
+        return try {
+            val sock = socket(AF_INET, SOCK_DGRAM, 0)
+            if (sock < 0) return null
+            memScoped {
+                val destAddr = alloc<sockaddr_in>()
+                destAddr.sin_family = AF_INET.convert()
+                destAddr.sin_port = htons(53.toUShort())
+                inet_pton(AF_INET, "8.8.8.8", destAddr.sin_addr.ptr)
+
+                if (connect(sock, destAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
+                    close(sock)
+                    return@memScoped null
                 }
-                curr = ifa.ifa_next
+
+                val localAddr = alloc<sockaddr_in>()
+                val addrLen = alloc<socklen_tVar>()
+                addrLen.value = sizeOf<sockaddr_in>().convert()
+
+                if (getsockname(sock, localAddr.ptr.reinterpret(), addrLen.ptr) != 0) {
+                    close(sock)
+                    return@memScoped null
+                }
+
+                close(sock)
+                val ipStr = inet_ntoa(localAddr.sin_addr)?.toKString()
+                if (ipStr.isNullOrBlank() || ipStr == "0.0.0.0") null else ipStr
             }
-            freeifaddrs(ifap.value)
-            return ip
+        } catch (_: Exception) {
+            null
         }
     }
 

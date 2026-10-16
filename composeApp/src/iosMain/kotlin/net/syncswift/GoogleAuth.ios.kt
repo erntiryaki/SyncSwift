@@ -54,13 +54,11 @@ actual fun rememberGoogleAuthLauncher(
 
             if (nsUrl == null) {
                 onError("Invalid OAuth URL")
-                return@rememberGoogleAuthLauncher
-            }
-
-            val session = ASWebAuthenticationSession(
-                uRL = nsUrl,
-                callbackURLScheme = "net.syncswift"
-            ) { callbackUrl, error ->
+            } else {
+                val session = ASWebAuthenticationSession(
+                    uRL = nsUrl,
+                    callbackURLScheme = "net.syncswift"
+                ) { callbackUrl, error ->
                 activeAuthSession = null
                 if (error != null) {
                     if (error.code.toInt() != 1) { // 1 = canceled by user
@@ -129,10 +127,11 @@ actual fun rememberGoogleAuthLauncher(
                 }
             }
 
-            session.presentationContextProvider = contextProvider
-            session.prefersEphemeralWebBrowserSession = false
-            activeAuthSession = session
-            session.start()
+                session.presentationContextProvider = contextProvider
+                session.prefersEphemeralWebBrowserSession = false
+                activeAuthSession = session
+                session.start()
+            }
         } catch (e: Exception) {
             onError(e.message ?: "Could not launch Google Sign-In.")
         }
