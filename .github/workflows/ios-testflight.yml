@@ -147,10 +147,15 @@ jobs:
           xcodebuild -project iosApp/iosApp.xcodeproj \
             -scheme iosApp \
             -configuration Release \
+            -destination 'generic/platform=iOS' \
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
             archive \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID || vars.APPLE_TEAM_ID }}" \
+            PROVISIONING_PROFILE_SPECIFIER="${{ secrets.PROVISIONING_PROFILE_SPECIFIER || vars.PROVISIONING_PROFILE_SPECIFIER }}" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            CODE_SIGN_STYLE="Manual" \
+            CODE_SIGN_REQUIRED=YES \
+            CODE_SIGN_ALLOWED=YES
 
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
