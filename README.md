@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./logo.png" alt="SyncSwift Logo" width="140" height="140" />
+  <img src="./logo.png" alt="SyncSwift Logo" width="320" />
 </p>
 
 <h1 align="center">SyncSwift</h1>
