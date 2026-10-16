@@ -6,8 +6,12 @@ import platform.Foundation.timeIntervalSince1970
 actual fun currentPlatform(): PlatformFlavor = PlatformFlavor.Ios
 actual fun currentTimeMs(): Long = (NSDate().timeIntervalSince1970 * 1000).toLong()
 actual fun getSystemLanguageCode(): String {
-    val preferred = (platform.Foundation.NSLocale.preferredLanguages.firstOrNull() as? String) ?: "en"
-    return preferred.split("-", "_").first().lowercase()
+    return try {
+        val preferred = (platform.Foundation.NSLocale.preferredLanguages().firstOrNull() as? String) ?: "en"
+        preferred.split("-", "_").first().lowercase()
+    } catch (e: Throwable) {
+        "en"
+    }
 }
 actual fun showNativeToast(message: String) {
     println("[SyncSwift Native Toast] $message")
@@ -34,7 +38,7 @@ actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
 }
 
 actual fun formatEpochToDate(epochMillis: Long): String {
-    val date = platform.Foundation.NSDate(timeIntervalSince1970 = epochMillis / 1000.0)
+    val date = platform.Foundation.NSDate(timeIntervalSinceReferenceDate = (epochMillis / 1000.0) - 978307200.0)
     val formatter = platform.Foundation.NSDateFormatter().apply {
         dateFormat = "dd.MM.yyyy"
     }

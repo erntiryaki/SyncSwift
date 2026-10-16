@@ -11,12 +11,13 @@ import platform.Foundation.*
 import platform.UIKit.UIPasteboard
 import platform.darwin.*
 import platform.posix.*
+import kotlin.Byte
 
 actual object TransferEngine {
     private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
-    private const val PROTOCOL_VERSION: Byte = 1
-    private const val TYPE_CLIPBOARD: Byte = 1
-    private const val ACK: Byte = 6
+    private const val PROTOCOL_VERSION: kotlin.Byte = 1
+    private const val TYPE_CLIPBOARD: kotlin.Byte = 1
+    private const val ACK: kotlin.Byte = 6
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _transfers = MutableStateFlow<List<TransferItem>>(emptyList())
