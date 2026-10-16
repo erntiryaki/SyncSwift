@@ -1,0 +1,379 @@
+================================================================================
+SYNCSWIFT - GOOGLE PLAY STORE MAĞAZA METİNLERİ (TÜM DİLLER)
+================================================================================
+İngilizce Master Metin: "SyncSwift: Cross-Device Sync"
+Google Play Store Sınırları:
+- Uygulama Başlığı: Maks. 30 Karakter
+- Kısa Açıklama: Maks. 80 Karakter
+- Tam Açıklama: Maks. 4000 Karakter
+
+Desteklenen Diller:
+1. Türkçe (tr-TR)
+2. English (en-US)
+3. Deutsch (de-DE)
+4. Français (fr-FR)
+5. Español (es-ES)
+6. Italiano (it-IT)
+7. Português (pt-BR / pt-PT)
+8. Русский (ru-RU)
+9. العربية (ar)
+
+
+================================================================================
+1. TÜRKÇE (tr-TR)
+================================================================================
+[Uygulama Adı] (29 Karakter):
+SyncSwift: Cihazlar Arası Sync
+
+[Kısa Açıklama] (73 Karakter):
+Cihazlarınız arasında kablosuz, hızlı ve güvenli dosya ve pano aktarımı.
+
+[Tam Açıklama]:
+SyncSwift ile cihazlarınız arasında dosya paylaşımı artık zahmetsiz, ışık hızında ve güvenli!
+
+Kablo karmaşasına, bulut yükleme sınırlarına ve yavaş transferlere veda edin. Telefonunuzdan bilgisayarınıza, tabletinizden telefonunuza veya mobil cihazlar arasında dosya aktarırken SyncSwift, fotoğrafları, 4K videoları, belgeleri ve büyük dosyaları saniyeler içinde orijinal kalitesinde aktarmak için yerel Wi-Fi veya erişim noktası (hotspot) bağlantınızın gücünden yararlanır.
+
+ÖNE ÇIKAN ÖZELLİKLER:
+
+⚡ Işık Hızında Yerel Transfer
+Mobil verinizi tüketmeden veya harici internet hızına bağımlı olmadan, yerel ağınızın maksimum bant genişliğiyle dosya aktarın.
+
+🔒 Gizli ve Güvenli (Eşler Arası / Peer-to-Peer)
+Dosyalarınız yerel ağınız üzerinden doğrudan cihazlarınız arasında aktarılır. Araya giren sunucu yok, takip yok—verileriniz %100 sizin kontrolünüzde kalır.
+
+📋 Anında Pano (Clipboard) Senkronizasyonu
+Bir cihazda bir bağlantıyı, notu veya kod parçasını kopyalayın ve tek bir dokunuşla diğer cihazınıza anında yapıştırın. Çoklu cihaz verimliliğinizi zirveye taşıyın.
+
+📷 Kayıpsız Kalite (Sıfır Sıkıştırma)
+Yüksek çözünürlüklü fotoğrafları, RAW görselleri ve 4K videoları hiçbir sıkıştırma veya kalite kaybı olmadan paylaşın.
+
+📱 Anında Eşleşme ve Ağ Keşfi
+Yerel ağınızdaki uygun cihazları otomatik olarak keşfedin veya QR kod taramasıyla anında eşleşin. Zahmetli manuel yapılandırmalara son!
+
+🌐 Ağlar Arası Uzaktan Transfer
+Farklı ağlarda olsanız bile entegre push bildirimleri sayesinde eşleşmiş güvenli cihazlarınıza uzaktan dosya gönderin.
+
+📁 Yerel Dosyalar Uygulaması Entegrasyonu
+Alınan dosyaları doğrudan telefonunuzun yerel "Dosyalarım" / İndirilenler yöneticisinde anında bulun ve tek tıkla açın.
+
+SyncSwift ile cihazlar arası kesintisiz üretkenliği bugün deneyimleyin!
+
+
+================================================================================
+2. ENGLISH (en-US)
+================================================================================
+[App Title] (28 Characters):
+SyncSwift: Cross-Device Sync
+
+[Short Description] (77 Characters):
+Fast, wireless & secure file transfer and clipboard sync across your devices.
+
+[Full Description]:
+File sharing between your devices is now effortless, lightning-fast, and secure with SyncSwift!
+
+Say goodbye to tangled cables, cloud upload limits, and slow transfers. Whether transferring from phone to PC, tablet to phone, or between mobile devices, SyncSwift leverages the power of your local Wi-Fi or hotspot connection to transfer photos, 4K videos, documents, and large files in seconds at original quality.
+
+KEY FEATURES:
+
+⚡ Lightning-Fast Local Transfers
+Transfer files at maximum local network bandwidth without consuming your mobile data or relying on external internet speeds.
+
+🔒 Private & Secure (Peer-to-Peer)
+Your files are transmitted directly between your devices over your local network. No middleman servers, no tracking—your data stays 100% in your hands.
+
+📋 Instant Clipboard Sync
+Copy a link, note, or code snippet on one device and paste it immediately onto another with one tap. Elevate your multi-device workflow.
+
+📷 Lossless Quality (No Compression)
+Share high-resolution images, RAW photos, and 4K videos without compression or downgrade in fidelity.
+
+📱 Instant Pairing & Network Discovery
+Automatically detect available devices on your local network or pair instantly via QR code scanning. No cumbersome manual configurations!
+
+🌐 Cross-Network Remote Transfer
+Send files securely to your paired devices even when you are on different networks with integrated push notification alerts.
+
+📁 Native Files App Integration
+Quickly locate and open received files directly inside your device's native Files / Downloads manager.
+
+Experience seamless cross-device productivity today with SyncSwift!
+
+
+================================================================================
+3. DEUTSCH (de-DE)
+================================================================================
+[App-Name] (22 Zeichen):
+SyncSwift: Geräte-Sync
+
+[Kurzbeschreibung] (77 Zeichen):
+Schnelle, kabellose Dateiübertragung und Zwischenablage-Sync für alle Geräte.
+
+[Vollständige Beschreibung]:
+Die Dateiübertragung zwischen Ihren Geräten ist mit SyncSwift jetzt mühelos, blitzschnell und sicher!
+
+Verabschieden Sie sich von Kabelsalat, Cloud-Upload-Limits und langsamen Übertragungen. Ob vom Smartphone zum PC, vom Tablet zum Smartphone oder zwischen Mobilgeräten: SyncSwift nutzt die Geschwindigkeit Ihres lokalen WLANs oder Hotspots, um Fotos, 4K-Videos, Dokumente und große Dateien in Sekundenschnelle in Originalqualität zu übertragen.
+
+HAUPTMERKMALE:
+
+⚡ Blitzschnelle lokale Übertragungen
+Übertragen Sie Dateien mit maximaler Geschwindigkeit im lokalen Netzwerk, ohne Ihr mobiles Datenvolumen zu verbrauchen oder vom Internet abhängig zu sein.
+
+🔒 Privat & Sicher (Peer-to-Peer)
+Ihre Dateien werden direkt zwischen Ihren Geräten im lokalen Netzwerk übertragen. Keine Zwischenserver, kein Tracking – Ihre Daten bleiben zu 100 % in Ihren Händen.
+
+📋 Sofortige Synchronisierung der Zwischenablage
+Kopieren Sie einen Link, eine Notiz oder einen Code auf einem Gerät und fügen Sie ihn mit nur einem Fingertipp sofort auf einem anderen ein. Steigern Sie Ihre Produktivität auf mehreren Geräten.
+
+📷 Verlustfreie Qualität (Keine Komprimierung)
+Teilen Sie hochauflösende Bilder, RAW-Fotos und 4K-Videos ohne Komprimierung oder Qualitätsverlust.
+
+📱 Sofortige Kopplung & Geräteerkennung
+Erkennen Sie verfügbare Geräte in Ihrem lokalen Netzwerk automatisch oder verbinden Sie sich sofort per QR-Code-Scan. Keine mühsamen manuellen Einstellungen!
+
+🌐 Netzwerkübergreifende Fernübertragung
+Senden Sie Dateien dank integrierter Push-Benachrichtigungen auch dann sicher an Ihre gekoppelten Geräte, wenn Sie sich in unterschiedlichen Netzwerken befinden.
+
+📁 Nahtlose Integration in Dateimanager
+Finden und öffnen Sie empfangene Dateien direkt im Standard-Dateimanager oder Download-Ordner Ihres Geräts.
+
+Erleben Sie noch heute nahtlose Produktivität auf allen Ihren Geräten mit SyncSwift!
+
+
+================================================================================
+4. FRANÇAIS (fr-FR)
+================================================================================
+[Titre de l'application] (28 Caractères):
+SyncSwift: Synchro Appareils
+
+[Brève Description] (69 Caractères):
+Transfert de fichiers et presse-papiers rapide, sans fil et sécurisé.
+
+[Description Complète]:
+Le partage de fichiers entre vos appareils devient enfin simple, ultra-rapide et sécurisé avec SyncSwift !
+
+Dites adieu aux câbles encombrants, aux limites de stockage cloud et aux transferts interminables. Que ce soit de votre téléphone vers un PC, d'une tablette vers un smartphone ou entre mobiles, SyncSwift exploite la puissance de votre réseau local (Wi-Fi ou partage de connexion) pour transférer vos photos, vidéos 4K, documents et fichiers volumineux en quelques secondes, sans perte de qualité.
+
+FONCTIONNALITÉS CLÉS :
+
+⚡ Transferts Locaux Ultra-Rapides
+Transférez vos fichiers à la vitesse maximale de votre réseau local, sans consommer votre forfait mobile ni dépendre de la vitesse d'Internet.
+
+🔒 Privé et Sécurisé (Peer-to-Peer)
+Vos fichiers transitent directement d'un appareil à l'autre sur votre réseau local. Aucun serveur intermédiaire, aucun traçage : vos données restent à 100 % entre vos mains.
+
+📋 Synchronisation Instantanée du Presse-Papiers
+Copiez un lien, une note ou un extrait de code sur un appareil et collez-le instantanément sur un autre d'un simple geste. Optimisez votre productivité multi-écrans.
+
+📷 Qualité Sans Perte (Zéro Compression)
+Partagez des images haute résolution, des photos RAW et des vidéos 4K sans aucune compression ni perte de fidélité.
+
+📱 Connexion Instantanée et Détection Réseau
+Détectez automatiquement les appareils disponibles sur votre réseau local ou associez-les instantanément en scannant un QR code. Fini les configurations manuelles complexes !
+
+🌐 Transfert à Distance Multi-Réseaux
+Envoyez des fichiers en toute sécurité à vos appareils associés, même sur des réseaux différents, grâce aux notifications push intégrées.
+
+📁 Intégration Native avec l'Application Fichiers
+Retrouvez et ouvrez facilement les fichiers reçus directement dans le gestionnaire "Mes Fichiers" ou le dossier Téléchargements de votre appareil.
+
+Découvrez dès aujourd'hui une productivité multi-appareils fluide et sans compromis avec SyncSwift !
+
+
+================================================================================
+5. ESPAÑOL (es-ES)
+================================================================================
+[Título de la aplicación] (30 Caracteres):
+SyncSwift: Sincro Dispositivos
+
+[Descripción Corta] (70 Caracteres):
+Transferencia rápida, inalámbrica y segura de archivos y portapapeles.
+
+[Descripción Completa]:
+¡Compartir archivos entre tus dispositivos ahora es sencillo, ultrarrápido y seguro con SyncSwift!
+
+Dile adiós a los cables enredados, los límites de almacenamiento en la nube y las transferencias lentas. Ya sea para transferir de tu teléfono al ordenador, de la tablet al móvil o entre smartphones, SyncSwift aprovecha la potencia de tu red local Wi-Fi o zona portátil para transferir fotos, vídeos 4K, documentos y archivos grandes en segundos con su calidad original.
+
+CARACTERÍSTICAS PRINCIPALES:
+
+⚡ Transferencias Locales Ultrarrápidas
+Transfiere archivos al ancho de banda máximo de tu red local sin gastar datos móviles ni depender de la velocidad de Internet externa.
+
+🔒 Privado y Seguro (Peer-to-Peer)
+Tus archivos viajan directamente entre tus dispositivos a través de tu red local. Sin servidores intermediarios, sin rastreo: tu información permanece 100% en tus manos.
+
+📋 Sincronización Inmediata del Portapapeles
+Copia un enlace, una nota o un fragmento de código en un dispositivo y pégalo al instante en otro con un solo toque. Maximiza tu productividad multidispositivo.
+
+📷 Calidad Original sin Pérdidas (Cero Compresión)
+Comparte imágenes en alta resolución, fotos RAW y vídeos 4K sin compresión ni degradación visual.
+
+📱 Emparejamiento Rápido y Detección en Red
+Detecta automáticamente los dispositivos disponibles en tu red local o vincúlate en segundos escaneando un código QR. ¡Sin engorrosas configuraciones manuales!
+
+🌐 Transferencia Remota entre Redes
+Envía archivos de forma segura a tus dispositivos emparejados incluso cuando estén en redes diferentes mediante alertas por notificaciones push.
+
+📁 Integración con la App de Archivos del Sistema
+Localiza y abre de inmediato los archivos recibidos directamente en la aplicación Mis Archivos o la carpeta de Descargas de tu teléfono.
+
+¡Disfruta hoy mismo de una productividad multidispositivo fluida con SyncSwift!
+
+
+================================================================================
+6. ITALIANO (it-IT)
+================================================================================
+[Titolo dell'app] (29 Caratteri):
+SyncSwift: Sincro Dispositivi
+
+[Descrizione Breve] (78 Caratteri):
+Trasferimento file e appunti rapido, wireless e sicuro tra i tuoi dispositivi.
+
+[Descrizione Completa]:
+Condividere file tra i tuoi dispositivi ora è facilissimo, fulmineo e sicuro con SyncSwift!
+
+Dì addio a cavi ingarbugliati, limiti di caricamento su cloud e trasferimenti lenti. Che si tratti di passare file dal telefono al PC, dal tablet allo smartphone o tra dispositivi mobili, SyncSwift sfrutta la potenza della tua connessione Wi-Fi locale o hotspot per trasferire foto, video 4K, documenti e file pesanti in pochi secondi alla qualità originale.
+
+CARATTERISTICHE PRINCIPALI:
+
+⚡ Trasferimenti Locali Fulminei
+Trasferisci file alla massima velocità della tua rete locale senza consumare dati mobili né dipendere dalla connessione Internet esterna.
+
+🔒 Privato e Sicuro (Peer-to-Peer)
+I tuoi file vengono inviati direttamente tra i tuoi dispositivi sulla rete locale. Nessun server intermediario, nessun tracciamento: i tuoi dati restano al 100% nelle tue mani.
+
+📋 Sincronizzazione Immediata degli Appunti
+Copia un link, un appunto o un frammento di codice su un dispositivo e incollalo istantaneamente su un altro con un solo tocco. Porta al massimo il tuo flusso di lavoro multi-dispositivo.
+
+📷 Qualità Senza Perdite (Nessuna Compressione)
+Condividi immagini ad alta risoluzione, scatti RAW e video 4K senza alcuna compressione né calo di nitidezza.
+
+📱 Connessione Istantanea e Rilevamento di Rete
+Rileva automaticamente i dispositivi disponibili sulla rete locale o connettiti subito scansionando un codice QR. Niente più complesse configurazioni manuali!
+
+🌐 Trasferimento Remoto tra Reti Diverse
+Invia file in modo sicuro ai tuoi dispositivi associati anche quando ti trovi su reti differenti grazie alle notifiche push integrate.
+
+📁 Integrazione Nativa con Gestore File
+Individua e apri immediatamente i file ricevuti direttamente nell'app "I miei file" o nella cartella Download del tuo dispositivo.
+
+Vivi oggi stesso un'esperienza di produttività multi-dispositivo senza interruzioni con SyncSwift!
+
+
+================================================================================
+7. PORTUGUÊS (pt-BR / pt-PT)
+================================================================================
+[Título do aplicativo] (30 Caracteres):
+SyncSwift: Sincro Dispositivos
+
+[Descrição Curta] (75 Caracteres):
+Transferência rápida, sem fio e segura de arquivos e área de transferência.
+
+[Descrição Completa]:
+O compartilhamento de arquivos entre seus aparelhos agora é simples, ultrarrápido e seguro com o SyncSwift!
+
+Diga adeus a cabos enrolados, limites de upload em nuvem e transferências demoradas. Seja do celular para o computador, do tablet para o smartphone ou entre aparelhos móveis, o SyncSwift aproveita ao máximo a velocidade da sua rede Wi-Fi local ou ponto de acesso para transferir fotos, vídeos em 4K, documentos e arquivos grandes em segundos com qualidade original.
+
+PRINCIPAIS RECURSOS:
+
+⚡ Transferências Locais Ultrarrápidas
+Transfira arquivos na largura de banda máxima da sua rede local sem consumir seu plano de dados móveis nem depender da internet externa.
+
+🔒 Privado e Seguro (Ponto a Ponto / Peer-to-Peer)
+Seus arquivos são transmitidos diretamente entre seus aparelhos pela rede local. Sem servidores intermediários, sem rastreamento: seus dados ficam 100% sob seu controle.
+
+📋 Sincronização Instantânea da Área de Transferência
+Copie um link, nota ou trecho de código em um aparelho e cole instantaneamente em outro com apenas um toque. Aumente sua produtividade em múltiplos dispositivos.
+
+📷 Qualidade Sem Perdas (Zero Compressão)
+Compartilhe imagens em alta resolução, fotos em formato RAW e vídeos em 4K sem qualquer compressão ou perda de fidelidade.
+
+📱 Pareamento Imediato e Descoberta de Rede
+Detecte automaticamente os aparelhos disponíveis na sua rede local ou conecte-se na hora lendo um código QR. Chega de configurações manuais complicadas!
+
+🌐 Transferência Remota entre Redes
+Envie arquivos com segurança para seus dispositivos pareados mesmo estando em redes diferentes, graças às notificações push integradas.
+
+📁 Integração Nativa com o Gerenciador de Arquivos
+Localize e abra rapidamente os arquivos recebidos direto no app "Meus Arquivos" ou na pasta Downloads do seu dispositivo.
+
+Experimente hoje mesmo uma produtividade contínua entre todos os seus dispositivos com o SyncSwift!
+
+
+================================================================================
+8. РУССКИЙ (ru-RU)
+================================================================================
+[Название приложения] (24 Символа):
+SyncSwift: Синхронизация
+
+[Краткое описание] (67 Символов):
+Быстрая, беспроводная и безопасная передача файлов и буфера обмена.
+
+[Полное описание]:
+Обмен файлами между вашими устройствами стал невероятно простым, молниеносным и безопасным благодаря SyncSwift!
+
+Забудьте о запутанных кабелях, лимитах облачных сервисов и медленной передаче. Будь то передача со смартфона на ПК, с планшета на телефон или между мобильными устройствами, SyncSwift использует скорость вашей локальной сети Wi-Fi или точки доступа, чтобы за считанные секунды передавать фото, 4K-видео, документы и большие файлы в оригинальном качестве.
+
+КЛЮЧЕВЫЕ ВОЗМОЖНОСТИ:
+
+⚡ Молниеносная локальная передача
+Передавайте файлы на максимальной пропускной способности вашей локальной сети без расхода мобильного трафика и зависимости от скорости интернета.
+
+🔒 Конфиденциально и безопасно (Peer-to-Peer)
+Файлы передаются напрямую между вашими устройствами в локальной сети. Никаких промежуточных серверов, никакого отслеживания — ваши данные на 100% остаются под вашим контролем.
+
+📋 Мгновенная синхронизация буфера обмена
+Скопируйте ссылку, заметку или фрагмент кода на одном устройстве и мгновенно вставьте на другом одним касанием. Поднимите свою продуктивность на новый уровень.
+
+📷 Исходное качество без потерь (Без сжатия)
+Делитесь фотографиями высокого разрешения, снимками в формате RAW и видео 4K без сжатия и потери четкости.
+
+📱 Мгновенное сопряжение и поиск в сети
+Автоматически находите доступные устройства в локальной сети или подключайтесь за секунды путем сканирования QR-кода. Никаких сложных ручных настроек!
+
+🌐 Удаленная передача между разными сетями
+Отправляйте файлы на сопряженные устройства, даже находясь в разных сетях, благодаря встроенным push-уведомлениям.
+
+📁 Интеграция со стандартным диспетчером файлов
+Быстро находите и открывайте полученные файлы прямо в системном приложении «Мои файлы» или папке «Загрузки» на вашем устройстве.
+
+Оцените удобство бесперебойной работы на всех ваших устройствах с SyncSwift уже сегодня!
+
+
+================================================================================
+9. العربية (ar)
+================================================================================
+[اسم التطبيق] (25 حرفاً):
+SyncSwift: مزامنة الأجهزة
+
+[الوصف القصير] (61 حرفاً):
+نقل لاسلكي سريع وآمن للملفات ومزامنة الحافظة بين جميع أجهزتك.
+
+[الوصف الكامل]:
+أصبح تبادل الملفات بين أجهزتك الآن أسهل من أي وقت مضى، فائق السرعة وآمن مع SyncSwift!
+
+ودّع الكابلات المتشابكة، وقيود السعة السحابية، وعمليات النقل البطيئة. سواء كنت تنقل الملفات من هاتفك إلى الكمبيوتر، أو من جهازك اللوحي إلى هاتفك، أو بين الأجهزة المحمولة، يستفيد SyncSwift من قوة شبكة Wi-Fi المحلية أو نقطة الاتصال المحمولة لنقل الصور ومقاطع الفيديو بدقة 4K والمستندات والملفات الكبيرة في غضون ثوانٍ بجودتها الأصلية تماماً.
+
+الميزات الرئيسية:
+
+⚡ نقل محلي فائق السرعة
+انقل ملفاتك بأقصى سرعة توفرها شبكتك المحلية دون استهلاك باقة بيانات الجوال أو الاعتماد على سرعة الإنترنت الخارجي.
+
+🔒 خاص وآمن تماماً (نقل مباشر من جهاز لجهاز P2P)
+تُنقل ملفاتك مباشرة بين أجهزتك عبر شبكتك المحلية. لا توجد خوادم وسيطة تخزن بياناتك، ولا تتبع — بياناتك تبقى في يدك بنسبة 100%.
+
+📋 مزامنة فورية للحافظة (Clipboard)
+انسخ رابطاً أو ملاحظة أو رمزاً على أحد أجهزتك، وقم بلصقه فوراً على جهازك الآخر بنقرة واحدة. عزّز إنتاجيتك في العمل عبر أجهزة متعددة.
+
+📷 جودة أصلية دون فقدان (بدون أي ضغط)
+شارك صورك فائقة الدقة وملفات RAW ومقاطع الفيديو بدقة 4K دون أي ضغط أو انخفاض في نقاء التفاصيل.
+
+📱 اقتران فوري واكتشاف تلقائي على الشبكة
+اكتشف الأجهزة المتاحة على شبكتك المحلية تلقائياً أو اقترن على الفور عبر مسح رمز الاستجابة السريعة QR. وداعاً للإعدادات اليدوية المعقدة!
+
+🌐 نقل عن بعد عبر شبكات مختلفة
+أرسل الملفات بأمان إلى أجهزتك المقترنة حتى لو كنت على شبكات مختلفة، وذلك عبر تنبيهات الإشعارات الفورية المدمجة.
+
+📁 دمج مباشر مع تطبيق الملفات الافتراضي
+اعثر على الملفات المستلمة وافتحها مباشرة داخل تطبيق "ملفاتي" أو مجلد التنزيلات الافتراضي على جهازك بكل سهولة.
+
+اختبر اليوم إنتاجية سلسة عبر جميع أجهزتك مع SyncSwift!
