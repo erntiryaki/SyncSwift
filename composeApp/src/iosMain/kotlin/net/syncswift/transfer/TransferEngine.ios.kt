@@ -5,7 +5,11 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import net.syncswift.connection.ConnectionManager
+import net.syncswift.connection.IncomingPairRequest
 import net.syncswift.currentAppCopy
+import net.syncswift.discovery.DeviceDiscoveryManager
+import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.showNativeToast
 import platform.Foundation.*
 import platform.UIKit.UIPasteboard
@@ -26,9 +30,12 @@ actual object TransferEngine {
         if (b0 > 255u || b1 > 255u || b2 > 255u || b3 > 255u) return null
         return b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
     }
-    private const val PROTOCOL_VERSION: kotlin.Byte = 1
-    private const val TYPE_CLIPBOARD: kotlin.Byte = 1
-    private const val ACK: kotlin.Byte = 6
+    private const val PROTOCOL_VERSION: Byte = 1
+    private const val TYPE_CLIPBOARD: Byte = 1
+    private const val TYPE_PAIR_REQUEST: Byte = 3
+    private const val ACK: Byte = 6
+    private const val RESP_ACCEPTED: Byte = 7
+    private const val RESP_REJECTED: Byte = 8
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _transfers = MutableStateFlow<List<TransferItem>>(emptyList())
@@ -59,63 +66,45 @@ actual object TransferEngine {
         }
     }
 
-    @OptIn(ExperimentalForeignApi::class)
-    private fun startForegroundServer() {
+    actual fun startForegroundServer() {
         if (isListening) return
         scope.launch(Dispatchers.Default) {
             try {
-                val sock = socket(AF_INET, SOCK_STREAM, 0)
-                if (sock < 0) return@launch
-                serverSocketFd = sock
+                serverSocketFd = socket(AF_INET, SOCK_STREAM, 0)
+                if (serverSocketFd < 0) return@launch
 
                 memScoped {
                     val opt = alloc<IntVar>()
                     opt.value = 1
-                    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, opt.ptr, sizeOf<IntVar>().convert())
-                    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, opt.ptr, sizeOf<IntVar>().convert())
-                    setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, opt.ptr, sizeOf<IntVar>().convert())
+                    setsockopt(serverSocketFd, SOL_SOCKET, SO_REUSEADDR, opt.ptr, sizeOf<IntVar>().convert())
 
                     val serverAddr = alloc<sockaddr_in>()
                     serverAddr.sin_family = AF_INET.convert()
                     serverAddr.sin_port = htons(52424.toUShort())
                     serverAddr.sin_addr.s_addr = INADDR_ANY
 
-                    if (bind(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
-                        close(sock)
-                        serverSocketFd = -1
+                    if (bind(serverSocketFd, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) < 0) {
+                        close(serverSocketFd)
                         return@launch
                     }
 
-                    if (listen(sock, 10) != 0) {
-                        close(sock)
-                        serverSocketFd = -1
+                    if (listen(serverSocketFd, 10) < 0) {
+                        close(serverSocketFd)
                         return@launch
                     }
-                }
 
-                isListening = true
+                    isListening = true
+                    println("[SyncSwift iOS] TransferEngine listening on port 52424")
 
-                while (isListening && serverSocketFd >= 0) {
-                    val clientSock = memScoped {
+                    while (isListening) {
                         val clientAddr = alloc<sockaddr_in>()
                         val clientLen = alloc<socklen_tVar>()
                         clientLen.value = sizeOf<sockaddr_in>().convert()
-                        accept(serverSocketFd, clientAddr.ptr.reinterpret(), clientLen.ptr)
-                    }
 
-                    if (clientSock >= 0) {
-                        memScoped {
-                            val opt = alloc<IntVar>()
-                            opt.value = 1
-                            setsockopt(clientSock, SOL_SOCKET, SO_NOSIGPIPE, opt.ptr, sizeOf<IntVar>().convert())
+                        val clientSock = accept(serverSocketFd, clientAddr.ptr.reinterpret(), clientLen.ptr)
+                        if (clientSock >= 0) {
+                            handleIncomingClient(clientSock)
                         }
-                        handleIncomingClient(clientSock)
-                    } else {
-                        val err = errno
-                        if (err == EBADF || err == ENOTSOCK || err == EINVAL || serverSocketFd < 0) {
-                            break
-                        }
-                        delay(500)
                     }
                 }
             } catch (e: Throwable) {
@@ -125,39 +114,107 @@ actual object TransferEngine {
     }
 
     @OptIn(ExperimentalForeignApi::class)
+    private fun readExact(sock: Int, buf: ByteArray, offset: Int, length: Int): Boolean {
+        var readTotal = 0
+        while (readTotal < length) {
+            val r = buf.usePinned { pinned ->
+                recv(sock, pinned.addressOf(offset + readTotal), (length - readTotal).convert(), 0)
+            }
+            if (r <= 0) return false
+            readTotal += r.toInt()
+        }
+        return true
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    private fun readUTF(sock: Int): String? {
+        val lenBuf = ByteArray(2)
+        if (!readExact(sock, lenBuf, 0, 2)) return null
+        val len = ((lenBuf[0].toInt() and 0xFF) shl 8) or (lenBuf[1].toInt() and 0xFF)
+        if (len == 0) return ""
+        val strBuf = ByteArray(len)
+        if (!readExact(sock, strBuf, 0, len)) return null
+        return strBuf.decodeToString()
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    private fun readInt(sock: Int): Int? {
+        val intBuf = ByteArray(4)
+        if (!readExact(sock, intBuf, 0, 4)) return null
+        return ((intBuf[0].toInt() and 0xFF) shl 24) or
+               ((intBuf[1].toInt() and 0xFF) shl 16) or
+               ((intBuf[2].toInt() and 0xFF) shl 8) or
+               (intBuf[3].toInt() and 0xFF)
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
     private fun handleIncomingClient(clientSock: Int) {
         scope.launch(Dispatchers.Default) {
             try {
                 memScoped {
-                    val header = ByteArray(4)
-                    var readTotal = 0
-                    while (readTotal < 4) {
-                        val r = header.usePinned { pinned ->
-                            recv(clientSock, pinned.addressOf(readTotal), (4 - readTotal).convert(), 0)
-                        }
-                        if (r <= 0) break
-                        readTotal += r.toInt()
-                    }
+                    val tv = alloc<timeval>()
+                    tv.tv_sec = 35
+                    tv.tv_usec = 0
+                    setsockopt(clientSock, SOL_SOCKET, SO_RCVTIMEO, tv.ptr, sizeOf<timeval>().convert())
 
-                    if (readTotal == 4 && header[0] == PROTOCOL_VERSION && header[1] == TYPE_CLIPBOARD) {
-                        val len = ((header[2].toInt() and 0xFF) shl 8) or (header[3].toInt() and 0xFF)
-                        val textBuf = ByteArray(len)
-                        var textRead = 0
-                        while (textRead < len) {
-                            val r = textBuf.usePinned { pinned ->
-                                recv(clientSock, pinned.addressOf(textRead), (len - textRead).convert(), 0)
+                    val header = ByteArray(2)
+                    if (!readExact(clientSock, header, 0, 2)) return@memScoped
+                    if (header[0] != PROTOCOL_VERSION) return@memScoped
+
+                    when (header[1]) {
+                        TYPE_PAIR_REQUEST -> {
+                            val senderName = readUTF(clientSock) ?: return@memScoped
+                            val senderHost = readUTF(clientSock) ?: return@memScoped
+                            val senderPort = readInt(clientSock) ?: 52424
+                            val senderOs = readUTF(clientSock) ?: "Unknown"
+
+                            println("[SyncSwift iOS] Incoming pair request from $senderName ($senderHost:$senderPort)")
+
+                            val request = IncomingPairRequest(
+                                senderId = "$senderHost:$senderPort",
+                                senderName = senderName,
+                                senderHost = senderHost,
+                                senderPort = senderPort,
+                                senderOsType = senderOs
+                            )
+
+                            ConnectionManager.dispatchIncomingPairRequest(request)
+
+                            val accepted = try {
+                                withTimeout(30000) {
+                                    request.deferredResponse.await()
+                                }
+                            } catch (e: Exception) {
+                                ConnectionManager.cancelIncomingPairRequest()
+                                false
                             }
-                            if (r <= 0) break
-                            textRead += r.toInt()
+
+                            val respByte = byteArrayOf(if (accepted) RESP_ACCEPTED else RESP_REJECTED)
+                            respByte.usePinned { pinned ->
+                                send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                            }
+
+                            if (accepted) {
+                                ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
+                            }
                         }
 
-                        val receivedText = textBuf.decodeToString()
-                        applyIncomingClipboard(receivedText)
+                        TYPE_CLIPBOARD -> {
+                            val str1 = readUTF(clientSock) ?: return@memScoped
+                            // Check if sender also sent text (when str1 is senderName)
+                            val str2 = readUTF(clientSock)
+                            val receivedText = str2 ?: str1
 
-                        // Send ACK
-                        val ackByte = byteArrayOf(ACK)
-                        ackByte.usePinned { pinned ->
-                            send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                            applyIncomingClipboard(receivedText)
+
+                            val ackByte = byteArrayOf(ACK)
+                            ackByte.usePinned { pinned ->
+                                send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                            }
+                        }
+
+                        else -> {
+                            println("[SyncSwift iOS] Unknown message type: ${header[1]}")
                         }
                     }
                 }
@@ -182,10 +239,10 @@ actual object TransferEngine {
 
         val item = TransferItem(
             id = NSUUID().UUIDString,
-            fileName = text.take(40).replace("\n", " "),
-            fileSizeBytes = text.encodeToByteArray().size.toLong(),
+            fileName = "Pano: ${text.take(30).replace("\n", " ")}",
+            fileSizeBytes = text.length.toLong(),
             mimeType = "text/plain",
-            bytesTransferred = text.encodeToByteArray().size.toLong(),
+            bytesTransferred = text.length.toLong(),
             isSent = false,
             peerName = "Remote Device",
             status = TransferStatus.COMPLETED,
@@ -232,13 +289,23 @@ actual object TransferEngine {
             )
             recordTransfer(item)
 
-            val len = textBytes.size
-            val payload = ByteArray(4 + len)
-            payload[0] = PROTOCOL_VERSION
-            payload[1] = TYPE_CLIPBOARD
-            payload[2] = ((len shr 8) and 0xFF).toByte()
-            payload[3] = (len and 0xFF).toByte()
-            textBytes.copyInto(payload, 4)
+            val self = DeviceDiscoveryManager.getSelfDevice()
+            val selfName = cleanDeviceDisplayName(self?.name ?: "iPhone")
+            val nameBytes = selfName.encodeToByteArray()
+
+            val size = 2 + (2 + nameBytes.size) + (2 + textBytes.size)
+            val payload = ByteArray(size)
+            var idx = 0
+            payload[idx++] = PROTOCOL_VERSION
+            payload[idx++] = TYPE_CLIPBOARD
+            // writeUTF(selfName)
+            payload[idx++] = ((nameBytes.size shr 8) and 0xFF).toByte()
+            payload[idx++] = (nameBytes.size and 0xFF).toByte()
+            nameBytes.copyInto(payload, idx); idx += nameBytes.size
+            // writeUTF(text)
+            payload[idx++] = ((textBytes.size shr 8) and 0xFF).toByte()
+            payload[idx++] = (textBytes.size and 0xFF).toByte()
+            textBytes.copyInto(payload, idx); idx += textBytes.size
 
             val socketOk = sendViaSocket(targetHost, targetPort, payload)
             if (socketOk) {
@@ -315,7 +382,7 @@ actual object TransferEngine {
                 recv(sock, pinned.addressOf(0), 1.convert(), 0)
             }
             close(sock)
-            received > 0 && ackBuf[0] == ACK
+            received > 0 && (ackBuf[0] == ACK || ackBuf[0] == RESP_ACCEPTED)
         }
     }
 

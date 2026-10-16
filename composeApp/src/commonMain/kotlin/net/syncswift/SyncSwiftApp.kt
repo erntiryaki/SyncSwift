@@ -215,16 +215,14 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         if (fName.isNotBlank()) firstName = fName
         if (lName.isNotBlank()) lastName = lName
         SessionManager.saveSession(userEmail, provider, firstName, lastName)
-        if (password.isNotBlank() || (fName.isNotBlank() && lName.isNotBlank())) {
-            scope.launch {
-                SupabaseNetwork.registerUserInSupabase(
-                    email = userEmail,
-                    firstName = firstName,
-                    lastName = lastName,
-                    provider = provider,
-                    password = password
-                )
-            }
+        scope.launch {
+            SupabaseNetwork.registerUserInSupabase(
+                email = userEmail,
+                firstName = firstName,
+                lastName = lastName,
+                provider = provider,
+                password = password
+            )
         }
     }
 
@@ -319,9 +317,16 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 },
                                 onAppleSignIn = { appleUser ->
                                     val targetEmail = if (appleUser.email.isNotBlank()) appleUser.email.trim().lowercase() else "${appleUser.userIdentifier}@privaterelay.appleid.com"
-                                    val aFirstName = appleUser.givenName ?: ""
-                                    val aLastName = appleUser.familyName ?: ""
+                                    var aFirstName = appleUser.givenName ?: ""
+                                    var aLastName = appleUser.familyName ?: ""
                                     scope.launch {
+                                        if (aFirstName.isBlank() && aLastName.isBlank()) {
+                                            val existingProfile = SupabaseNetwork.fetchUserProfile(targetEmail)
+                                            if (existingProfile != null) {
+                                                if (existingProfile.firstName.isNotBlank()) aFirstName = existingProfile.firstName
+                                                if (existingProfile.lastName.isNotBlank()) aLastName = existingProfile.lastName
+                                            }
+                                        }
                                         val existingProvider = SupabaseNetwork.getUserProvider(targetEmail) ?: authPolicy.getRegisteredProvider(targetEmail)
                                         if (existingProvider == IdentityProvider.EmailPassword) {
                                             authAlert = AuthAlertState.CrossProviderEmailToGoogle

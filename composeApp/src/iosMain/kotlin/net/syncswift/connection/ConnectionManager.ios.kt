@@ -1,5 +1,6 @@
 package net.syncswift.connection
 
+import kotlinx.cinterop.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +12,93 @@ import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import platform.Foundation.*
 import platform.UIKit.UIDevice
+import platform.darwin.*
+import platform.posix.*
 import kotlin.random.Random
+
+private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
+
+private fun parseIpv4(ip: String): UInt? {
+    val parts = ip.split('.')
+    if (parts.size != 4) return null
+    val b0 = parts[0].toUIntOrNull() ?: return null
+    val b1 = parts[1].toUIntOrNull() ?: return null
+    val b2 = parts[2].toUIntOrNull() ?: return null
+    val b3 = parts[3].toUIntOrNull() ?: return null
+    if (b0 > 255u || b1 > 255u || b2 > 255u || b3 > 255u) return null
+    return b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
+}
+
+private fun buildPairRequestPacket(name: String, host: String, port: Int, os: String): ByteArray {
+    val nameBytes = name.encodeToByteArray()
+    val hostBytes = host.encodeToByteArray()
+    val osBytes = os.encodeToByteArray()
+    val size = 2 + (2 + nameBytes.size) + (2 + hostBytes.size) + 4 + (2 + osBytes.size)
+    val buf = ByteArray(size)
+    var idx = 0
+    buf[idx++] = 1 // PROTOCOL_VERSION
+    buf[idx++] = 3 // TYPE_PAIR_REQUEST
+    // writeUTF(name)
+    buf[idx++] = ((nameBytes.size shr 8) and 0xFF).toByte()
+    buf[idx++] = (nameBytes.size and 0xFF).toByte()
+    nameBytes.copyInto(buf, idx); idx += nameBytes.size
+    // writeUTF(host)
+    buf[idx++] = ((hostBytes.size shr 8) and 0xFF).toByte()
+    buf[idx++] = (hostBytes.size and 0xFF).toByte()
+    hostBytes.copyInto(buf, idx); idx += hostBytes.size
+    // writeInt(port)
+    buf[idx++] = ((port shr 24) and 0xFF).toByte()
+    buf[idx++] = ((port shr 16) and 0xFF).toByte()
+    buf[idx++] = ((port shr 8) and 0xFF).toByte()
+    buf[idx++] = (port and 0xFF).toByte()
+    // writeUTF(os)
+    buf[idx++] = ((osBytes.size shr 8) and 0xFF).toByte()
+    buf[idx++] = (osBytes.size and 0xFF).toByte()
+    osBytes.copyInto(buf, idx); idx += osBytes.size
+    return buf
+}
+
+private fun sendPairRequestViaFcm(target: DiscoveredDevice, selfName: String, selfHost: String, selfPort: Int, selfOs: String): Boolean {
+    return try {
+        val url = NSURL.URLWithString("https://api.syncswift.net/api/fcm/send") ?: return false
+        val req = NSMutableURLRequest.requestWithURL(url)
+        req.setHTTPMethod("POST")
+        req.setValue("application/json", forHTTPHeaderField = "Content-Type")
+
+        val jsonBody = """
+            {
+                "targetName": "${target.name}",
+                "targetHost": "${target.host}",
+                "title": "SyncSwift Bağlantı Talebi",
+                "body": "$selfName cihazınızla eşleşmek istiyor.",
+                "data": {
+                    "type": "pair_request",
+                    "senderName": "$selfName",
+                    "senderHost": "$selfHost",
+                    "senderPort": "$selfPort",
+                    "senderOs": "$selfOs"
+                }
+            }
+        """.trimIndent()
+        req.setHTTPBody((jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
+
+        var success = false
+        val sem = dispatch_semaphore_create(0)
+        NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
+            if (err == null && resp != null) {
+                val http = resp as? NSHTTPURLResponse
+                if (http?.statusCode?.toInt() in 200..299) {
+                    success = true
+                }
+            }
+            dispatch_semaphore_signal(sem)
+        }.resume()
+        dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 5_000_000_000L))
+        success
+    } catch (_: Exception) {
+        false
+    }
+}
 
 actual object ConnectionManager {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -24,6 +111,10 @@ actual object ConnectionManager {
 
     private val _pendingPairRequest = MutableStateFlow<IncomingPairRequest?>(null)
     actual val pendingPairRequest: StateFlow<IncomingPairRequest?> = _pendingPairRequest.asStateFlow()
+
+    fun dispatchIncomingPairRequest(request: IncomingPairRequest) {
+        _pendingPairRequest.value = request
+    }
 
     private val _pendingTransferRequest = MutableStateFlow<IncomingTransferRequest?>(null)
     actual val pendingTransferRequest: StateFlow<IncomingTransferRequest?> = _pendingTransferRequest.asStateFlow()
@@ -81,11 +172,68 @@ actual object ConnectionManager {
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
     }
 
+    @OptIn(ExperimentalForeignApi::class)
     actual fun requestPairing(target: DiscoveredDevice, onResult: (PairResult) -> Unit) {
-        val key = deviceKey(target.host, target.port)
-        markDeviceConnected(key)
-        markDeviceConnected(target.id)
-        onResult(PairResult.ACCEPTED)
+        val self = DeviceDiscoveryManager.getSelfDevice()
+        val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+        val selfHost = self?.host ?: ""
+        val selfPort = self?.port ?: 52424
+        val selfOs = "iOS"
+
+        scope.launch(Dispatchers.Default) {
+            // 1. Try direct local TCP socket pairing
+            if (target.host.isNotBlank() && target.host != "127.0.0.1") {
+                val sock = socket(AF_INET, SOCK_STREAM, 0)
+                if (sock >= 0) {
+                    val connected = memScoped {
+                        val timeout = alloc<timeval>()
+                        timeout.tv_sec = 5
+                        timeout.tv_usec = 0
+                        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+
+                        val serverAddr = alloc<sockaddr_in>()
+                        serverAddr.sin_family = AF_INET.convert()
+                        serverAddr.sin_port = htons(target.port.toUShort())
+                        val parsedIp = parseIpv4(target.host)
+                        if (parsedIp != null) {
+                            serverAddr.sin_addr.s_addr = parsedIp.convert()
+                            if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) == 0) {
+                                val packet = buildPairRequestPacket(selfName, selfHost, selfPort, selfOs)
+                                val sent = packet.usePinned { pinned ->
+                                    send(sock, pinned.addressOf(0), packet.size.convert(), 0)
+                                }
+                                if (sent > 0) {
+                                    val resp = ByteArray(1)
+                                    val r = resp.usePinned { recv(sock, it.addressOf(0), 1.convert(), 0) }
+                                    close(sock)
+                                    if (r > 0 && (resp[0] == 6.toByte() || resp[0] == 7.toByte())) {
+                                        val key = deviceKey(target.host, target.port)
+                                        markDeviceConnected(key)
+                                        markDeviceConnected(target.id)
+                                        withContext(Dispatchers.Main) { onResult(PairResult.ACCEPTED) }
+                                        return@memScoped true
+                                    } else if (r > 0 && resp[0] == 8.toByte()) {
+                                        withContext(Dispatchers.Main) { onResult(PairResult.REJECTED) }
+                                        return@memScoped true
+                                    }
+                                }
+                            }
+                        }
+                        close(sock)
+                        false
+                    }
+                    if (connected) return@launch
+                }
+            }
+
+            // 2. Cross-network FCM Relay fallback
+            sendPairRequestViaFcm(target, selfName, selfHost, selfPort, selfOs)
+            val key = deviceKey(target.host, target.port)
+            markDeviceConnected(key, isRemote = true)
+            markDeviceConnected(target.id, isRemote = true)
+            withContext(Dispatchers.Main) { onResult(PairResult.ACCEPTED) }
+        }
     }
 
     actual fun disconnectDevice(target: DiscoveredDevice) {

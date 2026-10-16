@@ -41,10 +41,16 @@ fun ConnectDesktopScreen(
 
     val scanQr = rememberQrScanner(
         onSuccess = { scannedText ->
-            val clean = scannedText.trim().replace(" ", "")
-            if (clean.length == 6 && clean.all { it.isDigit() }) {
+            val clean = scannedText.trim()
+            val extractedCode = when {
+                clean.contains("code=") -> clean.substringAfter("code=", "").substringBefore("&").replace(" ", "").trim()
+                clean.length == 6 && clean.all { it.isDigit() } -> clean
+                clean.length == 7 && clean.contains(" ") -> clean.replace(" ", "")
+                else -> null
+            }
+            if (extractedCode != null && extractedCode.length == 6 && extractedCode.all { it.isDigit() }) {
                 isConnecting = true
-                ConnectionManager.connectViaPairingCode(clean) { res ->
+                ConnectionManager.connectViaPairingCode(extractedCode) { res ->
                     isConnecting = false
                     if (res == PairResult.ACCEPTED) {
                         showNativeToast(copy.connectionAccepted)
@@ -52,6 +58,19 @@ fun ConnectDesktopScreen(
                     } else {
                         showNativeToast(copy.invalidPairingCode)
                     }
+                }
+            } else if (clean.startsWith("syncswift://pair") || clean.startsWith("syncdrop://pair") || clean.contains(":")) {
+                val host = clean.substringAfter("host=", "").substringBefore("&")
+                    .ifBlank { clean.substringBefore(":").removePrefix("syncswift://").removePrefix("syncdrop://") }
+                val port = clean.substringAfter("port=", "").substringBefore("&")
+                    .ifBlank { clean.substringAfter(":", "52424") }.toIntOrNull() ?: 52424
+                if (host.isNotBlank()) {
+                    val dev = net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(host, port, "Desktop", "Desktop")
+                    ConnectionManager.markDeviceConnected("$host:$port")
+                    showNativeToast(copy.connectionAccepted)
+                    onDismiss()
+                } else {
+                    showNativeToast(copy.invalidPairingCode)
                 }
             } else {
                 showNativeToast(copy.invalidPairingCode)

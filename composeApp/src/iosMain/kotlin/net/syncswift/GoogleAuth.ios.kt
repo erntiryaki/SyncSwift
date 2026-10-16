@@ -32,8 +32,9 @@ private class WebAuthContextProvider : NSObject(), ASWebAuthenticationPresentati
     }
 }
 
-// Keep a strong reference to active ASWebAuthenticationSession to avoid ARC deallocation
+// Keep strong references to active ASWebAuthenticationSession and context provider to avoid ARC deallocation
 private var activeAuthSession: ASWebAuthenticationSession? = null
+private var activeContextProvider: WebAuthContextProvider? = null
 
 @Composable
 actual fun rememberGoogleAuthLauncher(
@@ -60,6 +61,7 @@ actual fun rememberGoogleAuthLauncher(
                     callbackURLScheme = "net.syncswift"
                 ) { callbackUrl, error ->
                 activeAuthSession = null
+                activeContextProvider = null
                 if (error != null) {
                     if (error.code.toInt() != 1) { // 1 = canceled by user
                         onError(error.localizedDescription ?: "Google Sign-In failed")
@@ -130,7 +132,10 @@ actual fun rememberGoogleAuthLauncher(
                 session.presentationContextProvider = contextProvider
                 session.prefersEphemeralWebBrowserSession = false
                 activeAuthSession = session
-                session.start()
+                activeContextProvider = contextProvider
+                dispatch_async(dispatch_get_main_queue()) {
+                    session.start()
+                }
             }
         } catch (e: Exception) {
             onError(e.message ?: "Could not launch Google Sign-In.")

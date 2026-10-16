@@ -239,7 +239,7 @@ fun EmailAuthScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             SocialPill(
-                label = copy.google,
+                label = if (currentPlatform() == PlatformFlavor.Ios) "Google" else copy.google,
                 provider = IdentityProvider.Google,
                 light = true,
                 action = launchNativeGoogleAuth,
@@ -247,7 +247,7 @@ fun EmailAuthScreen(
             )
             if (currentPlatform() == PlatformFlavor.Ios) {
                 SocialPill(
-                    label = copy.apple,
+                    label = "Apple",
                     provider = IdentityProvider.Apple,
                     light = false,
                     action = launchNativeAppleAuth,
