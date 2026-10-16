@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_scanner_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#730B101B">
+
+    <!-- Top bar with Back/Close button -->
+    <LinearLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="44dp"
+        android:paddingBottom="16dp"
+        android:gravity="center_vertical">
+
+        <FrameLayout
+            android:id="@+id/btn_close_scanner"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/bg_scanner_back_btn"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_scanner_back" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- Center Scanner Container -->
+    <LinearLayout
+        android:id="@+id/center_scanner_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <!-- Square framed scanning area with rounded corners and turquoise border -->
+        <FrameLayout
+            android:layout_width="260dp"
+            android:layout_height="260dp">
+
+            <!-- Rounded camera preview container -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_scanner_inner"
+                android:clipToOutline="true">
+
+                <com.journeyapps.barcodescanner.DecoratedBarcodeView
+                    android:id="@+id/zxing_barcode_scanner"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:zxing_preview_scaling_strategy="centerCrop"
+                    app:zxing_use_texture_view="true" />
+            </FrameLayout>
+
+            <!-- Frame border overlay with turquoise stroke -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_scanner_border" />
+        </FrameLayout>
+
+        <!-- SyncSwift white logo below the square scanner (even larger) -->
+        <ImageView
+            android:id="@+id/img_sync_swift_logo"
+            android:layout_width="320dp"
+            android:layout_height="80dp"
+            android:layout_marginTop="28dp"
+            android:src="@drawable/logo_syncswift"
+            android:scaleType="fitCenter"
+            android:tint="#FFFFFF"
+            android:contentDescription="SyncSwift" />
+
+    </LinearLayout>
+
+</RelativeLayout>

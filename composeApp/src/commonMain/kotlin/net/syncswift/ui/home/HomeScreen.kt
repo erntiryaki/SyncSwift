@@ -1,0 +1,617 @@
+package net.syncswift.ui.home
+
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import net.syncswift.*
+import net.syncswift.connection.ConnectionManager
+import net.syncswift.connection.PairResult
+import net.syncswift.discovery.DeviceDiscoveryManager
+import net.syncswift.discovery.DiscoveredDevice
+import net.syncswift.discovery.cleanDeviceDisplayName
+import net.syncswift.transfer.TransferEngine
+import net.syncswift.transfer.TransferItem
+import net.syncswift.transfer.TransferStatus
+import net.syncswift.ui.components.SyncSwiftModal
+import net.syncswift.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+@Composable
+fun HomeScreen(
+    copy: Copy,
+    onSendClick: () -> Unit = {},
+    onClipboardClick: () -> Unit = {},
+    onDeviceClick: (DiscoveredDevice) -> Unit = {},
+    onViewAllTransfers: () -> Unit = {}
+) {
+    val scrollState = rememberScrollState()
+    val discoveredDevices by DeviceDiscoveryManager.devices.collectAsState()
+    val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
+    val isScanning by DeviceDiscoveryManager.isScanning.collectAsState()
+    val selfDevice = remember { DeviceDiscoveryManager.getSelfDevice() }
+    val recentTransfers by TransferEngine.transfers.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    var deviceToPair by remember { mutableStateOf<DiscoveredDevice?>(null) }
+    var deviceForAction by remember { mutableStateOf<DiscoveredDevice?>(null) }
+
+    var isRefreshing by remember { mutableStateOf(false) }
+    var showScanningBanner by remember { mutableStateOf(false) }
+    var pullOffset by remember { mutableStateOf(0f) }
+
+    fun triggerScan() {
+        if (isRefreshing) return
+        isRefreshing = true
+        pullOffset = 0f
+        scope.launch {
+            try {
+                DeviceDiscoveryManager.startDiscovery()
+                delay(2500)
+            } finally {
+                isRefreshing = false
+                pullOffset = 0f
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        DeviceDiscoveryManager.startDiscovery()
+    }
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0 && pullOffset > 0f) {
+                    val consumed = available.y.coerceAtLeast(-pullOffset)
+                    pullOffset += consumed
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y > 0 && scrollState.value == 0 && !isRefreshing) {
+                    pullOffset = (pullOffset + available.y * 0.4f).coerceAtMost(250f)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullOffset >= 150f && !isRefreshing) {
+                    triggerScan()
+                }
+                pullOffset = 0f
+                return Velocity.Zero
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .nestedScroll(nestedScrollConnection)
+            .padding(horizontal = 24.dp)
+            .verticalScroll(scrollState)
+    ) {
+        Spacer(Modifier.height(16.dp))
+
+        // Top Bar: Clean Minimalist Page Header (P2P removed)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = copy.homeTab,
+                color = Cloud,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.6).sp
+            )
+        }
+
+        // Modern Pull-to-Refresh: circular indicator with text underneath, no dots, no box
+        AnimatedVisibility(
+            visible = isRefreshing,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = Blue,
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = copy.scanningNearbyDevices,
+                    color = Mist,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        val otherDevices = discoveredDevices.filter { dev ->
+            !dev.isSelf &&
+            (selfDevice == null || (dev.host != selfDevice.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name)))
+        }
+        val connectedList = otherDevices.filter { ConnectionManager.isDeviceConnected(it) }
+        val availableList = otherDevices.filter { !ConnectionManager.isDeviceConnected(it) }
+
+        // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)
+        // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { triggerScan() },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = copy.connectedDevicesSection,
+                color = Cloud,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.3).sp,
+                maxLines = 1,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            val connectedCount = connectedList.size + (if (selfDevice != null) 1 else 0)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = copy.formatDeviceCount(connectedCount),
+                color = Mist,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (selfDevice != null) {
+                BoxlessDeviceRow(
+                    name = cleanDeviceDisplayName(selfDevice.name),
+                    details = copy.thisDeviceOnline,
+                    badge = selfDevice.osType,
+                    isOnline = true,
+                    isSelf = true
+                )
+                HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+            }
+
+            if (connectedList.isNotEmpty()) {
+                connectedList.forEach { device ->
+                    val statusText = if (device.isOnline) copy.connectedStatus else copy.offlineSleeping
+                    BoxlessDeviceRow(
+                        name = cleanDeviceDisplayName(device.name),
+                        details = statusText,
+                        badge = device.osType,
+                        isOnline = device.isOnline,
+                        isConnected = true,
+                        onClick = {
+                            deviceForAction = device
+                        }
+                    )
+                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        // SECTION 2: AĞDAKİ DİĞER CİHAZLAR (Available Devices)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { triggerScan() },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = copy.availableDevicesSection,
+                color = Cloud,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.3).sp,
+                maxLines = 1,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = copy.formatDeviceCount(availableList.size),
+                color = Mist,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (availableList.isNotEmpty()) {
+                availableList.forEach { device ->
+                    val statusText = if (device.isOnline) copy.deviceOnline else copy.outsideLocalNetwork
+                    BoxlessDeviceRow(
+                        name = cleanDeviceDisplayName(device.name),
+                        details = statusText,
+                        badge = device.osType,
+                        isOnline = device.isOnline,
+                        isConnected = false,
+                        onClick = {
+                            deviceToPair = device
+                        }
+                    )
+                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+                }
+            } else {
+                Text(
+                    text = copy.noDevicesOnNetwork,
+                    color = Mist,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        // SECTION 2: ACTION BUTTONS (GÖNDER & ORTAK PANO)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Gönder (Send Files Action)
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .clickable(onClick = onSendClick),
+                shape = RoundedCornerShape(26.dp),
+                color = PillButtonBg
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    UploadIcon(Modifier.size(18.dp), color = PillButtonText)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = copy.send,
+                        color = PillButtonText,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Ortak Pano (Clipboard Action)
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .clickable(onClick = onClipboardClick),
+                shape = RoundedCornerShape(26.dp),
+                color = InputBg
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    ClipboardVectorIcon(Modifier.size(18.dp), color = Blue)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = copy.clipboard,
+                        color = Cloud,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(34.dp))
+
+        // SECTION 3: SON AKTARIMLAR (Recent Transfers)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = copy.recentTransfers,
+                color = Cloud,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.3).sp
+            )
+            if (recentTransfers.isNotEmpty()) {
+                Text(
+                    text = copy.viewAll,
+                    color = Blue,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(onClick = onViewAllTransfers)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Recent Transfer Items or Clean Empty State
+        if (recentTransfers.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = copy.noTransfersYet,
+                    color = Mist.copy(alpha = 0.7f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                recentTransfers.take(4).forEach { item ->
+                    BoxlessTransferRow(
+                        title = item.fileName,
+                        info = "${if (item.isSent) copy.transfersSent else copy.transfersReceived} · ${item.formattedSize}",
+                        isSent = item.isSent,
+                        status = item.status
+                    )
+                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(160.dp))
+    }
+
+    if (deviceToPair != null) {
+        val target = deviceToPair!!
+        SyncSwiftModal(
+            onDismissRequest = { deviceToPair = null },
+            title = copy.connectionRequestTitle,
+            confirmText = copy.sendConnectionRequestAction,
+            onConfirm = {
+                val connectedCount = discoveredDevices.count { ConnectionManager.isDeviceConnected(it) }
+                if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedCount)) {
+                    deviceToPair = null
+                    net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                        net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
+                    )
+                    return@SyncSwiftModal
+                }
+
+                deviceToPair = null
+                showNativeToast(copy.sendingConnectionRequest)
+                ConnectionManager.requestPairing(target) { result ->
+                    when (result) {
+                        PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
+                        PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                        PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
+                        PairResult.PENDING_APPROVAL -> { /* OutgoingStatusModal displays approval waiting */ }
+                    }
+                }
+            },
+            dismissText = copy.otpCancelAction,
+            onDismiss = { deviceToPair = null }
+        ) {
+            Text(
+                text = copy.sendConnectionRequestPrompt.replace("%s", cleanDeviceDisplayName(target.name)),
+                color = Mist,
+                fontSize = 15.sp,
+                lineHeight = 22.sp
+            )
+        }
+    }
+
+    if (deviceForAction != null) {
+        val target = deviceForAction!!
+        SyncSwiftModal(
+            onDismissRequest = { deviceForAction = null },
+            title = cleanDeviceDisplayName(target.name),
+            confirmText = copy.send,
+            onConfirm = {
+                deviceForAction = null
+                onDeviceClick(target)
+            },
+            dismissText = copy.disconnect,
+            onDismiss = {
+                deviceForAction = null
+                ConnectionManager.disconnectDevice(target)
+                showNativeToast(copy.disconnected)
+            }
+        ) {
+            val status = if (target.isOnline) copy.connectedStatus else copy.outsideLocalNetwork
+            Text(
+                text = "${cleanDeviceDisplayName(target.name)} · $status",
+                color = Blue,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoxlessDeviceRow(
+    name: String,
+    details: String,
+    badge: String,
+    isOnline: Boolean,
+    isConnected: Boolean = false,
+    isSelf: Boolean = false,
+    onClick: (() -> Unit)? = null
+) {
+    val isMobile = badge.equals("Android", ignoreCase = true) || badge.equals("iOS", ignoreCase = true)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(InputBg.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isMobile) {
+                PhoneVectorIcon(Modifier.size(19.dp), color = if (isConnected && isOnline) Blue else Mist)
+            } else {
+                LaptopVectorIcon(Modifier.size(19.dp), color = if (isConnected && isOnline) Blue else Mist)
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(name, color = Cloud, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = badge,
+                    color = Mist,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Row(
+                modifier = Modifier.padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(if (isOnline) SuccessGreen else Mist.copy(alpha = 0.4f))
+                )
+                Text(
+                    text = details,
+                    color = if (isConnected && isOnline) Blue else Mist,
+                    fontSize = 12.sp,
+                    fontWeight = if (isConnected && isOnline) FontWeight.SemiBold else FontWeight.Normal
+                )
+            }
+        }
+        if (!isSelf) {
+            ChevronRightIcon(Modifier.size(14.dp), color = Mist.copy(alpha = 0.6f))
+        }
+    }
+}
+
+@Composable
+private fun BoxlessTransferRow(
+    title: String,
+    info: String,
+    isSent: Boolean,
+    status: TransferStatus = TransferStatus.COMPLETED
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(SuccessGreen.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isSent) {
+                OutgoingArrowIcon(Modifier.size(18.dp), color = SuccessGreen)
+            } else {
+                IncomingArrowIcon(Modifier.size(18.dp), color = SuccessGreen)
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Cloud,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+            Text(
+                text = info,
+                color = Mist,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        when (status) {
+            TransferStatus.IN_PROGRESS -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Blue,
+                    strokeWidth = 2.dp
+                )
+            }
+            TransferStatus.COMPLETED -> {
+                AnimatedCheckCircleIcon(Modifier.size(20.dp))
+            }
+            TransferStatus.FAILED -> {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(ErrorRed.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CrossVectorIcon(Modifier.size(10.dp), color = ErrorRed)
+                }
+            }
+            else -> {}
+        }
+    }
+}

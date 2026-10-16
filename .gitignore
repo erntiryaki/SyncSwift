@@ -9,5 +9,13 @@ local.properties
 .kotlin/
 build/
 composeApp/build/
+iosApp/build/
 *.exe
 *.winmd
+*firebase-service-account*.json
+scratch/
+*.apk
+*.aab
+*.log
+.DS_Store
+Thumbs.db
