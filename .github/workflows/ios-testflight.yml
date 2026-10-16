@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-deploy:
     name: Build & Upload to TestFlight
-    runs-on: macos-14
+    runs-on: macos-15
     environment: testflight
     timeout-minutes: 60
 
@@ -24,15 +24,15 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Select Xcode 16
+      - name: Select Xcode 26
         run: |
-          XCODE_APP=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
+          XCODE_APP=$(find /Applications -maxdepth 1 -name "Xcode_26*.app" | sort -V | tail -n 1)
           if [ -n "$XCODE_APP" ]; then
             echo "Selecting $XCODE_APP"
-            sudo xcode-select -switch "$XCODE_APP"
+            sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           elif [ -d "/Applications/Xcode.app" ]; then
             echo "Falling back to /Applications/Xcode.app"
-            sudo xcode-select -switch /Applications/Xcode.app
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           fi
           xcodebuild -version
 
