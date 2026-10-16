@@ -375,6 +375,38 @@ class Copy {
     var doneAction: String = "Done"
     var closeAction: String = "Close"
     var cancelAction: String = "Cancel"
+
+    // Engine, Alerts & Push Notifications
+    var fileSentSuccessfully: String = "File sent successfully: %s"
+    var clipboardSynced: String = "Clipboard synced: %s"
+    var fileReceivedSuccessfully: String = "File received successfully: %s"
+    var fileReceived: String = "File received: %s"
+    var fileSizeCapExceeded: String = "5 GB transfer limit in free plan. Upgrade to SyncSwift Pro for unlimited file size."
+    var remoteTransferProRequired: String = "Remote transfer across different networks is exclusive to SyncSwift Pro."
+    var receiverAppMustBeOpen: String = "In the free plan, the recipient app must be open. Upgrade to Pro for background delivery."
+    var transferNotificationSentWaiting: String = "Transfer notification sent to device. Waiting for approval..."
+    var deviceNotificationFailed: String = "Device unavailable (Notification could not be delivered)"
+    var deviceNotAvailable: String = "Device not available"
+    var deviceOfflineOrNotFound: String = "Device offline or not found"
+    var transferFailedRecipientIncomplete: String = "Transfer could not be completed by recipient"
+    var transferRejectedByRecipient: String = "Transfer was rejected by recipient"
+    var fileDownloadSuccess: String = "File downloaded successfully: %s"
+    var fileDownloadFailed: String = "File download failed: %s"
+    var connectionRequestRejected: String = "Connection request was rejected."
+    var deviceDidNotRespond: String = "Device did not respond or is not available."
+
+    // Push Notifications
+    var notificationChannelName: String = "SyncSwift Notifications"
+    var notificationChannelDesc: String = "Connection and file transfer notifications"
+    var notificationActionAccept: String = "Accept"
+    var notificationActionDecline: String = "Decline"
+    var notificationPairRequestTitle: String = "SyncSwift Connection Request"
+    var notificationFileRequestTitle: String = "SyncSwift File Transfer"
+    var notificationPairRequestBody: String = "%s wants to connect with your device."
+    var notificationFileRequestBody: String = "%s wants to send you \"%s\" (%s)."
+    var notificationPairAcceptedStatus: String = "%s approved your connection request!"
+    var notificationPairRejectedStatus: String = "%s rejected the connection request."
+    var notificationFileRejectedStatus: String = "%s rejected the file transfer."
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {
@@ -395,4 +427,10 @@ fun resolveInitialLanguage(code: String): AppLanguage {
 }
 
 fun Copy.formatDeviceCount(count: Int): String = "$count $deviceSingle"
+
+fun currentAppCopy(): Copy {
+    val langCode = SessionManager.getSavedLanguage() ?: "en"
+    return copyFor(resolveInitialLanguage(langCode))
+}
+
 

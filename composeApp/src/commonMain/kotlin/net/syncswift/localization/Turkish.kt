@@ -345,5 +345,37 @@ val TurkishCopy = Copy().apply {
     doneAction = "Tamamla"
     closeAction = "Kapat"
     cancelAction = "İptal"
+
+    // Engine, Alerts & Push Notifications
+    fileSentSuccessfully = "Dosya başarıyla gönderildi: %s"
+    clipboardSynced = "Pano senkronize edildi: %s"
+    fileReceivedSuccessfully = "Dosya başarıyla alındı: %s"
+    fileReceived = "Dosya alındı: %s"
+    fileSizeCapExceeded = "Temel planda en fazla 5 GB gönderilebilir. Sınırsız aktarım için SyncSwift Pro'ya geçin."
+    remoteTransferProRequired = "Farklı ağlar arası uzaktan transfer SyncSwift Pro özelliğidir."
+    receiverAppMustBeOpen = "Temel planda alıcı cihazda uygulamanın açık olması şarttır. Arka planda teslimat için Pro'ya geçin."
+    transferNotificationSentWaiting = "Cihaza aktarım bildirimi gönderildi. Onay bekleniyor..."
+    deviceNotificationFailed = "Cihaz uygun değil (Bildirim iletilemedi)"
+    deviceNotAvailable = "Cihaz uygun değil"
+    deviceOfflineOrNotFound = "Cihaz çevrimdışı veya bulunamadı"
+    transferFailedRecipientIncomplete = "Aktarım alıcı tarafından tamamlanamadı"
+    transferRejectedByRecipient = "Transfer alıcı tarafından reddedildi"
+    fileDownloadSuccess = "Dosya başarıyla indirildi: %s"
+    fileDownloadFailed = "Dosya indirme başarısız: %s"
+    connectionRequestRejected = "Bağlantı isteği reddedildi."
+    deviceDidNotRespond = "Cihaz yanıt vermedi veya uygun değil."
+
+    // Push Notifications
+    notificationChannelName = "SyncSwift Bildirimleri"
+    notificationChannelDesc = "Bağlantı ve dosya aktarımı bildirimleri"
+    notificationActionAccept = "Onayla"
+    notificationActionDecline = "Reddet"
+    notificationPairRequestTitle = "SyncSwift Bağlantı İsteği"
+    notificationFileRequestTitle = "SyncSwift Dosya Transferi"
+    notificationPairRequestBody = "%s cihazınızla bağlantı kurmak istiyor."
+    notificationFileRequestBody = "%s size \"%s\" (%s) göndermek istiyor."
+    notificationPairAcceptedStatus = "%s bağlantı isteğinizi onayladı!"
+    notificationPairRejectedStatus = "%s bağlantı isteğini reddetti."
+    notificationFileRejectedStatus = "%s dosya aktarımını reddetti."
 }
 

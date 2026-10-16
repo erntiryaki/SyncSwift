@@ -28,15 +28,14 @@ import net.syncswift.ui.theme.*
 
 /**
  * Full-page, high-converting 7-Day Trial Paywall Screen.
- * Faithful to the minimalist dark reference aesthetic:
+ * Minimalist dark aesthetic styled with the primary SyncSwift theme tokens:
  * - Ambient cinematic hero visual at top with smooth gradient fade
  * - Top-right "Cancel" button
  * - Centered bold headline: "Design Your Trial"
  * - 5 high-value checkmarked benefit bullets
- * - 2-box segmented plan selector (7 Days Free vs 1 Month)
- * - Trial footnote summary
- * - Full-width vibrant CTA button ("Continue")
- * - "Remind me before the trial ends" toggle switch
+ * - Flexible 2-box segmented plan selector for all languages (German, Russian, etc.)
+ * - Footnote summary
+ * - Full-width theme-colored CTA button ("Continue")
  * - Legal footer links (Terms | Privacy | Subscription Terms | Restore)
  */
 @Composable
@@ -46,12 +45,12 @@ fun PaywallScreen(
     onDismiss: () -> Unit
 ) {
     var selectedPlan by remember { mutableStateOf(0) } // 0: 7 Days Free Trial, 1: 1 Month
-    var remindMeEnabled by remember { mutableStateOf(true) }
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val accentRed = Color(0xFFEF4444)
-    val pageBackground = Color(0xFF0D0F14)
+    val themeColor = Blue
+    val primaryButtonBg = PillButtonBg
+    val pageBackground = Night
 
     Box(
         modifier = Modifier
@@ -69,13 +68,13 @@ fun PaywallScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(240.dp)
             ) {
                 PaywallHeroImage(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Smooth gradient overlay to fade into dark background
+                // Smooth gradient overlay to fade into dark theme background
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -83,8 +82,8 @@ fun PaywallScreen(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    pageBackground.copy(alpha = 0.3f),
-                                    pageBackground.copy(alpha = 0.85f),
+                                    pageBackground.copy(alpha = 0.35f),
+                                    pageBackground.copy(alpha = 0.88f),
                                     pageBackground
                                 )
                             )
@@ -120,22 +119,23 @@ fun PaywallScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Headline
+                // Headline (Flexible line wrap for long languages)
                 Text(
                     text = copy.designYourTrial,
                     color = Cloud,
-                    fontSize = 28.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-0.5).sp,
+                    lineHeight = 32.sp,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(20.dp))
 
-                // 5 Bullet Benefits with Red Checkmarks
+                // 5 Bullet Benefits with Theme Checkmarks
                 val benefits = listOf(
                     copy.trialBenefit1,
                     copy.trialBenefit2,
@@ -146,41 +146,42 @@ fun PaywallScreen(
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     benefits.forEach { benefit ->
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                            verticalAlignment = Alignment.Top,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
                                 text = "✔",
-                                color = accentRed,
+                                color = themeColor,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(end = 12.dp)
+                                modifier = Modifier.padding(end = 10.dp, top = 1.dp)
                             )
                             Text(
                                 text = benefit,
                                 color = Cloud.copy(alpha = 0.95f),
-                                fontSize = 14.5.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
-                                lineHeight = 20.sp
+                                lineHeight = 20.sp,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(24.dp))
 
-                // 2-BOX PLAN SELECTOR
+                // 2-BOX PLAN SELECTOR (Flexible height for long language strings)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(86.dp),
+                        .height(IntrinsicSize.Min),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Option 0: Free / 7 days (Selected)
+                    // Option 0: Free / 7 days (Selected by default)
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -190,45 +191,51 @@ fun PaywallScreen(
                         color = if (selectedPlan == 0) CardSurface else InputBg.copy(alpha = 0.35f),
                         border = BorderStroke(
                             width = if (selectedPlan == 0) 1.5.dp else 1.dp,
-                            color = if (selectedPlan == 0) accentRed else InputBorder.copy(alpha = 0.25f)
+                            color = if (selectedPlan == 0) themeColor else InputBorder.copy(alpha = 0.25f)
                         )
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(verticalArrangement = Arrangement.Center) {
+                            Column(
+                                modifier = Modifier.weight(1f, fill = false),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Text(
                                     text = copy.planFreeTitle,
                                     color = Cloud,
-                                    fontSize = 17.sp,
+                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
                                     text = copy.planFreeSubtitle,
                                     color = Mist,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Normal
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    lineHeight = 16.sp
                                 )
                             }
+
+                            Spacer(Modifier.width(6.dp))
 
                             if (selectedPlan == 0) {
                                 Box(
                                     modifier = Modifier
                                         .size(22.dp)
                                         .clip(CircleShape)
-                                        .background(accentRed),
+                                        .background(themeColor),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = "✓",
-                                        color = Color.White,
+                                        color = DeepInk,
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             } else {
@@ -253,45 +260,51 @@ fun PaywallScreen(
                         color = if (selectedPlan == 1) CardSurface else InputBg.copy(alpha = 0.35f),
                         border = BorderStroke(
                             width = if (selectedPlan == 1) 1.5.dp else 1.dp,
-                            color = if (selectedPlan == 1) accentRed else InputBorder.copy(alpha = 0.25f)
+                            color = if (selectedPlan == 1) themeColor else InputBorder.copy(alpha = 0.25f)
                         )
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(verticalArrangement = Arrangement.Center) {
+                            Column(
+                                modifier = Modifier.weight(1f, fill = false),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Text(
-                                    text = "1 " + copy.planMonthly.lowercase(),
+                                    text = copy.planMonthly,
                                     color = Cloud,
-                                    fontSize = 17.sp,
+                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
                                     text = copy.planMonthlyPrice,
                                     color = Mist,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Normal
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    lineHeight = 16.sp
                                 )
                             }
+
+                            Spacer(Modifier.width(6.dp))
 
                             if (selectedPlan == 1) {
                                 Box(
                                     modifier = Modifier
                                         .size(22.dp)
                                         .clip(CircleShape)
-                                        .background(accentRed),
+                                        .background(themeColor),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = "✓",
-                                        color = Color.White,
+                                        color = DeepInk,
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             } else {
@@ -307,15 +320,17 @@ fun PaywallScreen(
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(18.dp))
 
                 // Footnote Summary Text
                 Text(
                     text = if (selectedPlan == 0) copy.trialPricingYearlySummary else copy.trialPricingMonthlySummary,
                     color = Mist,
-                    fontSize = 13.5.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center
+                    lineHeight = 18.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
 
                 if (errorMessage != null) {
@@ -328,9 +343,9 @@ fun PaywallScreen(
                     )
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(20.dp))
 
-                // PRIMARY CTA BUTTON ("Continue" / "Devam Et")
+                // PRIMARY CTA BUTTON (Themed Button: PillButtonBg & PillButtonText)
                 Button(
                     onClick = {
                         if (isProcessing) return@Button
@@ -350,58 +365,23 @@ fun PaywallScreen(
                         .height(54.dp),
                     shape = RoundedCornerShape(27.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = accentRed,
-                        contentColor = Color.White
+                        containerColor = primaryButtonBg,
+                        contentColor = PillButtonText
                     ),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                 ) {
                     if (isProcessing) {
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = PillButtonText,
                             modifier = Modifier.size(22.dp),
                             strokeWidth = 2.dp
                         )
                     } else {
                         Text(
                             text = copy.continueText,
-                            color = Color.White,
+                            color = PillButtonText,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                // REMINDER BEFORE TRIAL ENDS TOGGLE PILL
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = InputBg.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.25f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 18.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = copy.remindBeforeTrialEnds,
-                            color = Cloud,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Switch(
-                            checked = remindMeEnabled,
-                            onCheckedChange = { remindMeEnabled = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = accentRed,
-                                uncheckedThumbColor = Mist,
-                                uncheckedTrackColor = InputBg
-                            )
                         )
                     }
                 }
@@ -412,14 +392,16 @@ fun PaywallScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 24.dp),
+                        .navigationBarsPadding()
+                        .padding(bottom = 28.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "${copy.privacyPolicy}  ·  ${copy.subscriptionTerms}  ·  ${copy.restorePurchases}",
-                        color = Mist.copy(alpha = 0.65f),
+                        color = Mist.copy(alpha = 0.7f),
                         fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.clickable {
                             isProcessing = true

@@ -35,7 +35,7 @@ class SyncSwiftColors(
     val isDark: Boolean
 )
 
-// Balanced, premium matte slate-navy dark palette (calm, non-glaring, spacious, highly visible turquoise)
+// Balanced, premium matte slate-navy dark palette (calm, non-glaring, spacious, rich turquoise)
 val DarkSyncSwiftColors = SyncSwiftColors(
     night = Color(0xFF0B101B),
     cardSurface = Color(0xFF131B28),
@@ -45,9 +45,9 @@ val DarkSyncSwiftColors = SyncSwiftColors(
     cloud = Color(0xFFF8FAFC),
     mist = Color(0xFFA6B4C9),
     placeholder = Color(0xFF64748B),
-    blue = Color(0xFF38D5E2), // Highly visible, vivid, premium turquoise
-    pillButtonBg = Color(0xFF249DA8), // Lighter, more vivid turquoise in dark theme
-    pillButtonBorder = Color(0xFF3AC4D2),
+    blue = Color(0xFF2BC5D3), // Refined premium turquoise
+    pillButtonBg = Color(0xFF147D87), // Darker, richer turquoise button background in dark theme
+    pillButtonBorder = Color(0xFF1C8D98),
     pillButtonDisabledBg = Color(0xFF122C32),
     pillButtonDisabledText = Color(0xFF4C7B83),
     pillButtonText = Color(0xFFFFFFFF),
@@ -58,26 +58,26 @@ val DarkSyncSwiftColors = SyncSwiftColors(
     isDark = true
 )
 
-// Modern, sleek cool-neutral matte titanium slate light palette (comfortable, eye-friendly, NOT harsh white)
+// Modern, sleek soft titanium slate light palette (subtle off-white, comfortable, crystal-clear readability)
 val LightSyncSwiftColors = SyncSwiftColors(
-    night = Color(0xFFC4CBD6), // Calmer matte titanium slate background (subdued, comfortable, not white)
-    cardSurface = Color(0xFFB2BAC7), // Distinct soft slate surface
-    inputBg = Color(0xFFB2BAC7), // Input container background
-    inputBorder = Color(0xFF909CAC), // Crisp slate border
+    night = Color(0xFFEFF2F6), // Cleaner soft off-white background (closer to white, eye-friendly, not harsh)
+    cardSurface = Color(0xFFE2E7EE), // Clean layered soft slate surface
+    inputBg = Color(0xFFE2E7EE), // Input container background
+    inputBorder = Color(0xFFC5CED9), // Crisp soft slate border
     borderHighlight = Color(0x330E8388),
-    cloud = Color(0xFF0A101D), // Deep rich charcoal slate for crystal-clear readability
-    mist = Color(0xFF334155), // Elegant slate secondary text
+    cloud = Color(0xFF0F172A), // Deep rich charcoal slate for crystal-clear readability
+    mist = Color(0xFF475569), // Elegant slate secondary text
     placeholder = Color(0xFF64748B),
     blue = Color(0xFF086872), // Deep petroleum turquoise
-    pillButtonBg = Color(0xFF086872), // Darker, bold button background in light mode
+    pillButtonBg = Color(0xFF086872), // Bold button background in light mode
     pillButtonBorder = Color(0xFF054A52),
-    pillButtonDisabledBg = Color(0xFFA2ADC0),
+    pillButtonDisabledBg = Color(0xFFBAC4D4),
     pillButtonDisabledText = Color(0xFF5B697D),
     pillButtonText = Color(0xFFFFFFFF),
-    deepInk = Color(0xFFC4CBD6),
+    deepInk = Color(0xFFEFF2F6),
     successGreen = Color(0xFF047857),
     errorRed = Color(0xFFB91C1C),
-    navy = Color(0xFFA2ADC0),
+    navy = Color(0xFFBAC4D4),
     isDark = false
 )
 

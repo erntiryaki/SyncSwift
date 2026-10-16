@@ -48,11 +48,12 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
 
+        val copy = net.syncswift.currentAppCopy()
         val data = remoteMessage.data
         val type = data["type"] ?: ""
-        val senderName = data["senderName"] ?: "SyncSwift Cihazı"
-        val title = remoteMessage.notification?.title ?: data["title"] ?: "SyncSwift İsteği"
-        val body = remoteMessage.notification?.body ?: data["body"] ?: "$senderName yeni bir istek gönderdi."
+        val senderName = data["senderName"] ?: copy.deviceSingle
+        val title = remoteMessage.notification?.title ?: data["title"] ?: copy.notificationPairRequestTitle
+        val body = remoteMessage.notification?.body ?: data["body"] ?: copy.notificationPairRequestBody.replace("%s", senderName)
 
         when (type) {
             "pair_request" -> {
@@ -74,7 +75,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val transferId = data["transferId"] ?: ""
                 val senderHost = data["senderHost"] ?: ""
                 val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
-                val fileName = data["fileName"] ?: "Dosya"
+                val fileName = data["fileName"] ?: "File"
                 val fileSize = data["fileSize"]?.toLongOrNull() ?: 0L
                 val mimeType = data["mimeType"] ?: "application/octet-stream"
 
@@ -99,31 +100,32 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 if (senderId.isNotBlank()) {
                     ConnectionManager.markDeviceConnected(senderId)
                 }
-                net.syncswift.connection.OutgoingStatusManager.completeSuccess("$senderName bağlantı isteğinizi onayladı!")
+                net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.notificationPairAcceptedStatus.replace("%s", senderName))
             }
             "pair_rejected" -> {
-                net.syncswift.connection.OutgoingStatusManager.fail("$senderName bağlantı isteğini reddetti.")
+                net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
             }
             "file_rejected" -> {
-                net.syncswift.connection.OutgoingStatusManager.fail("$senderName dosya aktarımını reddetti.")
+                net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationFileRejectedStatus.replace("%s", senderName))
             }
         }
 
-        // Show native Android system notification with Onayla / Reddet actions
+        // Show native Android system notification with localized actions
         showSystemNotification(title, body, data)
     }
 
     private fun showSystemNotification(title: String, message: String, data: Map<String, String>) {
+        val copy = net.syncswift.currentAppCopy()
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notificationId = (System.currentTimeMillis() % 100000).toInt()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                CHANNEL_NAME,
+                copy.notificationChannelName,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Bağlantı ve dosya aktarımı bildirimleri"
+                description = copy.notificationChannelDesc
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(channel)
@@ -191,15 +193,15 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            builder.addAction(android.R.drawable.checkbox_on_background, "Onayla", acceptPending)
-            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Reddet", rejectPending)
+            builder.addAction(android.R.drawable.checkbox_on_background, copy.notificationActionAccept, acceptPending)
+            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, copy.notificationActionDecline, rejectPending)
         } else if (type == "file_request") {
             val transferId = data["transferId"] ?: ""
-            val fileName = data["fileName"] ?: "Dosya"
+            val fileName = data["fileName"] ?: "File"
             val fileSize = data["fileSize"]?.toLongOrNull() ?: 0L
             val mimeType = data["mimeType"] ?: "application/octet-stream"
 
-            // "Onayla" Action button
+            // Accept Action button
             val acceptFileIntent = Intent(this, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_ACCEPT_FILE
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
@@ -218,7 +220,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // "Reddet" Action button
+            // Decline Action button
             val rejectFileIntent = Intent(this, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_REJECT_FILE
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
@@ -233,8 +235,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            builder.addAction(android.R.drawable.checkbox_on_background, "Onayla", acceptFilePending)
-            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Reddet", rejectFilePending)
+            builder.addAction(android.R.drawable.checkbox_on_background, copy.notificationActionAccept, acceptFilePending)
+            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, copy.notificationActionDecline, rejectFilePending)
         }
 
         notificationManager.notify(notificationId, builder.build())

@@ -4,6 +4,7 @@ import android.os.Build
 import android.util.Log
 import net.syncswift.SessionManager
 import net.syncswift.SyncSwiftConfig
+import net.syncswift.currentAppCopy
 import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
@@ -122,6 +123,7 @@ actual object ConnectionManager {
         scope.launch {
             val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
+                val copy = currentAppCopy()
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                 val selfHost = self?.host ?: ""
@@ -130,8 +132,8 @@ actual object ConnectionManager {
 
                 sendFcmNotification(
                     token = senderToken,
-                    title = "Bağlantı Kabul Edildi",
-                    body = "$selfName bağlantı isteğinizi kabul etti.",
+                    title = copy.connectionAccepted,
+                    body = copy.notificationPairAcceptedStatus.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_accepted",
                         "senderName" to selfName,
@@ -153,12 +155,13 @@ actual object ConnectionManager {
         scope.launch {
             val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
+                val copy = currentAppCopy()
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                 sendFcmNotification(
                     token = senderToken,
-                    title = "Bağlantı Reddedildi",
-                    body = "$selfName bağlantı isteğinizi reddetti.",
+                    title = copy.connectionRejected,
+                    body = copy.notificationPairRejectedStatus.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_rejected",
                         "senderName" to selfName
@@ -194,12 +197,13 @@ actual object ConnectionManager {
         scope.launch {
             val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
+                val copy = currentAppCopy()
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                 sendFcmNotification(
                     token = senderToken,
-                    title = "Dosya Aktarımı Reddedildi",
-                    body = "$selfName dosya aktarımını reddetti.",
+                    title = copy.transferRejectedByRecipient,
+                    body = copy.notificationFileRejectedStatus.replace("%s", selfName),
                     data = mapOf(
                         "type" to "file_rejected",
                         "transferId" to request.transferId,
@@ -393,16 +397,17 @@ actual object ConnectionManager {
                         out.flush()
 
                         val response = input.readByte()
+                        val copy = currentAppCopy()
                         if (response == RESP_ACCEPTED) {
                             markDeviceConnected(deviceKey(target.host, target.port), isRemote = target.isRemote)
                             markDeviceConnected(target.id, isRemote = target.isRemote)
-                            OutgoingStatusManager.completeSuccess("Bağlantı kuruldu!")
+                            OutgoingStatusManager.completeSuccess(copy.connectionAccepted)
                             withContext(Dispatchers.Main) {
                                 onResult(PairResult.ACCEPTED)
                             }
                             return@launch
                         } else {
-                            OutgoingStatusManager.fail("Bağlantı isteği reddedildi.")
+                            OutgoingStatusManager.fail(copy.connectionRequestRejected)
                             withContext(Dispatchers.Main) {
                                 onResult(PairResult.REJECTED)
                             }
@@ -419,12 +424,13 @@ actual object ConnectionManager {
             if (token.isNullOrBlank() && target.host.isNotBlank()) {
                 token = queryPushTokenFromSupabase(target.host, target.name)
             }
+            val copy = currentAppCopy()
             if (!token.isNullOrBlank()) {
                 Log.d(TAG, "Sending FCM wake-up pairing request to token: $token")
                 val fcmSent = sendFcmNotification(
                     token = token,
-                    title = "SyncSwift Bağlantı İsteği",
-                    body = "$selfName sizinle bağlantı kurmak istiyor.",
+                    title = copy.notificationPairRequestTitle,
+                    body = copy.notificationPairRequestBody.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_request",
                         "senderId" to (self?.id ?: ""),
@@ -439,11 +445,11 @@ actual object ConnectionManager {
                         type = OutgoingStatusType.CONNECTION,
                         deviceName = target.name,
                         step = OutgoingStep.WAITING_APPROVAL,
-                        message = "Bağlantı bildirimi gönderildi, onay bekleniyor..."
+                        message = copy.transferNotificationSentWaiting
                     )
                     withContext(Dispatchers.Main) {
                         SessionManager.getAppContext()?.let { ctx ->
-                            android.widget.Toast.makeText(ctx, "Bağlantı bildirimi gönderildi, onay bekleniyor...", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(ctx, copy.transferNotificationSentWaiting, android.widget.Toast.LENGTH_SHORT).show()
                         }
                         onResult(PairResult.PENDING_APPROVAL)
                     }
@@ -451,7 +457,7 @@ actual object ConnectionManager {
                 }
             }
 
-            OutgoingStatusManager.fail("Cihaz yanıt vermedi veya uygun değil.")
+            OutgoingStatusManager.fail(copy.deviceDidNotRespond)
             withContext(Dispatchers.Main) {
                 onResult(PairResult.UNAVAILABLE)
             }

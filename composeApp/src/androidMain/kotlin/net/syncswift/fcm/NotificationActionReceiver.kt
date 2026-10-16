@@ -37,6 +37,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
             notificationManager.cancel(notificationId)
         }
 
+        val copy = net.syncswift.currentAppCopy()
+
         fun showToast(msg: String) {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 Toast.makeText(appCtx, msg, Toast.LENGTH_SHORT).show()
@@ -45,7 +47,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         when (intent.action) {
             ACTION_ACCEPT_PAIR -> {
-                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: "Cihaz"
+                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
                 val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
                 val senderPort = intent.getIntExtra(EXTRA_SENDER_PORT, 52424)
                 val senderId = intent.getStringExtra(EXTRA_SENDER_ID) ?: ""
@@ -69,8 +71,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
                         ConnectionManager.sendFcmNotification(
                             token = senderToken,
-                            title = "Bağlantı Kabul Edildi",
-                            body = "$selfName bağlantı isteğinizi kabul etti.",
+                            title = copy.connectionAccepted,
+                            body = copy.notificationPairAcceptedStatus.replace("%s", selfName),
                             data = mapOf(
                                 "type" to "pair_accepted",
                                 "senderName" to selfName,
@@ -82,10 +84,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     }
                 }
 
-                showToast("$senderName ile bağlantı kuruldu.")
+                showToast(copy.operationCompletedDesc.replace("%s", senderName))
             }
             ACTION_REJECT_PAIR -> {
-                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: "Cihaz"
+                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
                 val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                     val senderToken = ConnectionManager.queryPushTokenFromSupabase(senderHost, senderName)
@@ -94,8 +96,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
                         ConnectionManager.sendFcmNotification(
                             token = senderToken,
-                            title = "Bağlantı Reddedildi",
-                            body = "$selfName bağlantı isteğinizi reddetti.",
+                            title = copy.connectionRejected,
+                            body = copy.notificationPairRejectedStatus.replace("%s", selfName),
                             data = mapOf(
                                 "type" to "pair_rejected",
                                 "senderName" to selfName
@@ -103,18 +105,18 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         )
                     }
                 }
-                showToast("Bağlantı isteği reddedildi.")
+                showToast(copy.connectionRequestRejected)
             }
             ACTION_ACCEPT_FILE -> {
                 val transferId = intent.getStringExtra(EXTRA_TRANSFER_ID) ?: ""
-                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: "Cihaz"
+                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
                 val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
                 val senderPort = intent.getIntExtra(EXTRA_SENDER_PORT, 52424)
-                val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "Dosya"
+                val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "File"
                 val fileSize = intent.getLongExtra(EXTRA_FILE_SIZE, 0L)
                 val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE) ?: "application/octet-stream"
 
-                showToast("Dosya indiriliyor: $fileName...")
+                showToast("${copy.transferringFile} ($fileName)")
 
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                     net.syncswift.transfer.TransferEngine.downloadStagedFile(
@@ -129,7 +131,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 }
             }
             ACTION_REJECT_FILE -> {
-                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: "Cihaz"
+                val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: copy.deviceSingle
                 val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
                 val transferId = intent.getStringExtra(EXTRA_TRANSFER_ID) ?: ""
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -139,8 +141,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
                         ConnectionManager.sendFcmNotification(
                             token = senderToken,
-                            title = "Dosya Aktarımı Reddedildi",
-                            body = "$selfName dosya aktarımını reddetti.",
+                            title = copy.transferRejectedByRecipient,
+                            body = copy.notificationFileRejectedStatus.replace("%s", selfName),
                             data = mapOf(
                                 "type" to "file_rejected",
                                 "transferId" to transferId,
@@ -149,7 +151,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         )
                     }
                 }
-                showToast("Dosya aktarımı reddedildi.")
+                showToast(copy.transferDeclined)
             }
         }
     }

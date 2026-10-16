@@ -18,6 +18,7 @@ import net.syncswift.connection.IncomingTransferRequest
 import net.syncswift.connection.OutgoingStatusManager
 import net.syncswift.connection.OutgoingStatusType
 import net.syncswift.connection.OutgoingStep
+import net.syncswift.currentAppCopy
 import net.syncswift.showNativeToast
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -141,7 +142,7 @@ actual object TransferEngine {
                         OutgoingStatusManager.updateProgress(
                             transferredBytes = 0L,
                             totalBytes = staged.fileBytes.size.toLong(),
-                            message = "Dosya gönderiliyor..."
+                            message = currentAppCopy().transferringFile
                         )
 
                         val bufferSize = 64 * 1024
@@ -154,17 +155,18 @@ actual object TransferEngine {
                             OutgoingStatusManager.updateProgress(
                                 transferredBytes = offset.toLong(),
                                 totalBytes = staged.fileBytes.size.toLong(),
-                                message = "Dosya gönderiliyor..."
+                                message = currentAppCopy().transferringFile
                             )
                         }
                         output.flush()
 
                         val ack = input.readByte()
                         if (ack == ACK) {
+                            val copy = currentAppCopy()
                             updateTransferProgress(reqTransferId, staged.fileBytes.size.toLong(), TransferStatus.COMPLETED)
-                            OutgoingStatusManager.completeSuccess("Dosya başarıyla gönderildi: ${staged.fileName}")
+                            OutgoingStatusManager.completeSuccess(copy.fileSentSuccessfully.replace("%s", staged.fileName))
                             withContext(Dispatchers.Main) {
-                                showNativeToast("Dosya başarıyla gönderildi: ${staged.fileName}")
+                                showNativeToast(copy.fileSentSuccessfully.replace("%s", staged.fileName))
                             }
                             stagedTransfers.remove(reqTransferId)
                         }
@@ -223,7 +225,8 @@ actual object TransferEngine {
                                     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                     val clip = ClipData.newPlainText("SyncSwift", text)
                                     cm?.setPrimaryClip(clip)
-                                    showNativeToast("Pano senkronize edildi: ${text.take(30)}")
+                                    val copy = currentAppCopy()
+                                    showNativeToast(copy.clipboardSynced.replace("%s", text.take(30)))
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to set clipboard: ${e.message}")
                                 }
@@ -312,7 +315,8 @@ actual object TransferEngine {
                             output.flush()
 
                             Handler(Looper.getMainLooper()).post {
-                                showNativeToast("Dosya başarıyla alındı: $fileName")
+                                val copy = currentAppCopy()
+                                showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))
                             }
                         } else {
                             updateTransferProgress(transferId, 0, TransferStatus.FAILED)
@@ -353,7 +357,8 @@ actual object TransferEngine {
                             output.writeByte(ACK.toInt())
                             output.flush()
                             Handler(Looper.getMainLooper()).post {
-                                showNativeToast("Dosya alındı: $fileName")
+                                val copy = currentAppCopy()
+                                showNativeToast(copy.fileReceived.replace("%s", fileName))
                             }
                         } else {
                             updateTransferProgress(transferId, 0, TransferStatus.FAILED)
@@ -378,11 +383,12 @@ actual object TransferEngine {
                         output.writeLong(staged.fileBytes.size.toLong())
                         output.flush()
 
+                        val copy = currentAppCopy()
                         updateTransferProgress(transferId, 0, TransferStatus.IN_PROGRESS)
                         OutgoingStatusManager.updateProgress(
                             transferredBytes = 0L,
                             totalBytes = staged.fileBytes.size.toLong(),
-                            message = "Dosya gönderiliyor..."
+                            message = copy.transferringFile
                         )
 
                         val bufferSize = 64 * 1024
@@ -395,7 +401,7 @@ actual object TransferEngine {
                             OutgoingStatusManager.updateProgress(
                                 transferredBytes = offset.toLong(),
                                 totalBytes = staged.fileBytes.size.toLong(),
-                                message = "Dosya gönderiliyor..."
+                                message = copy.transferringFile
                             )
                         }
                         output.flush()
@@ -403,14 +409,14 @@ actual object TransferEngine {
                         val ack = input.readByte()
                         if (ack == ACK) {
                             updateTransferProgress(transferId, staged.fileBytes.size.toLong(), TransferStatus.COMPLETED)
-                            OutgoingStatusManager.completeSuccess("Dosya başarıyla gönderildi: ${staged.fileName}")
+                            OutgoingStatusManager.completeSuccess(copy.fileSentSuccessfully.replace("%s", staged.fileName))
                             stagedTransfers.remove(transferId)
                             Handler(Looper.getMainLooper()).post {
-                                showNativeToast("Dosya başarıyla gönderildi: ${staged.fileName}")
+                                showNativeToast(copy.fileSentSuccessfully.replace("%s", staged.fileName))
                             }
                         } else {
                             updateTransferProgress(transferId, 0, TransferStatus.FAILED)
-                            OutgoingStatusManager.fail("Aktarım alıcı tarafından tamamlanamadı")
+                            OutgoingStatusManager.fail(copy.transferFailedRecipientIncomplete)
                         }
                     }
                 }
@@ -498,15 +504,16 @@ actual object TransferEngine {
         onError: (String) -> Unit
     ) {
         scope.launch {
+            val copy = currentAppCopy()
             // 1. Pro Limit: 5 GB File Size Check
             if (!net.syncswift.subscription.SubscriptionManager.canTransferFileSize(fileBytes.size.toLong())) {
-                OutgoingStatusManager.fail("Temel planda transfer başı en fazla 5 GB gönderilebilir.")
+                OutgoingStatusManager.fail(copy.fileSizeCapExceeded)
                 net.syncswift.subscription.SubscriptionManager.triggerPaywall(
                     net.syncswift.subscription.PaywallReason.FILE_SIZE_LIMIT
                 )
                 withContext(Dispatchers.Main) {
-                    showNativeToast("5 GB dosya sınırı! Sınırsız aktarım için Pro'ya geçin.")
-                    onError("5 GB limit aşıldı")
+                    showNativeToast(copy.fileSizeCapExceeded)
+                    onError(copy.fileSizeCapExceeded)
                 }
                 return@launch
             }
@@ -517,13 +524,13 @@ actual object TransferEngine {
                     (targetHost.startsWith("172.") && (targetHost.substringAfter("172.").substringBefore(".").toIntOrNull() ?: 0) in 16..31)
 
             if (!isLocalNetwork && !net.syncswift.subscription.SubscriptionManager.canRemoteTransfer()) {
-                OutgoingStatusManager.fail("Uzaktan transfer SyncSwift Pro özelliğidir.")
+                OutgoingStatusManager.fail(copy.remoteTransferProRequired)
                 net.syncswift.subscription.SubscriptionManager.triggerPaywall(
                     net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
                 )
                 withContext(Dispatchers.Main) {
-                    showNativeToast("Uzaktan transfer Pro üyeliğe özeldir.")
-                    onError("Uzaktan transfer Pro özelliğidir")
+                    showNativeToast(copy.remoteTransferProRequired)
+                    onError(copy.remoteTransferProRequired)
                 }
                 return@launch
             }
@@ -549,7 +556,7 @@ actual object TransferEngine {
                 fileName = fileName,
                 totalBytes = fileBytes.size.toLong(),
                 step = OutgoingStep.WAITING_APPROVAL,
-                message = "Alıcının dosya aktarımını onaylaması bekleniyor..."
+                message = copy.waitingForRecipientApproval
             )
 
             try {
@@ -560,13 +567,13 @@ actual object TransferEngine {
                     // 3. Pro Limit: Background wake when receiving app is closed
                     if (!net.syncswift.subscription.SubscriptionManager.canBackgroundWake()) {
                         updateTransferProgress(transferId, 0, TransferStatus.FAILED)
-                        OutgoingStatusManager.fail("Temel planda alıcı cihazda uygulamanın açık olması şarttır.")
+                        OutgoingStatusManager.fail(copy.receiverAppMustBeOpen)
                         net.syncswift.subscription.SubscriptionManager.triggerPaywall(
                             net.syncswift.subscription.PaywallReason.BACKGROUND_WAKE
                         )
                         withContext(Dispatchers.Main) {
-                            showNativeToast("Alıcı cihazda uygulamanın açık olması gerekir veya Pro'ya geçin.")
-                            onError("Uygulamanın açık olması şartı")
+                            showNativeToast(copy.receiverAppMustBeOpen)
+                            onError(copy.receiverAppMustBeOpen)
                         }
                         return@launch
                     }
@@ -587,8 +594,11 @@ actual object TransferEngine {
                         val selfPort = getServerPort()
                         val fcmSent = ConnectionManager.sendFcmNotification(
                             token = pushToken,
-                            title = "Yeni Dosya Aktarımı",
-                            body = "${Build.MODEL} size bir dosya göndermek istiyor: $fileName",
+                            title = copy.notificationFileRequestTitle,
+                            body = copy.notificationFileRequestBody
+                                .replace("%s", Build.MODEL)
+                                .replace("%s", fileName)
+                                .replace("(%s)", "(${formatBytes(fileBytes.size.toLong())})"),
                             data = mapOf(
                                 "type" to "file_request",
                                 "transferId" to transferId,
@@ -608,21 +618,21 @@ actual object TransferEngine {
                                     fileName = fileName,
                                     totalBytes = fileBytes.size.toLong(),
                                     step = OutgoingStep.WAITING_APPROVAL,
-                                    message = "Cihaza aktarım bildirimi gönderildi. Onay bekleniyor..."
+                                    message = copy.transferNotificationSentWaiting
                                 )
-                                showNativeToast("Cihaza aktarım bildirimi gönderildi. Onay bekleniyor...")
+                                showNativeToast(copy.transferNotificationSentWaiting)
                             } else {
-                                OutgoingStatusManager.fail("Cihaz uygun değil (Bildirim iletilemedi)")
-                                showNativeToast("Cihaz uygun değil (Bildirim iletilemedi)")
-                                onError("Cihaz uygun değil")
+                                OutgoingStatusManager.fail(copy.deviceNotificationFailed)
+                                showNativeToast(copy.deviceNotificationFailed)
+                                onError(copy.deviceNotificationFailed)
                             }
                         }
                     } else {
                         updateTransferProgress(transferId, 0, TransferStatus.FAILED)
-                        OutgoingStatusManager.fail("Cihaz çevrimdışı veya bulunamadı")
+                        OutgoingStatusManager.fail(copy.deviceOfflineOrNotFound)
                         withContext(Dispatchers.Main) {
-                            showNativeToast("Cihaz uygun değil")
-                            onError("Cihaz uygun değil")
+                            showNativeToast(copy.deviceNotAvailable)
+                            onError(copy.deviceNotAvailable)
                         }
                     }
                     return@launch
@@ -646,10 +656,10 @@ actual object TransferEngine {
                     val response = input.readByte()
                     if (response != RESP_ACCEPTED) {
                         updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
-                        OutgoingStatusManager.fail("Aktarım alıcı tarafından reddedildi")
+                        OutgoingStatusManager.fail(copy.transferRejectedByRecipient)
                         withContext(Dispatchers.Main) {
-                            showNativeToast("Transfer reddedildi")
-                            onError("Transfer reddedildi")
+                            showNativeToast(copy.transferDeclined)
+                            onError(copy.transferDeclined)
                         }
                         return@launch
                     }
@@ -659,7 +669,7 @@ actual object TransferEngine {
                     OutgoingStatusManager.updateProgress(
                         transferredBytes = 0L,
                         totalBytes = fileBytes.size.toLong(),
-                        message = "Dosya gönderiliyor..."
+                        message = copy.transferringFile
                     )
                     val bufferSize = 64 * 1024
                     var offset = 0
@@ -671,7 +681,7 @@ actual object TransferEngine {
                         OutgoingStatusManager.updateProgress(
                             transferredBytes = offset.toLong(),
                             totalBytes = fileBytes.size.toLong(),
-                            message = "Dosya gönderiliyor..."
+                            message = copy.transferringFile
                         )
                     }
                     output.flush()
@@ -680,9 +690,9 @@ actual object TransferEngine {
                     val ack = input.readByte()
                     if (ack == ACK) {
                         updateTransferProgress(transferId, fileBytes.size.toLong(), TransferStatus.COMPLETED)
-                        OutgoingStatusManager.completeSuccess("Dosya başarıyla gönderildi: $fileName")
+                        OutgoingStatusManager.completeSuccess(copy.fileSentSuccessfully.replace("%s", fileName))
                         withContext(Dispatchers.Main) {
-                            showNativeToast("Dosya başarıyla gönderildi: $fileName")
+                            showNativeToast(copy.fileSentSuccessfully.replace("%s", fileName))
                             onSuccess()
                         }
                     } else {
@@ -694,9 +704,9 @@ actual object TransferEngine {
                 updateTransferProgress(transferId, 0, TransferStatus.FAILED)
                 val msg = if (e.message?.contains("refused", ignoreCase = true) == true ||
                              e.message?.contains("timed out", ignoreCase = true) == true) {
-                    "Cihaz uygun değil"
+                    copy.deviceNotAvailable
                 } else {
-                    "Aktarım başarısız: ${e.message}"
+                    "${copy.transferFailed}: ${e.message}"
                 }
                 OutgoingStatusManager.fail(msg)
                 withContext(Dispatchers.Main) {
@@ -735,10 +745,11 @@ actual object TransferEngine {
                 try {
                     socket.connect(InetSocketAddress(targetHost, targetPort), 6000)
                 } catch (e: Exception) {
+                    val copy = currentAppCopy()
                     updateTransferProgress(transferId, 0, TransferStatus.FAILED)
                     withContext(Dispatchers.Main) {
-                        showNativeToast("Cihaz uygun değil")
-                        onError("Cihaz uygun değil")
+                        showNativeToast(copy.deviceNotAvailable)
+                        onError(copy.deviceNotAvailable)
                     }
                     return@launch
                 }
@@ -755,9 +766,10 @@ actual object TransferEngine {
 
                     val ack = input.readByte()
                     if (ack == ACK) {
+                        val copy = currentAppCopy()
                         updateTransferProgress(transferId, text.toByteArray().size.toLong(), TransferStatus.COMPLETED)
                         withContext(Dispatchers.Main) {
-                            showNativeToast("Pano gönderildi: ${text.take(30)}")
+                            showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
                             onSuccess()
                         }
                     } else {
@@ -766,10 +778,11 @@ actual object TransferEngine {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Send clipboard failed: ${e.message}")
+                val copy = currentAppCopy()
                 updateTransferProgress(transferId, 0, TransferStatus.FAILED)
                 withContext(Dispatchers.Main) {
-                    showNativeToast("Cihaz uygun değil")
-                    onError("Cihaz uygun değil")
+                    showNativeToast(copy.deviceNotAvailable)
+                    onError(copy.deviceNotAvailable)
                 }
             }
         }
@@ -838,7 +851,8 @@ actual object TransferEngine {
                         out.flush()
                         updateTransferProgress(transferId, if (incomingSize > 0) incomingSize else fileSize, TransferStatus.COMPLETED)
                         withContext(Dispatchers.Main) {
-                            showNativeToast("Dosya başarıyla indirildi: $fileName")
+                            val copy = currentAppCopy()
+                            showNativeToast(copy.fileDownloadSuccess.replace("%s", fileName))
                         }
                     } else {
                         updateTransferProgress(transferId, 0, TransferStatus.FAILED)
@@ -847,7 +861,8 @@ actual object TransferEngine {
             } catch (e: Exception) {
                 Log.e(TAG, "Download staged file failed: ${e.message}")
                 withContext(Dispatchers.Main) {
-                    showNativeToast("Dosya indirme başarısız: ${e.message}")
+                    val copy = currentAppCopy()
+                    showNativeToast(copy.fileDownloadFailed.replace("%s", e.message ?: ""))
                 }
             }
         }

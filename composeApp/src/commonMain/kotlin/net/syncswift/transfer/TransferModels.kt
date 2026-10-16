@@ -30,14 +30,14 @@ data class TransferItem(
 
     val formattedSize: String
         get() = formatBytes(fileSizeBytes)
+}
 
-    private fun formatBytes(bytes: Long): String {
-        if (bytes <= 0) return "0 B"
-        val units = arrayOf("B", "KB", "MB", "GB", "TB")
-        val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt().coerceIn(0, units.size - 1)
-        val value = bytes / 1024.0.pow(digitGroups.toDouble())
-        return "${(round(value * 10.0) / 10.0)} ${units[digitGroups]}"
-    }
+fun formatBytes(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt().coerceIn(0, units.size - 1)
+    val value = bytes / 1024.0.pow(digitGroups.toDouble())
+    return "${(round(value * 10.0) / 10.0)} ${units[digitGroups]}"
 }
 
 expect object TransferEngine {

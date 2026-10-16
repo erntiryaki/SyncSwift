@@ -7,28 +7,28 @@ import net.syncswift.SessionManager
 
 enum class PaywallReason(val title: String, val description: String) {
     DEVICE_LIMIT(
-        "Cihaz Sınırına Ulaşıldı",
-        "Temel planda aynı anda en fazla 3 cihaz eşleştirilebilir. Sınırsız cihaz bağlamak için SyncSwift Pro'ya geçin."
+        "Device Limit Reached",
+        "Up to 3 devices can be paired in the free plan. Upgrade to SyncSwift Pro for unlimited devices."
     ),
     REMOTE_TRANSFER(
-        "Uzaktan Transfer Özelliği",
-        "Farklı ağlar ve mobil veri üzerinden uzaktan transfer SyncSwift Pro üyelerine özeldir."
+        "Remote Transfer Feature",
+        "Transferring across different networks and mobile data is exclusive to SyncSwift Pro."
     ),
     BACKGROUND_WAKE(
-        "Arka Planda Uyandırma",
-        "Alıcı uygulama kapalı olsa bile arka planda bildirimle uyandırma ve otomatik transfer SyncSwift Pro özelliğidir."
+        "Background Delivery",
+        "Delivering files automatically even when the app is closed is exclusive to SyncSwift Pro."
     ),
     FILE_SIZE_LIMIT(
-        "5 GB Transfer Sınırı",
-        "Temel planda aktarım başı maksimum 5 GB dosya gönderilebilir. Sınırsız boyut için SyncSwift Pro'ya geçin."
+        "5 GB Transfer Cap",
+        "Free plan supports up to 5 GB per transfer. Upgrade to SyncSwift Pro for unlimited file size."
     ),
     CLIPBOARD_SYNC(
-        "Canlı Pano Senkronizasyonu",
-        "Cihazlar arası anlık metin ve pano senkronizasyonu SyncSwift Pro üyelerine özeldir."
+        "Live Clipboard Sync",
+        "Instant real-time clipboard sync across devices is exclusive to SyncSwift Pro."
     ),
     UPGRADE_BUTTON(
-        "SyncSwift Pro'ya Yükseltin",
-        "Sınırsız aktarım boyutu, uzaktan transfer, arka planda teslimat ve reklamsız deneyimin kilidini açın."
+        "Upgrade to SyncSwift Pro",
+        "Unlock unlimited file sizes, remote transfers, background delivery, and an ad-free experience."
     )
 }
 

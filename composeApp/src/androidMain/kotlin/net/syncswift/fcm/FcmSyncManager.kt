@@ -21,13 +21,14 @@ object FcmSyncManager {
     fun init(context: Context) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val copy = net.syncswift.currentAppCopy()
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
                 val channel = android.app.NotificationChannel(
                     "syncswift_requests_channel",
-                    "SyncSwift Bildirimleri",
+                    copy.notificationChannelName,
                     android.app.NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "Bağlantı ve dosya aktarımı bildirimleri"
+                    description = copy.notificationChannelDesc
                     enableVibration(true)
                     enableLights(true)
                     lockscreenVisibility = androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC

@@ -345,5 +345,37 @@ val GermanCopy = Copy().apply {
     doneAction = "Fertig"
     closeAction = "Schließen"
     cancelAction = "Abbrechen"
+
+    // Engine, Alerts & Push Notifications
+    fileSentSuccessfully = "Datei erfolgreich gesendet: %s"
+    clipboardSynced = "Zwischenablage synchronisiert: %s"
+    fileReceivedSuccessfully = "Datei erfolgreich empfangen: %s"
+    fileReceived = "Datei empfangen: %s"
+    fileSizeCapExceeded = "Im Basis-Tarif max. 5 GB pro Übertragung. Wechseln Sie zu SyncSwift Pro für unbegrenzte Dateigröße."
+    remoteTransferProRequired = "Remote-Übertragungen über verschiedene Netzwerke erfordern SyncSwift Pro."
+    receiverAppMustBeOpen = "Im Basis-Tarif muss die Empfänger-App geöffnet sein. Wechseln Sie zu Pro für Hintergrundzustellung."
+    transferNotificationSentWaiting = "Übertragungsbenachrichtigung an Gerät gesendet. Warten auf Bestätigung..."
+    deviceNotificationFailed = "Gerät nicht verfügbar (Benachrichtigung konnte nicht zugestellt werden)"
+    deviceNotAvailable = "Gerät nicht verfügbar"
+    deviceOfflineOrNotFound = "Gerät offline oder nicht gefunden"
+    transferFailedRecipientIncomplete = "Übertragung konnte vom Empfänger nicht abgeschlossen werden"
+    transferRejectedByRecipient = "Übertragung wurde vom Empfänger abgelehnt"
+    fileDownloadSuccess = "Datei erfolgreich heruntergeladen: %s"
+    fileDownloadFailed = "Herunterladen der Datei fehlgeschlagen: %s"
+    connectionRequestRejected = "Verbindungsanfrage wurde abgelehnt."
+    deviceDidNotRespond = "Das Gerät hat nicht geantwortet oder ist nicht verfügbar."
+
+    // Push Notifications
+    notificationChannelName = "SyncSwift-Benachrichtigungen"
+    notificationChannelDesc = "Benachrichtigungen über Verbindungen und Dateiübertragungen"
+    notificationActionAccept = "Annehmen"
+    notificationActionDecline = "Ablehnen"
+    notificationPairRequestTitle = "SyncSwift Verbindungsanfrage"
+    notificationFileRequestTitle = "SyncSwift Dateiübertragung"
+    notificationPairRequestBody = "%s möchte sich mit Ihrem Gerät verbinden."
+    notificationFileRequestBody = "%s möchte Ihnen \"%s\" (%s) senden."
+    notificationPairAcceptedStatus = "%s hat Ihre Verbindungsanfrage bestätigt!"
+    notificationPairRejectedStatus = "%s hat die Verbindungsanfrage abgelehnt."
+    notificationFileRejectedStatus = "%s hat die Dateiübertragung abgelehnt."
 }
 
