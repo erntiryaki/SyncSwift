@@ -193,4 +193,12 @@ actual object SessionManager {
     actual fun getProRenewalDateMillis(): Long {
         return getPrefs()?.getLong("pro_renewal_date_ms", 0L) ?: 0L
     }
+
+    actual fun saveOnboardingSeen(seen: Boolean) {
+        getPrefs()?.edit()?.putBoolean("onboarding_seen", seen)?.apply()
+    }
+
+    actual fun isOnboardingSeen(): Boolean {
+        return getPrefs()?.getBoolean("onboarding_seen", false) ?: false
+    }
 }

@@ -161,9 +161,9 @@ actual object DeviceDiscoveryManager {
         if (_isScanning.value) return
         _isScanning.value = true
 
-        scope.launch(Dispatchers.Default) {
+        scope.launch(Dispatchers.Main) {
             try {
-                // 1. Publish our own Bonjour service
+                // 1. Publish our own Bonjour service on main runloop
                 val service = NSNetService(
                     domain = "local.",
                     type = SERVICE_TYPE,
@@ -171,9 +171,10 @@ actual object DeviceDiscoveryManager {
                     port = DEFAULT_PORT
                 )
                 netService = service
+                service.scheduleInRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
                 service.publish()
 
-                // 2. Start browsing for other devices
+                // 2. Start browsing for other devices on main runloop
                 val b = NSNetServiceBrowser()
                 browser = b
                 val bDelegate = ServiceBrowserDelegate(
@@ -184,6 +185,7 @@ actual object DeviceDiscoveryManager {
                         }
                         resolvingServices[foundService.name] = foundService to resolverDelegate
                         foundService.delegate = resolverDelegate
+                        foundService.scheduleInRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
                         foundService.resolveWithTimeout(6.0)
                     },
                     onLost = { lostService ->
@@ -198,10 +200,13 @@ actual object DeviceDiscoveryManager {
                 )
                 browserDelegate = bDelegate
                 b.delegate = bDelegate
+                b.scheduleInRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
                 b.searchForServicesOfType(SERVICE_TYPE, inDomain = "local.")
 
-                // 3. Fallback: Sync with Supabase on same subnet
-                syncOfflineDevicesFromCloud()
+                // 3. Fallback: Sync with Supabase on same subnet in background
+                withContext(Dispatchers.Default) {
+                    syncOfflineDevicesFromCloud()
+                }
             } catch (e: Exception) {
                 println("[SyncSwift iOS Discovery] startDiscovery error: ${e.message}")
             }
@@ -209,18 +214,20 @@ actual object DeviceDiscoveryManager {
     }
 
     actual fun stopDiscovery() {
-        try {
-            browser?.stop()
-            browser = null
-            browserDelegate = null
+        scope.launch(Dispatchers.Main) {
+            try {
+                browser?.stop()
+                browser = null
+                browserDelegate = null
 
-            netService?.stop()
-            netService = null
+                netService?.stop()
+                netService = null
 
-            resolvingServices.clear()
-            _isScanning.value = false
-        } catch (e: Exception) {
-            println("[SyncSwift iOS Discovery] stopDiscovery error: ${e.message}")
+                resolvingServices.clear()
+                _isScanning.value = false
+            } catch (e: Exception) {
+                println("[SyncSwift iOS Discovery] stopDiscovery error: ${e.message}")
+            }
         }
     }
 

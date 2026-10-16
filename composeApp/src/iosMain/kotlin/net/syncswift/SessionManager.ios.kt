@@ -155,4 +155,12 @@ actual object SessionManager {
     actual fun getProRenewalDateMillis(): Long {
         return NSUserDefaults.standardUserDefaults.integerForKey("pro_renewal_date_ms")
     }
+
+    actual fun saveOnboardingSeen(seen: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(seen, "onboarding_seen")
+    }
+
+    actual fun isOnboardingSeen(): Boolean {
+        return NSUserDefaults.standardUserDefaults.boolForKey("onboarding_seen")
+    }
 }

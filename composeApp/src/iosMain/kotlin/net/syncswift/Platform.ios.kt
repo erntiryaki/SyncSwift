@@ -49,3 +49,13 @@ actual fun formatEpochToDate(epochMillis: Long): String {
     }
     return formatter.stringFromDate(date)
 }
+
+fun requestIosPermissions() {
+    try {
+        val center = platform.UserNotifications.UNUserNotificationCenter.currentNotificationCenter()
+        val options = platform.UserNotifications.UNAuthorizationOptionAlert or
+                platform.UserNotifications.UNAuthorizationOptionBadge or
+                platform.UserNotifications.UNAuthorizationOptionSound
+        center.requestAuthorizationWithOptions(options) { _, _ -> }
+    } catch (_: Throwable) {}
+}
