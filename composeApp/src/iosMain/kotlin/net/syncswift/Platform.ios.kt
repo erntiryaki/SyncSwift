@@ -5,6 +5,8 @@ import net.syncswift.discovery.cleanDeviceDisplayName
 import platform.Foundation.NSDate
 import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.preferredLanguages
+import platform.Foundation.currentLocale
+import platform.Foundation.countryCode
 
 actual fun currentPlatform(): PlatformFlavor = PlatformFlavor.Ios
 actual fun currentTimeMs(): Long = (NSDate().timeIntervalSince1970 * 1000).toLong()
@@ -21,8 +23,27 @@ actual fun getSystemLanguageCode(): String {
 }
 actual fun getSystemCountryCode(): String {
     return try {
-        val currentLocale = platform.Foundation.NSLocale.currentLocale
-        val code = currentLocale.countryCode ?: currentLocale.objectForKey(platform.Foundation.NSLocaleCountryCode) as? String
+        // 1. Check iOS AppleLocale from NSUserDefaults (e.g. "tr_TR", "en_TR", "de_DE")
+        val appleLocale = platform.Foundation.NSUserDefaults.standardUserDefaults.stringForKey("AppleLocale")
+        if (!appleLocale.isNullOrBlank()) {
+            val parts = appleLocale.split("_", "-")
+            if (parts.size >= 2 && parts[1].length in 2..3) {
+                return parts[1].uppercase()
+            }
+        }
+
+        // 2. Check NSLocale.preferredLanguages (e.g. "en-TR", "tr-TR")
+        val preferred = platform.Foundation.NSLocale.preferredLanguages.firstOrNull() as? String
+        if (!preferred.isNullOrBlank()) {
+            val parts = preferred.split("-", "_")
+            if (parts.size >= 2 && parts[1].length in 2..3) {
+                return parts[1].uppercase()
+            }
+        }
+
+        // 3. Check NSLocale currentLocale property
+        val loc = platform.Foundation.NSLocale.currentLocale
+        val code = loc.countryCode ?: loc.objectForKey(platform.Foundation.NSLocaleCountryCode) as? String
         (code as? String)?.uppercase() ?: ""
     } catch (_: Throwable) {
         ""
