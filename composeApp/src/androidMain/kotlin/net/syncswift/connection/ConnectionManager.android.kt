@@ -175,6 +175,8 @@ actual object ConnectionManager {
         markDeviceConnected(request.senderHost, isRemote = isRemote)
         markDeviceConnected(request.senderName, isRemote = isRemote)
         markDeviceConnected(cleanDeviceDisplayName(request.senderName), isRemote = isRemote)
+        DeviceDiscoveryManager.markDeviceSeen(request.senderHost, request.senderName)
+        DeviceDiscoveryManager.triggerDiscoveryPing()
 
         if (matchedDev != null) {
             markDeviceConnected(matchedDev.id, isRemote = isRemote)
@@ -289,6 +291,10 @@ actual object ConnectionManager {
         if (!completed) {
             showNativeToast(currentAppCopy().transferCancelledBySender)
             return
+        }
+        if (request.senderHost.isNotBlank()) {
+            DeviceDiscoveryManager.markDeviceSeen(request.senderHost, request.senderName)
+            DeviceDiscoveryManager.triggerDiscoveryPing()
         }
         if (request.mimeType == "text/plain") {
             val clipText = request.downloadUrl

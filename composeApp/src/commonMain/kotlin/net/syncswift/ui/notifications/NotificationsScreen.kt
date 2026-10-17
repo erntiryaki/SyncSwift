@@ -307,7 +307,7 @@ private fun SwipeableNotificationCard(
                             maxLines = 1
                         )
                         Text(
-                            text = formatRelativeTime(item.timestampMs),
+                            text = formatRelativeTime(item.timestampMs, copy),
                             color = Mist.copy(alpha = 0.7f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
@@ -338,13 +338,13 @@ private fun SwipeableNotificationCard(
     }
 }
 
-private fun formatRelativeTime(timestampMs: Long): String {
+private fun formatRelativeTime(timestampMs: Long, copy: Copy): String {
     val now = currentTimeMs()
     val diffSec = (now - timestampMs) / 1000
     return when {
-        diffSec < 60 -> "Şimdi"
-        diffSec < 3600 -> "${diffSec / 60} dk"
-        diffSec < 86400 -> "${diffSec / 3600} sa"
-        else -> "${diffSec / 86400} gün"
+        diffSec < 60 -> copy.timeJustNow
+        diffSec < 3600 -> copy.timeMinutesAgo.replace("%d", "${diffSec / 60}")
+        diffSec < 86400 -> copy.timeHoursAgo.replace("%d", "${diffSec / 3600}")
+        else -> copy.timeDaysAgo.replace("%d", "${diffSec / 86400}")
     }
 }

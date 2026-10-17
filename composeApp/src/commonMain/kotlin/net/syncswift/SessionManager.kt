@@ -22,6 +22,8 @@ expect object SessionManager {
     fun isLoggedIn(): Boolean
     fun getLoggedInEmail(): String?
     fun getLoggedInProvider(): IdentityProvider?
+    fun saveLoggedInUserId(userId: String)
+    fun getLoggedInUserId(): String?
     fun getUserFirstName(): String
     fun getUserLastName(): String
     fun updateUserProfile(firstName: String, lastName: String)

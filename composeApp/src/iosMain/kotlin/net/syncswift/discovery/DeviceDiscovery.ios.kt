@@ -350,6 +350,10 @@ actual object DeviceDiscoveryManager {
         saveManualDevices()
     }
 
+    actual fun triggerDiscoveryPing() {
+        // iOS Bonjour browser continuously scans and resolves in background
+    }
+
     @OptIn(ExperimentalForeignApi::class)
     private fun getLocalWifiIp(): String? {
         val sock = socket(AF_INET, SOCK_DGRAM, 0)

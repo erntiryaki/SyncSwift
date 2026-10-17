@@ -17,17 +17,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
-import java.net.ServerSocket
-import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 
 actual object DeviceDiscoveryManager {
     private const val TAG = "SyncSwiftDiscovery"
     private const val SERVICE_TYPE = "_syncswift._tcp."
     private const val DEFAULT_PORT = 52424
+    private const val UDP_DISCOVERY_PORT = 52428
 
     private var appContext: Context? = null
     private var nsdManager: NsdManager? = null
@@ -52,6 +55,13 @@ actual object DeviceDiscoveryManager {
     // Resolve queue to prevent Android NsdManager concurrent resolve failures
     private val resolveQueue = ConcurrentLinkedQueue<NsdServiceInfo>()
     private var isResolving = false
+
+    // Fast UDP discovery & heartbeats
+    private var udpSocket: DatagramSocket? = null
+    private var udpListenJob: Job? = null
+    private var udpHeartbeatJob: Job? = null
+    private var livenessJob: Job? = null
+    private val lastSeenTimestamps = ConcurrentHashMap<String, Long>()
 
     fun init(context: Context) {
         if (appContext != null) return
@@ -123,30 +133,242 @@ actual object DeviceDiscoveryManager {
         } catch (_: Exception) {}
     }
 
+    fun markDeviceSeen(host: String, name: String? = null) {
+        if (host.isBlank() && name.isNullOrBlank()) return
+        val now = System.currentTimeMillis()
+        if (host.isNotBlank()) lastSeenTimestamps[host] = now
+        if (!name.isNullOrBlank()) {
+            lastSeenTimestamps[name] = now
+            lastSeenTimestamps[cleanDeviceDisplayName(name)] = now
+        }
+        val current = _devices.value.toMutableList()
+        var changed = false
+        for (i in current.indices) {
+            val dev = current[i]
+            val matches = (host.isNotBlank() && dev.host == host) ||
+                    (!name.isNullOrBlank() && (dev.name == name || cleanDeviceDisplayName(dev.name) == cleanDeviceDisplayName(name)))
+            if (matches) {
+                lastSeenTimestamps[dev.id] = now
+                if (!dev.isOnline) {
+                    current[i] = dev.copy(isOnline = true)
+                    changed = true
+                }
+            }
+        }
+        if (changed) {
+            _devices.value = current
+            saveManualDevices()
+        }
+    }
+
     fun addOrUpdateConnectedDevice(device: DiscoveredDevice) {
         val current = _devices.value.toMutableList()
         val clean = cleanDeviceDisplayName(device.name)
+        val now = System.currentTimeMillis()
+        if (device.host.isNotBlank()) lastSeenTimestamps[device.host] = now
+        lastSeenTimestamps[device.id] = now
+        lastSeenTimestamps[clean] = now
+
         val idx = current.indexOfFirst {
             it.id == device.id ||
             (it.host.isNotBlank() && it.host == device.host) ||
             cleanDeviceDisplayName(it.name) == clean
         }
         if (idx >= 0) {
-            current[idx] = device.copy(name = clean)
+            val existing = current[idx]
+            current[idx] = device.copy(
+                name = clean,
+                isOnline = true,
+                pushToken = existing.pushToken ?: device.pushToken
+            )
         } else {
-            current.add(0, device.copy(name = clean))
+            current.add(0, device.copy(name = clean, isOnline = true))
         }
         _devices.value = current
         saveManualDevices()
     }
 
-    private var livenessJob: Job? = null
+    private fun getBroadcastAddresses(): List<InetAddress> {
+        val list = mutableListOf<InetAddress>()
+        try {
+            list.add(InetAddress.getByName("255.255.255.255"))
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                for (addr in iface.interfaceAddresses) {
+                    val b = addr.broadcast
+                    if (b != null && !list.contains(b)) {
+                        list.add(b)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return list
+    }
+
+    private fun buildSelfAnnouncement(isPing: Boolean): String {
+        val self = getSelfDevice()
+        val id = self?.id ?: "self-${Build.MODEL}"
+        val name = self?.name?.replace(":", "-") ?: Build.MODEL
+        val port = actualPort
+        val os = "Android"
+        val model = Build.MODEL
+        val prefix = if (isPing) "SS_DISC:v1" else "SS_BEAT:v1"
+        return "$prefix:$id:$name:$port:$os:$model"
+    }
+
+    private fun sendUdpPacket(message: String, targetAddress: InetAddress? = null) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val bytes = message.toByteArray(Charsets.UTF_8)
+                val socket = DatagramSocket()
+                socket.broadcast = true
+                if (targetAddress != null) {
+                    val packet = DatagramPacket(bytes, bytes.size, targetAddress, UDP_DISCOVERY_PORT)
+                    socket.send(packet)
+                } else {
+                    for (bcast in getBroadcastAddresses()) {
+                        try {
+                            val packet = DatagramPacket(bytes, bytes.size, bcast, UDP_DISCOVERY_PORT)
+                            socket.send(packet)
+                        } catch (_: Exception) {}
+                    }
+                }
+                socket.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "sendUdpPacket error: ${e.message}")
+            }
+        }
+    }
+
+    private fun handleIncomingUdpPacket(rawMessage: String, senderAddress: InetAddress) {
+        val senderHost = senderAddress.hostAddress ?: return
+        val localIp = getLocalIpAddress()
+        if (senderHost == localIp || senderHost == "127.0.0.1") return
+
+        val parts = rawMessage.split(":")
+        if (parts.size < 6) return
+        val tag = parts[0]
+        val version = parts[1]
+        if (version != "v1") return
+
+        val id = parts[2]
+        val name = parts[3]
+        val port = parts[4].toIntOrNull() ?: DEFAULT_PORT
+        val os = parts[5]
+        val model = if (parts.size >= 7) parts[6] else ""
+
+        val cleanName = cleanDeviceDisplayName(name)
+        val now = System.currentTimeMillis()
+        lastSeenTimestamps[senderHost] = now
+        lastSeenTimestamps[id] = now
+        lastSeenTimestamps[name] = now
+        lastSeenTimestamps[cleanName] = now
+
+        // If peer sent a discovery ping, reply immediately directly to them
+        if (tag == "SS_DISC") {
+            sendUdpPacket(buildSelfAnnouncement(isPing = false), senderAddress)
+        }
+
+        val device = DiscoveredDevice(
+            id = id,
+            name = cleanName,
+            host = senderHost,
+            port = port,
+            osType = os,
+            isSelf = false,
+            isOnline = true,
+            modelCode = model
+        )
+
+        val current = _devices.value.toMutableList()
+        val idx = current.indexOfFirst {
+            it.id == id ||
+            (it.host.isNotBlank() && it.host == senderHost) ||
+            cleanDeviceDisplayName(it.name) == cleanName
+        }
+
+        if (idx >= 0) {
+            val existing = current[idx]
+            current[idx] = existing.copy(
+                name = cleanName,
+                host = senderHost,
+                port = port,
+                osType = os,
+                isOnline = true,
+                pushToken = existing.pushToken ?: device.pushToken
+            )
+        } else {
+            current.add(0, device)
+        }
+        _devices.value = current
+        saveManualDevices()
+    }
+
+    private fun startUdpDiscovery() {
+        stopUdpDiscovery()
+
+        // 1. Launch UDP Listener on UDP_DISCOVERY_PORT
+        udpListenJob = scope.launch(Dispatchers.IO) {
+            try {
+                val socket = DatagramSocket(null).apply {
+                    reuseAddress = true
+                    broadcast = true
+                    bind(InetSocketAddress(UDP_DISCOVERY_PORT))
+                }
+                udpSocket = socket
+                Log.d(TAG, "UDP Discovery listener active on port $UDP_DISCOVERY_PORT")
+
+                val buffer = ByteArray(1024)
+                while (isActive && !socket.isClosed) {
+                    try {
+                        val packet = DatagramPacket(buffer, buffer.size)
+                        socket.receive(packet)
+                        val msg = String(packet.data, 0, packet.length, Charsets.UTF_8)
+                        handleIncomingUdpPacket(msg, packet.address)
+                    } catch (e: Exception) {
+                        if (!isActive) break
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to start UDP listener: ${e.message}")
+            }
+        }
+
+        // 2. Launch UDP Heartbeat broadcaster (instant broadcast on start, then every 2.8s)
+        udpHeartbeatJob = scope.launch(Dispatchers.IO) {
+            // Instant discovery ping
+            sendUdpPacket(buildSelfAnnouncement(isPing = true))
+            delay(500)
+            sendUdpPacket(buildSelfAnnouncement(isPing = false))
+
+            while (isActive) {
+                delay(2800)
+                sendUdpPacket(buildSelfAnnouncement(isPing = false))
+            }
+        }
+    }
+
+    private fun stopUdpDiscovery() {
+        udpHeartbeatJob?.cancel()
+        udpHeartbeatJob = null
+
+        udpListenJob?.cancel()
+        udpListenJob = null
+
+        try {
+            udpSocket?.close()
+        } catch (_: Exception) {}
+        udpSocket = null
+    }
 
     private fun startLivenessCheck() {
         livenessJob?.cancel()
         livenessJob = scope.launch {
             while (isActive) {
                 delay(2500)
+                val now = System.currentTimeMillis()
                 val current = _devices.value.toMutableList()
                 var changed = false
                 val iterator = current.listIterator()
@@ -154,23 +376,21 @@ actual object DeviceDiscoveryManager {
                     val dev = iterator.next()
                     if (dev.isSelf || dev.isRemote || dev.host.isBlank() || dev.host.startsWith("remote-")) continue
 
-                    val reachable = withContext(Dispatchers.IO) {
-                        try {
-                            Socket().use { s ->
-                                s.connect(InetSocketAddress(dev.host, dev.port), 350)
-                                true
-                            }
-                        } catch (_: Exception) {
-                            false
-                        }
-                    }
+                    val clean = cleanDeviceDisplayName(dev.name)
+                    val lastSeen = lastSeenTimestamps[dev.id]
+                        ?: lastSeenTimestamps[dev.host]
+                        ?: lastSeenTimestamps[dev.name]
+                        ?: lastSeenTimestamps[clean]
+                        ?: 0L
 
-                    if (reachable) {
+                    val age = now - lastSeen
+                    // If seen within 18s -> definitely online
+                    if (lastSeen > 0L && age < 18000L) {
                         if (!dev.isOnline) {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else {
+                    } else if (lastSeen > 0L && age >= 18000L) {
                         val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
                         if (isConnected) {
                             if (dev.isOnline) {
@@ -178,8 +398,11 @@ actual object DeviceDiscoveryManager {
                                 changed = true
                             }
                         } else {
-                            iterator.remove()
-                            changed = true
+                            // If dynamically discovered peer has disappeared for over 30s, remove it
+                            if (age >= 30000L && !dev.id.startsWith("manual-")) {
+                                iterator.remove()
+                                changed = true
+                            }
                         }
                     }
                 }
@@ -196,6 +419,12 @@ actual object DeviceDiscoveryManager {
         livenessJob = null
     }
 
+    actual fun triggerDiscoveryPing() {
+        scope.launch(Dispatchers.IO) {
+            sendUdpPacket(buildSelfAnnouncement(isPing = true))
+        }
+    }
+
     actual fun startDiscovery() {
         if (appContext == null) return
         scope.launch {
@@ -205,6 +434,8 @@ actual object DeviceDiscoveryManager {
                 Log.w(TAG, "MulticastLock acquire failed: ${e.message}")
             }
 
+            actualPort = net.syncswift.transfer.TransferEngine.getServerPort()
+            startUdpDiscovery()
             registerService()
             startBrowsing()
             startLivenessCheck()
@@ -214,6 +445,7 @@ actual object DeviceDiscoveryManager {
 
     actual fun stopDiscovery() {
         scope.launch {
+            stopUdpDiscovery()
             stopLivenessCheck()
             stopBrowsing()
             unregisterService()
@@ -272,6 +504,11 @@ actual object DeviceDiscoveryManager {
             isSelf = false,
             isOnline = true
         )
+        val now = System.currentTimeMillis()
+        lastSeenTimestamps[host] = now
+        lastSeenTimestamps[device.id] = now
+        lastSeenTimestamps[cleanDeviceDisplayName(name)] = now
+
         val current = _devices.value.toMutableList()
         val idx = current.indexOfFirst { it.host == host && it.port == port }
         if (idx >= 0) {
@@ -373,9 +610,17 @@ actual object DeviceDiscoveryManager {
                 }
 
                 override fun onServiceLost(service: NsdServiceInfo) {
-                    Log.d(TAG, "Service lost: ${service.serviceName}")
+                    Log.d(TAG, "NSD Service lost: ${service.serviceName}")
                     val lostName = service.serviceName
                     val cleanLost = cleanDeviceDisplayName(lostName)
+                    val now = System.currentTimeMillis()
+                    val lastSeen = lastSeenTimestamps[lostName] ?: lastSeenTimestamps[cleanLost] ?: 0L
+                    // If UDP heartbeats have seen this device recently (<18s), ignore NSD's false service-lost event!
+                    if (now - lastSeen < 18000L) {
+                        Log.d(TAG, "Ignoring NSD service lost for $lostName - UDP heartbeats active")
+                        return
+                    }
+
                     val current = _devices.value.toMutableList()
                     var changed = false
                     val iterator = current.listIterator()
@@ -462,6 +707,10 @@ actual object DeviceDiscoveryManager {
                     val port = serviceInfo.port
                     val rawName = serviceInfo.serviceName
                     val cleanName = cleanDeviceDisplayName(rawName)
+                    val now = System.currentTimeMillis()
+                    if (hostAddress.isNotBlank()) lastSeenTimestamps[hostAddress] = now
+                    lastSeenTimestamps[rawName] = now
+                    lastSeenTimestamps[cleanName] = now
 
                     // Deduce OS type from name or attributes
                     val os = when {
@@ -482,7 +731,7 @@ actual object DeviceDiscoveryManager {
                         isOnline = true
                     )
 
-                    Log.d(TAG, "Device resolved: $device")
+                    Log.d(TAG, "NSD Device resolved: $device")
 
                     // Add or update in list, preserving pushToken
                     val current = _devices.value.toMutableList()

@@ -226,7 +226,7 @@ fun ClipboardHistoryScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Free: 24h · Pro: Sınırsız Geçmiş",
+                            text = copy.clipboardFreeVsPro,
                             color = Mist,
                             fontSize = 12.sp
                         )
@@ -500,7 +500,7 @@ private fun ClipboardItemCard(
                 is SmartAction.CodeAction -> {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "${act.lineCount} satır kod bloğu",
+                        text = copy.linesOfCode.replace("%d", "${act.lineCount}"),
                         color = Mist,
                         fontSize = 11.sp
                     )
@@ -638,7 +638,7 @@ private fun AddTemplateDialog(
                 Spacer(Modifier.height(14.dp))
 
                 // Label field
-                Text(text = "Başlık / Etiket (Örn: IBAN, Fatura)", color = Mist, fontSize = 12.sp)
+                Text(text = copy.clipboardTagLabel, color = Mist, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -660,7 +660,7 @@ private fun AddTemplateDialog(
                 Spacer(Modifier.height(12.dp))
 
                 // Text field
-                Text(text = "Pano İçeriği", color = Mist, fontSize = 12.sp)
+                Text(text = copy.clipboardContentLabel, color = Mist, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
                 Surface(
                     shape = RoundedCornerShape(10.dp),

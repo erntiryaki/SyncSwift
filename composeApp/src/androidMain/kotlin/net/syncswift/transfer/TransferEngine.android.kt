@@ -19,6 +19,7 @@ import net.syncswift.connection.OutgoingStatusManager
 import net.syncswift.connection.OutgoingStatusType
 import net.syncswift.connection.OutgoingStep
 import net.syncswift.discovery.DeviceDiscoveryManager
+import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.currentAppCopy
 import net.syncswift.showNativeToast
@@ -141,6 +142,10 @@ actual object TransferEngine {
     private suspend fun handleIncomingClient(socket: Socket) {
         socket.use { s ->
             try {
+                val clientIp = s.inetAddress?.hostAddress ?: ""
+                if (clientIp.isNotBlank() && clientIp != "127.0.0.1") {
+                    DeviceDiscoveryManager.markDeviceSeen(clientIp)
+                }
                 s.soTimeout = 40000
                 val input = DataInputStream(s.getInputStream())
                 val output = DataOutputStream(s.getOutputStream())
@@ -252,15 +257,28 @@ actual object TransferEngine {
                                 ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
                                 ConnectionManager.markDeviceConnected(request.senderId)
                                 ConnectionManager.markDeviceConnected(senderHost)
-                                ConnectionManager.markDeviceConnected(senderName)
-                                ConnectionManager.markDeviceConnected(cleanDeviceDisplayName(senderName))
                                 val dev = DeviceDiscoveryManager.devices.value.firstOrNull {
                                     it.host == senderHost || cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(senderName)
                                 }
-                                if (dev != null) {
-                                    ConnectionManager.markDeviceConnected(dev.id)
-                                    ConnectionManager.markDeviceConnected(dev.host)
+                                val peerDev = if (dev != null) {
+                                    dev.copy(isOnline = true)
+                                } else {
+                                    DiscoveredDevice(
+                                        id = "manual-$senderHost",
+                                        name = senderName,
+                                        host = senderHost,
+                                        port = senderPort,
+                                        osType = senderOs,
+                                        isSelf = false,
+                                        isOnline = true
+                                    )
                                 }
+                                DeviceDiscoveryManager.addOrUpdateConnectedDevice(peerDev)
+                                ConnectionManager.markDeviceConnected(peerDev.id)
+                                ConnectionManager.markDeviceConnected(peerDev.host)
+                                ConnectionManager.markDeviceConnected("${peerDev.host}:${peerDev.port}")
+                                ConnectionManager.markDeviceConnected(peerDev.name)
+                                ConnectionManager.markDeviceConnected(cleanDeviceDisplayName(peerDev.name))
                             } catch (e: Exception) {
                                 ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
                                 ConnectionManager.markDeviceDisconnected(request.senderId)
@@ -780,6 +798,8 @@ actual object TransferEngine {
 
                 socket.use { s ->
                     s.soTimeout = 40000
+                    net.syncswift.discovery.DeviceDiscoveryManager.markDeviceSeen(targetHost, targetDeviceName)
+                    net.syncswift.discovery.DeviceDiscoveryManager.triggerDiscoveryPing()
                     val output = DataOutputStream(s.getOutputStream())
                     val input = DataInputStream(s.getInputStream())
 

@@ -251,7 +251,7 @@ actual object SupabaseNetwork {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext null
         try {
             val cleanEmail = email.lowercase().trim()
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=email,first_name,last_name,auth_provider,is_pro,pro_start_date,pro_renewal_date")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=*")
             var conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
@@ -262,9 +262,9 @@ actual object SupabaseNetwork {
             var code = conn.responseCode
             var body = if (code in 200..299) conn.inputStream.bufferedReader().readText() else ""
             
-            // If the query failed (e.g. is_pro column not yet added to profiles table), fall back to base fields
+            // If the query failed, fall back to base fields with is_pro included
             if (code !in 200..299) {
-                val fallbackUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=email,first_name,last_name,auth_provider")
+                val fallbackUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=email,first_name,last_name,auth_provider,is_pro")
                 conn = fallbackUrl.openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
                 conn.connectTimeout = 8000
@@ -274,6 +274,28 @@ actual object SupabaseNetwork {
                 conn.setRequestProperty("Accept", "application/json")
                 code = conn.responseCode
                 body = if (code in 200..299) conn.inputStream.bufferedReader().readText() else ""
+            }
+
+            // Fallback by userId if known and email search returned empty
+            val savedUid = SessionManager.getLoggedInUserId()
+            if ((body.isBlank() || body == "[]") && !savedUid.isNullOrBlank()) {
+                try {
+                    val uidUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?id=eq.$savedUid&select=*")
+                    val uidConn = uidUrl.openConnection() as HttpURLConnection
+                    uidConn.requestMethod = "GET"
+                    uidConn.connectTimeout = 8000
+                    uidConn.readTimeout = 8000
+                    uidConn.setRequestProperty("apikey", effectiveKey)
+                    uidConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+                    uidConn.setRequestProperty("Accept", "application/json")
+                    if (uidConn.responseCode in 200..299) {
+                        val uidBody = uidConn.inputStream.bufferedReader().readText()
+                        if (uidBody.isNotBlank() && uidBody != "[]") {
+                            code = uidConn.responseCode
+                            body = uidBody
+                        }
+                    }
+                } catch (_: Exception) {}
             }
 
             if (code in 200..299 && body.isNotBlank() && body != "[]") {
@@ -517,8 +539,29 @@ actual object SupabaseNetwork {
             try {
                 patchConn.outputStream.use { it.write(patchBody.toByteArray(Charsets.UTF_8)) }
             } catch (_: Exception) {}
-            val patchCode = patchConn.responseCode
+            var patchCode = patchConn.responseCode
             Log.d("SupabaseNetwork", "updateUserProStatus profiles code=$patchCode")
+
+            if (patchCode !in 200..299) {
+                try {
+                    val fallbackUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail")
+                    val fallbackConn = fallbackUrl.openConnection() as HttpURLConnection
+                    fallbackConn.requestMethod = "PATCH"
+                    fallbackConn.connectTimeout = 8000
+                    fallbackConn.readTimeout = 8000
+                    fallbackConn.setRequestProperty("apikey", effectiveKey)
+                    fallbackConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+                    fallbackConn.setRequestProperty("Content-Type", "application/json")
+                    fallbackConn.setRequestProperty("Prefer", "return=minimal")
+                    fallbackConn.doOutput = true
+                    val fallbackBody = """{"is_pro":$isPro}"""
+                    fallbackConn.outputStream.use { it.write(fallbackBody.toByteArray(Charsets.UTF_8)) }
+                    patchCode = fallbackConn.responseCode
+                    Log.d("SupabaseNetwork", "updateUserProStatus fallback code=$patchCode")
+                } catch (fe: Exception) {
+                    Log.w("SupabaseNetwork", "updateUserProStatus fallback error: ${fe.message}")
+                }
+            }
 
             // Also update Supabase auth.users user_metadata so status syncs even if custom columns don't exist in profiles
             val userId = getUserIdFromProfile(cleanEmail)
@@ -549,11 +592,23 @@ actual object SupabaseNetwork {
         }
     }
 
+    actual suspend fun getUserId(email: String): String? = withContext(Dispatchers.IO) {
+        val clean = email.lowercase().trim()
+        if (clean.isBlank()) return@withContext null
+        return@withContext getUserIdFromProfile(clean)
+    }
+
     actual suspend fun getActiveMobileDevices(email: String): List<DiscoveredDevice> = withContext(Dispatchers.IO) {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
         try {
             val cleanEmail = email.lowercase().trim()
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_email=eq.$cleanEmail&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port")
+            val userId = SessionManager.getLoggedInUserId() ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
+            val userFilter = if (!userId.isNullOrBlank()) {
+                "or=(user_email.eq.$cleanEmail,user_id.eq.$userId)"
+            } else {
+                "user_email=eq.$cleanEmail"
+            }
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?$userFilter&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
@@ -644,12 +699,21 @@ actual object SupabaseNetwork {
         deviceType: String,
         pushToken: String,
         localIp: String,
-        port: Int
+        port: Int,
+        userId: String?
     ): Boolean = withContext(Dispatchers.IO) {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
             val cleanEmail = email.lowercase().trim()
             val cleanName = cleanDeviceDisplayName(deviceName)
+            val resolvedUserId = userId?.trim()?.ifBlank { null }
+                ?: SessionManager.getLoggedInUserId()
+                ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
+
+            if (!resolvedUserId.isNullOrBlank()) {
+                SessionManager.saveLoggedInUserId(resolvedUserId)
+            }
+
             val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
@@ -662,17 +726,41 @@ actual object SupabaseNetwork {
             conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
 
             val payload = org.json.JSONObject().apply {
+                val currentLang = SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()
                 put("id", deviceId)
                 put("device_name", cleanName)
                 put("device_type", deviceType)
                 if (cleanEmail.isNotBlank()) put("user_email", cleanEmail)
+                if (!resolvedUserId.isNullOrBlank()) put("user_id", resolvedUserId)
                 if (pushToken.isNotBlank()) put("push_token", pushToken)
                 if (localIp.isNotBlank()) put("local_ip", localIp)
+                put("language", currentLang)
                 put("port", port)
                 put("is_online", true)
             }
             conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-            return@withContext conn.responseCode in 200..299
+            val code = conn.responseCode
+            if (code in 200..299) {
+                return@withContext true
+            }
+
+            // Fallback: If merge-duplicates didn't succeed, try PATCH on the existing device row
+            try {
+                val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId")
+                val patchConn = patchUrl.openConnection() as HttpURLConnection
+                patchConn.requestMethod = "PATCH"
+                patchConn.connectTimeout = 8000
+                patchConn.readTimeout = 8000
+                patchConn.doOutput = true
+                patchConn.setRequestProperty("Content-Type", "application/json")
+                patchConn.setRequestProperty("apikey", effectiveKey)
+                patchConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+                patchConn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                return@withContext patchConn.responseCode in 200..299
+            } catch (ex: Exception) {
+                Log.e("SupabaseNetwork", "PATCH device fallback failed: ${ex.message}")
+            }
+            return@withContext false
         } catch (e: Exception) {
             Log.e("SupabaseNetwork", "registerDeviceInSupabase failed: ${e.message}")
             return@withContext false
@@ -683,7 +771,13 @@ actual object SupabaseNetwork {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
         try {
             val cleanEmail = email.lowercase().trim()
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_email=eq.$cleanEmail&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port")
+            val userId = SessionManager.getLoggedInUserId() ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
+            val userFilter = if (!userId.isNullOrBlank()) {
+                "or=(user_email.eq.$cleanEmail,user_id.eq.$userId)"
+            } else {
+                "user_email=eq.$cleanEmail"
+            }
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?$userFilter&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
@@ -722,7 +816,13 @@ actual object SupabaseNetwork {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
         try {
             val cleanEmail = email.lowercase().trim()
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_email=eq.$cleanEmail&select=id,device_name,device_type,push_token,local_ip,port,is_online")
+            val userId = SessionManager.getLoggedInUserId() ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
+            val userFilter = if (!userId.isNullOrBlank()) {
+                "or=(user_email.eq.$cleanEmail,user_id.eq.$userId)"
+            } else {
+                "user_email=eq.$cleanEmail"
+            }
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?$userFilter&select=id,device_name,device_type,push_token,local_ip,port,is_online")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
@@ -791,6 +891,30 @@ actual object SupabaseNetwork {
             return@withContext authDeleted || (profCode in 200..299)
         } catch (e: Exception) {
             Log.e("SupabaseNetwork", "deleteUserAccount failed: ${e.message}")
+            return@withContext false
+        }
+    }
+
+    actual suspend fun clearDeviceUser(deviceId: String): Boolean = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank() || deviceId.isBlank()) return@withContext false
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "PATCH"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Prefer", "return=minimal")
+            val payload = """{"user_id":null,"user_email":null}"""
+            conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            Log.d("SupabaseNetwork", "clearDeviceUser code=$code")
+            return@withContext code in 200..299
+        } catch (e: Exception) {
+            Log.e("SupabaseNetwork", "clearDeviceUser failed: ${e.message}")
             return@withContext false
         }
     }

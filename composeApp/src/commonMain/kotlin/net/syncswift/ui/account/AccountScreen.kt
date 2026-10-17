@@ -744,7 +744,7 @@ fun AccountScreen(
                                     val currentPro = net.syncswift.subscription.SubscriptionManager.isPro.value
                                     val newPro = !currentPro
                                     net.syncswift.subscription.SubscriptionManager.setProState(newPro)
-                                    showNativeToast(if (newPro) "🚀 Geliştirici Modu: Pro Aktif Edildi!" else "Geliştirici Modu: Pro Kapatıldı!")
+                                    showNativeToast(if (newPro) copy.devModeProActivated else copy.devModeProDeactivated)
                                 }
                             }
                             .padding(horizontal = 8.dp, vertical = 3.dp)

@@ -20,6 +20,7 @@ actual object SessionManager {
     actual fun saveLocalSession() {
         NSUserDefaults.standardUserDefaults.setBool(true, "is_logged_in")
         NSUserDefaults.standardUserDefaults.setObject("", "logged_email")
+        NSUserDefaults.standardUserDefaults.setObject("", "logged_user_id")
         NSUserDefaults.standardUserDefaults.setObject(IdentityProvider.Local.name, "logged_provider")
         NSUserDefaults.standardUserDefaults.setObject("", "first_name")
         NSUserDefaults.standardUserDefaults.setObject("", "last_name")
@@ -27,13 +28,26 @@ actual object SessionManager {
         net.syncswift.subscription.SubscriptionManager.refreshProState()
     }
 
+    actual fun saveLoggedInUserId(userId: String) {
+        NSUserDefaults.standardUserDefaults.setObject(userId.trim(), forKey = "logged_user_id")
+    }
+
+    actual fun getLoggedInUserId(): String? {
+        val uid = NSUserDefaults.standardUserDefaults.stringForKey("logged_user_id")?.trim()
+        return if (uid.isNullOrBlank()) null else uid
+    }
+
     actual fun clearSession() {
         NSUserDefaults.standardUserDefaults.setBool(false, "is_logged_in")
         NSUserDefaults.standardUserDefaults.removeObjectForKey("logged_email")
+        NSUserDefaults.standardUserDefaults.removeObjectForKey("logged_user_id")
         NSUserDefaults.standardUserDefaults.removeObjectForKey("logged_provider")
         NSUserDefaults.standardUserDefaults.removeObjectForKey("first_name")
         NSUserDefaults.standardUserDefaults.removeObjectForKey("last_name")
         NSUserDefaults.standardUserDefaults.setBool(false, "is_pro")
+        NSUserDefaults.standardUserDefaults.setBool(false, "is_pro_member")
+        NSUserDefaults.standardUserDefaults.setInteger(0L, "pro_start_date_ms")
+        NSUserDefaults.standardUserDefaults.setInteger(0L, "pro_renewal_date_ms")
         net.syncswift.subscription.SubscriptionManager.refreshProState()
     }
 

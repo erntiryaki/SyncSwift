@@ -56,7 +56,10 @@ expect object SupabaseNetwork {
     /** Removes a registered device from Supabase and sends remote logout notification */
     suspend fun removeUserDevice(email: String, deviceId: String): Boolean
 
-    /** Registers the current device in Supabase with the logged-in email */
+    /** Returns the unique Supabase User ID (UUID) for this email */
+    suspend fun getUserId(email: String): String?
+
+    /** Registers the current device in Supabase with the logged-in email and user ID */
     suspend fun registerDeviceInSupabase(
         email: String,
         deviceId: String,
@@ -64,7 +67,8 @@ expect object SupabaseNetwork {
         deviceType: String,
         pushToken: String = "",
         localIp: String = "",
-        port: Int = 52424
+        port: Int = 52424,
+        userId: String? = null
     ): Boolean
 
     /** Fetches linked desktop devices for this user */
@@ -75,5 +79,8 @@ expect object SupabaseNetwork {
 
     /** Deletes user from auth.users and profiles table */
     suspend fun deleteUserAccount(email: String): Boolean
+
+    /** Clears the user_id and user_email from the device in Supabase upon logout */
+    suspend fun clearDeviceUser(deviceId: String): Boolean
 }
 

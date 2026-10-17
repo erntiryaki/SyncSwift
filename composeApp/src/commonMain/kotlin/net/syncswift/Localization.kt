@@ -473,8 +473,23 @@ class Copy {
     var registeredDevicesTitle: String = "Registered Devices"
     var removeDeviceConfirmTitle: String = "Remove Device"
     var removeDeviceConfirmDesc: String = "Are you sure you want to remove this device? You will be signed out on that device."
+    var removeAction: String = "Remove"
     var deviceRemovedSuccess: String = "Device removed. You can now sign in."
     var remoteSignedOut: String = "You were signed out because this device was removed from your account."
+    var timeJustNow: String = "Just now"
+    var timeMinutesAgo: String = "%d min ago"
+    var timeHoursAgo: String = "%d hr ago"
+    var timeDaysAgo: String = "%d d ago"
+    var clipboardFreeVsPro: String = "Free: 24h · Pro: Unlimited History"
+    var linesOfCode: String = "%d lines code block"
+    var clipboardTagLabel: String = "Title / Label (e.g. IBAN, Invoice)"
+    var clipboardContentLabel: String = "Clipboard Content"
+    var devModeProActivated: String = "Developer Mode: Pro Activated!"
+    var devModeProDeactivated: String = "Developer Mode: Pro Deactivated!"
+    var adTitle: String = "SyncSwift Pro"
+    var adBadge: String = "AD"
+    var adSubtitle: String = "Unlimited transfers & ad-free experience"
+    var adAction: String = "Explore"
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {

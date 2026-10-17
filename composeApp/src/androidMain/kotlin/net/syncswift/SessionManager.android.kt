@@ -57,6 +57,7 @@ actual object SessionManager {
         getPrefs()?.edit()
             ?.putBoolean("is_logged_in", true)
             ?.putString("logged_email", "")
+            ?.putString("logged_user_id", "")
             ?.putString("logged_provider", IdentityProvider.Local.name)
             ?.putString("first_name", "")
             ?.putString("last_name", "")
@@ -65,14 +66,27 @@ actual object SessionManager {
         net.syncswift.subscription.SubscriptionManager.refreshProState()
     }
 
+    actual fun saveLoggedInUserId(userId: String) {
+        getPrefs()?.edit()?.putString("logged_user_id", userId.trim())?.apply()
+    }
+
+    actual fun getLoggedInUserId(): String? {
+        val uid = getPrefs()?.getString("logged_user_id", null)?.trim()
+        return if (uid.isNullOrBlank()) null else uid
+    }
+
     actual fun clearSession() {
         getPrefs()?.edit()
             ?.putBoolean("is_logged_in", false)
             ?.remove("logged_email")
+            ?.remove("logged_user_id")
             ?.remove("logged_provider")
             ?.remove("first_name")
             ?.remove("last_name")
             ?.putBoolean("is_pro", false)
+            ?.putBoolean("is_pro_member", false)
+            ?.putLong("pro_start_date_ms", 0L)
+            ?.putLong("pro_renewal_date_ms", 0L)
             ?.apply()
         net.syncswift.subscription.SubscriptionManager.refreshProState()
     }

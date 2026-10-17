@@ -435,10 +435,8 @@ fun ConnectedDevicesScreen(
             Spacer(Modifier.height(28.dp))
 
             // SECTION 2: Uzaktan Bağlı Cihazlar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = copy.remoteConnectedDevices,
@@ -447,7 +445,7 @@ fun ConnectedDevicesScreen(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.3).sp
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.height(3.dp))
                 Text(
                     text = copy.formatDeviceCount(remoteConnected.size),
                     color = Mist,

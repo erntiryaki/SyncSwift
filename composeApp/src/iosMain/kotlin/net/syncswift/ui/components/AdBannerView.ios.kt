@@ -51,12 +51,35 @@ actual fun AdBannerView(modifier: Modifier) {
                     try {
                         val cls = NSClassFromString("GADBannerView")
                         if (cls != null) {
-                            // Try allocating GADBannerView safely
                             val alloc = platform.Foundation.NSSelectorFromString("alloc")
                             val initSel = platform.Foundation.NSSelectorFromString("init")
                             val rawObj = (cls as? platform.darwin.NSObject)?.performSelector(alloc)
-                            val view = (rawObj as? platform.darwin.NSObject)?.performSelector(initSel) as? UIView
-                            view ?: UIView()
+                            val bannerView = (rawObj as? platform.darwin.NSObject)?.performSelector(initSel) as? UIView
+
+                            if (bannerView != null) {
+                                val adUnit = net.syncswift.PlatformConfig.admobBannerId.ifBlank {
+                                    "ca-app-pub-3940256099942544/2934735716"
+                                }
+                                bannerView.setValue(adUnit, forKey = "adUnitID")
+
+                                val window = UIApplication.sharedApplication.keyWindow
+                                    ?: UIApplication.sharedApplication.windows.firstOrNull() as? platform.UIKit.UIWindow
+                                val rootVC = window?.rootViewController
+                                if (rootVC != null) {
+                                    bannerView.setValue(rootVC, forKey = "rootViewController")
+                                }
+
+                                val reqCls = NSClassFromString("GADRequest")
+                                val reqObj = (reqCls as? platform.darwin.NSObject)?.performSelector(platform.Foundation.NSSelectorFromString("request"))
+                                    ?: (reqCls as? platform.darwin.NSObject)?.performSelector(alloc)?.let { (it as? platform.darwin.NSObject)?.performSelector(initSel) }
+
+                                val loadRequestSel = platform.Foundation.NSSelectorFromString("loadRequest:")
+                                (bannerView as? platform.darwin.NSObject)?.performSelector(loadRequestSel, withObject = reqObj)
+
+                                bannerView
+                            } else {
+                                UIView()
+                            }
                         } else {
                             UIView()
                         }
@@ -75,6 +98,7 @@ actual fun AdBannerView(modifier: Modifier) {
 
 @Composable
 private fun CustomFallbackBanner(modifier: Modifier) {
+    val copy = net.syncswift.currentAppCopy()
     val electricColor = Color(0xFF2BC5D3)
     val skyColor = Color(0xFF38BDF8)
     val midnightColor = Color(0xFF0B101B)
@@ -135,7 +159,7 @@ private fun CustomFallbackBanner(modifier: Modifier) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "SyncSwift Pro",
+                        text = copy.adTitle,
                         color = cloudColor,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
@@ -150,7 +174,7 @@ private fun CustomFallbackBanner(modifier: Modifier) {
                             .padding(horizontal = 5.dp, vertical = 1.dp)
                     ) {
                         Text(
-                            text = "AD",
+                            text = copy.adBadge,
                             color = mistColor,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -162,7 +186,7 @@ private fun CustomFallbackBanner(modifier: Modifier) {
                 Spacer(Modifier.height(2.dp))
 
                 Text(
-                    text = "Sınırsız transfer & reklamsız deneyim",
+                    text = copy.adSubtitle,
                     color = mistColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
@@ -181,7 +205,7 @@ private fun CustomFallbackBanner(modifier: Modifier) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Keşfet",
+                    text = copy.adAction,
                     color = midnightColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold

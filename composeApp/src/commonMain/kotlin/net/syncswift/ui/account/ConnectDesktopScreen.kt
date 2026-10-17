@@ -748,6 +748,86 @@ fun ConnectDesktopScreen(
                 Spacer(Modifier.height(24.dp))
             }
         }
+
+        if (deviceToConfirmRemove != null) {
+            val dev = deviceToConfirmRemove!!
+            SyncSwiftModal(
+                onDismissRequest = { if (!isRemovingDevice) deviceToConfirmRemove = null }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = copy.removeDeviceConfirmTitle,
+                        color = Cloud,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = copy.removeDeviceConfirmDesc.replace("%s", cleanDeviceDisplayName(dev.name)),
+                        color = Mist,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = { deviceToConfirmRemove = null },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = InputBg,
+                                contentColor = Cloud
+                            )
+                        ) {
+                            Text(text = copy.cancelAction, fontWeight = FontWeight.SemiBold)
+                        }
+                        Button(
+                            onClick = {
+                                if (isRemovingDevice) return@Button
+                                isRemovingDevice = true
+                                scope.launch {
+                                    val devId = dev.id.ifBlank { "manual-${dev.host}" }
+                                    SupabaseNetwork.removeUserDevice(userEmail, devId)
+                                    SupabaseNetwork.clearDeviceUser(devId)
+                                    ConnectionManager.disconnectDevice(dev, notifyPeer = true)
+                                    net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(dev.host)
+                                    deviceToConfirmRemove = null
+                                    isRemovingDevice = false
+                                    refreshDevices()
+                                    showNativeToast(copy.deviceRemovedSuccess)
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ErrorRed,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            if (isRemovingDevice) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text(text = copy.removeAction, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

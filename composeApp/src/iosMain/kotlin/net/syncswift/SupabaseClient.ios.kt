@@ -446,7 +446,7 @@ actual object SupabaseNetwork {
         try {
             val clean = cleanEmail(email)
             val patchBody = """{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}"""
-            executeRequest(
+            val patchResp = executeRequest(
                 urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
                 method = "PATCH",
                 headers = mapOf(
@@ -457,6 +457,20 @@ actual object SupabaseNetwork {
                 ),
                 body = patchBody
             )
+            // Fallback: If 3-column update fails (e.g. pro_start_date not present in schema), update just is_pro
+            if (patchResp.statusCode !in 200..299) {
+                executeRequest(
+                    urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
+                    method = "PATCH",
+                    headers = mapOf(
+                        "apikey" to serviceKey,
+                        "Authorization" to "Bearer $serviceKey",
+                        "Content-Type" to "application/json",
+                        "Prefer" to "return=minimal"
+                    ),
+                    body = """{"is_pro":$isPro}"""
+                )
+            }
 
             // Also update auth.users metadata
             val userId = getUserIdFromProfile(clean)
@@ -518,14 +532,26 @@ actual object SupabaseNetwork {
         return list
     }
 
+    actual suspend fun getUserId(email: String): String? {
+        val clean = cleanEmail(email)
+        if (clean.isBlank()) return null
+        return getUserIdFromProfile(clean)
+    }
+
     actual suspend fun getActiveMobileDevices(email: String): List<DiscoveredDevice> {
         val supabaseUrl = PlatformConfig.supabaseUrl
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
         try {
             val clean = cleanEmail(email)
+            val userId = SessionManager.getLoggedInUserId() ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
+            val userFilter = if (!userId.isNullOrBlank()) {
+                "or=(user_email.eq.$clean,user_id.eq.$userId)"
+            } else {
+                "user_email=eq.$clean"
+            }
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/devices?user_email=eq.$clean&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port",
+                urlString = "$supabaseUrl/rest/v1/devices?$userFilter&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -591,7 +617,8 @@ actual object SupabaseNetwork {
         deviceType: String,
         pushToken: String,
         localIp: String,
-        port: Int
+        port: Int,
+        userId: String?
     ): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
         val serviceKey = effectiveKey
@@ -599,15 +626,28 @@ actual object SupabaseNetwork {
         try {
             val clean = cleanEmail(email)
             val cleanName = cleanDeviceDisplayName(deviceName)
+            val resolvedUserId = userId?.trim()?.ifBlank { null }
+                ?: SessionManager.getLoggedInUserId()
+                ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
+
+            if (!resolvedUserId.isNullOrBlank()) {
+                SessionManager.saveLoggedInUserId(resolvedUserId)
+            }
+
+            val currentLang = SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()
+            val userField = if (clean.isNotBlank()) "\"user_email\": \"$clean\"," else ""
+            val userIdField = if (!resolvedUserId.isNullOrBlank()) "\"user_id\": \"$resolvedUserId\"," else ""
             val body = """
                 {
                     "id": "$deviceId",
                     "device_name": "$cleanName",
                     "device_type": "$deviceType",
-                    "user_email": "$clean",
+                    $userField
+                    $userIdField
                     "push_token": "$pushToken",
                     "local_ip": "$localIp",
                     "port": $port,
+                    "language": "$currentLang",
                     "is_online": true
                 }
             """.trimIndent()
@@ -622,7 +662,20 @@ actual object SupabaseNetwork {
                 ),
                 body = body
             )
-            return resp.statusCode in 200..299
+            if (resp.statusCode in 200..299) return true
+
+            // Fallback: PATCH on existing device row
+            val patchResp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId",
+                method = "PATCH",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json"
+                ),
+                body = body
+            )
+            return patchResp.statusCode in 200..299
         } catch (_: Exception) {
             return false
         }
@@ -634,8 +687,14 @@ actual object SupabaseNetwork {
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
         try {
             val clean = cleanEmail(email)
+            val userId = SessionManager.getLoggedInUserId() ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
+            val userFilter = if (!userId.isNullOrBlank()) {
+                "or=(user_email.eq.$clean,user_id.eq.$userId)"
+            } else {
+                "user_email=eq.$clean"
+            }
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/devices?user_email=eq.$clean&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port",
+                urlString = "$supabaseUrl/rest/v1/devices?$userFilter&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -656,8 +715,14 @@ actual object SupabaseNetwork {
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
         try {
             val clean = cleanEmail(email)
+            val userId = SessionManager.getLoggedInUserId() ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
+            val userFilter = if (!userId.isNullOrBlank()) {
+                "or=(user_email.eq.$clean,user_id.eq.$userId)"
+            } else {
+                "user_email=eq.$clean"
+            }
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/devices?user_email=eq.$clean&select=id,device_name,device_type,push_token,local_ip,port,is_online",
+                urlString = "$supabaseUrl/rest/v1/devices?$userFilter&select=id,device_name,device_type,push_token,local_ip,port,is_online",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -701,6 +766,28 @@ actual object SupabaseNetwork {
 
             return profResp.statusCode in 200..299
         } catch (e: Exception) {
+            return false
+        }
+    }
+
+    actual suspend fun clearDeviceUser(deviceId: String): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank() || deviceId.isBlank()) return false
+        try {
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId",
+                method = "PATCH",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "return=minimal"
+                ),
+                body = """{"user_id":null,"user_email":null}"""
+            )
+            return resp.statusCode in 200..299
+        } catch (_: Exception) {
             return false
         }
     }

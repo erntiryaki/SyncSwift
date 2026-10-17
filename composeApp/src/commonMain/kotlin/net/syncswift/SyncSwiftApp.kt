@@ -58,7 +58,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         if (saved != null) {
             AppLanguage.entries.find { it.code == saved } ?: AppLanguage.English
         } else {
-            AppLanguage.English
+            val sysLang = getSystemLanguageCode()
+            val matched = resolveInitialLanguage(sysLang)
+            SessionManager.saveLanguage(matched.code)
+            matched
         }
     }
     val initialTheme = remember {
@@ -72,16 +75,6 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
     var language by remember { mutableStateOf(initialLanguage) }
     var themeMode by remember { mutableStateOf(initialTheme) }
-
-    fun updateLanguage(newLang: AppLanguage) {
-        language = newLang
-        SessionManager.saveLanguage(newLang.code)
-    }
-
-    fun updateThemeMode(newTheme: AppThemeMode) {
-        themeMode = newTheme
-        SessionManager.saveThemeMode(newTheme.name)
-    }
     var email by remember { mutableStateOf(initialEmail) }
     var authDraftEmail by remember { mutableStateOf("") }
     var authProvider by remember { mutableStateOf(initialProvider) }
@@ -100,6 +93,27 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     var currentOtpCode by remember { mutableStateOf("") }
     val authPolicy = remember { AuthPolicy() }
     val scope = rememberCoroutineScope()
+
+    fun updateLanguage(newLang: AppLanguage) {
+        language = newLang
+        SessionManager.saveLanguage(newLang.code)
+        if (email.isNotBlank() && screen == AuthStep.Home) {
+            scope.launch {
+                SupabaseNetwork.registerDeviceInSupabase(
+                    email = email,
+                    deviceId = SessionManager.getPlatformDeviceId(),
+                    deviceName = SessionManager.getMyDeviceName(),
+                    deviceType = SessionManager.getMyPlatformName(),
+                    pushToken = SessionManager.getMyPushToken()
+                )
+            }
+        }
+    }
+
+    fun updateThemeMode(newTheme: AppThemeMode) {
+        themeMode = newTheme
+        SessionManager.saveThemeMode(newTheme.name)
+    }
 
     val copy = copyFor(language)
     val alertMessage = when (authAlert) {
@@ -202,6 +216,13 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                     net.syncswift.subscription.SubscriptionManager.setProState(true)
                     if (prof.proStartDate > 0L) SessionManager.saveProStartDateMillis(prof.proStartDate)
                     if (prof.proRenewalDate > 0L) SessionManager.saveProRenewalDateMillis(prof.proRenewalDate)
+                } else if (net.syncswift.subscription.SubscriptionManager.isProActive() || SessionManager.getSavedProStatus()) {
+                    SupabaseNetwork.updateUserProStatus(
+                        email = email,
+                        isPro = true,
+                        startDate = SessionManager.getProStartDateMillis(),
+                        renewalDate = SessionManager.getProRenewalDateMillis()
+                    )
                 }
                 val needsNameRefresh = firstName.isBlank() || lastName.isBlank() || firstName.any { it.isDigit() } || firstName.contains("@")
                 if (needsNameRefresh) {
@@ -574,6 +595,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             provider = authProvider,
                                             onBack = { inSettings = false },
                                             onAccountDeleted = {
+                                                scope.launch {
+                                                    SupabaseNetwork.clearDeviceUser(SessionManager.getPlatformDeviceId())
+                                                }
                                                 inSettings = false
                                                 email = ""
                                                 firstName = ""
@@ -581,6 +605,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                 authDraftEmail = ""
                                                 authProvider = IdentityProvider.EmailPassword
                                                 SessionManager.clearSession()
+                                                net.syncswift.subscription.SubscriptionManager.setProState(false)
                                                 mainTab = net.syncswift.ui.components.MainNavTab.Home
                                                 screen = AuthStep.Email
                                             }
@@ -692,12 +717,16 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                 onOpenSettings = { inSettings = true },
                                                                 onOpenHelpSupport = { inHelpSupport = true },
                                                                 onLogout = {
+                                                                    scope.launch {
+                                                                        SupabaseNetwork.clearDeviceUser(SessionManager.getPlatformDeviceId())
+                                                                    }
                                                                     email = ""
                                                                     firstName = ""
                                                                     lastName = ""
                                                                     authDraftEmail = ""
                                                                     authProvider = IdentityProvider.EmailPassword
                                                                     SessionManager.clearSession()
+                                                                    net.syncswift.subscription.SubscriptionManager.setProState(false)
                                                                     mainTab = net.syncswift.ui.components.MainNavTab.Home
                                                                     screen = AuthStep.Email
                                                                 },

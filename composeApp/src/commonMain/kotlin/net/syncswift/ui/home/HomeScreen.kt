@@ -55,7 +55,7 @@ fun HomeScreen(
     val discoveredDevices by DeviceDiscoveryManager.devices.collectAsState()
     val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
     val isScanning by DeviceDiscoveryManager.isScanning.collectAsState()
-    val selfDevice = remember { DeviceDiscoveryManager.getSelfDevice() }
+    val selfDevice = remember(discoveredDevices) { DeviceDiscoveryManager.getSelfDevice() }
     val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
     val allTransfers by TransferEngine.transfers.collectAsState()
     val recentTransfers = remember(allTransfers) {
@@ -85,7 +85,8 @@ fun HomeScreen(
         scope.launch {
             try {
                 DeviceDiscoveryManager.startDiscovery()
-                delay(2500)
+                DeviceDiscoveryManager.triggerDiscoveryPing()
+                delay(1200)
             } finally {
                 isRefreshing = false
                 pullOffset = 0f
@@ -95,6 +96,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         DeviceDiscoveryManager.startDiscovery()
+        DeviceDiscoveryManager.triggerDiscoveryPing()
     }
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {

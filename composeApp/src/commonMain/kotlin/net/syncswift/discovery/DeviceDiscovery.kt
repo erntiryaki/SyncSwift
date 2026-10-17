@@ -24,6 +24,7 @@ expect object DeviceDiscoveryManager {
     fun getSelfDevice(): DiscoveredDevice?
     fun addManualDevice(host: String, port: Int = 52424, name: String = "SyncSwift Device", osType: String = "Other"): DiscoveredDevice
     fun removeManualDevice(host: String)
+    fun triggerDiscoveryPing()
 }
 
 fun cleanDeviceDisplayName(rawName: String): String {
