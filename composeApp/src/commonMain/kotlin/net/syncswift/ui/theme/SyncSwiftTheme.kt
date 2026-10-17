@@ -135,26 +135,30 @@ fun SyncSwiftTheme(
     val font = net.syncswift.platformFontFamily()
     val baseTypography = androidx.compose.material3.Typography()
     val typography = baseTypography.copy(
-        displayLarge = baseTypography.displayLarge.copy(fontFamily = font),
-        displayMedium = baseTypography.displayMedium.copy(fontFamily = font),
-        displaySmall = baseTypography.displaySmall.copy(fontFamily = font),
-        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = font),
-        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = font),
-        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = font),
-        titleLarge = baseTypography.titleLarge.copy(fontFamily = font),
-        titleMedium = baseTypography.titleMedium.copy(fontFamily = font),
-        titleSmall = baseTypography.titleSmall.copy(fontFamily = font),
-        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = font),
-        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = font),
-        bodySmall = baseTypography.bodySmall.copy(fontFamily = font),
-        labelLarge = baseTypography.labelLarge.copy(fontFamily = font),
-        labelMedium = baseTypography.labelMedium.copy(fontFamily = font),
-        labelSmall = baseTypography.labelSmall.copy(fontFamily = font)
+        displayLarge = baseTypography.displayLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold),
+        displayMedium = baseTypography.displayMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        displaySmall = baseTypography.displaySmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold),
+        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        titleLarge = baseTypography.titleLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold),
+        titleMedium = baseTypography.titleMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        titleSmall = baseTypography.titleSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+        bodySmall = baseTypography.bodySmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+        labelLarge = baseTypography.labelLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+        labelMedium = baseTypography.labelMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+        labelSmall = baseTypography.labelSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
     )
 
     CompositionLocalProvider(
         LocalSyncSwiftColors provides colors,
-        LocalThemeMode provides themeMode
+        LocalThemeMode provides themeMode,
+        androidx.compose.material3.LocalTextStyle provides androidx.compose.ui.text.TextStyle(
+            fontFamily = font,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+        )
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

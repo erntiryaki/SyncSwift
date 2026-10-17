@@ -24,9 +24,15 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 
 enum class AuthAlertState { None, WrongPassword, CrossProviderEmailToGoogle }
 
@@ -85,6 +91,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     var inHelpSupport by remember { mutableStateOf(false) }
     var inConnectedDevices by remember { mutableStateOf(false) }
     var inConnectDesktop by remember { mutableStateOf(false) }
+    var inNotifications by remember { mutableStateOf(false) }
 
     var authAlert by remember { mutableStateOf(AuthAlertState.None) }
     // Empty by default — filled when OTP is actually sent; prevents guessing before send
@@ -332,6 +339,21 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                 if (existingProfile.lastName.isNotBlank()) aLastName = existingProfile.lastName
                                             }
                                         }
+                                        if (aFirstName.isBlank() && aLastName.isBlank()) {
+                                            if (SessionManager.getUserFirstName().isNotBlank()) aFirstName = SessionManager.getUserFirstName()
+                                            if (SessionManager.getUserLastName().isNotBlank()) aLastName = SessionManager.getUserLastName()
+                                        }
+                                        if (aFirstName.isBlank() && aLastName.isBlank() && targetEmail.isNotBlank() && !targetEmail.contains("@privaterelay") && !targetEmail.endsWith("@apple.id")) {
+                                            val prefix = targetEmail.substringBefore("@")
+                                            val parts = prefix.replace(".", " ").replace("_", " ").replace("-", " ").split(" ").filter { it.isNotBlank() }
+                                            if (parts.size >= 2) {
+                                                aFirstName = parts.first().replaceFirstChar { it.uppercase() }
+                                                aLastName = parts.drop(1).joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                                            } else if (parts.size == 1) {
+                                                aFirstName = parts.first().replaceFirstChar { it.uppercase() }
+                                                aLastName = ""
+                                            }
+                                        }
                                         val existingProvider = SupabaseNetwork.getUserProvider(targetEmail) ?: authPolicy.getRegisteredProvider(targetEmail)
                                         if (existingProvider == IdentityProvider.EmailPassword) {
                                             authAlert = AuthAlertState.CrossProviderEmailToGoogle
@@ -413,6 +435,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     inHelpSupport -> 3
                                     inConnectedDevices -> 4
                                     inConnectDesktop -> 5
+                                    inNotifications -> 6
                                     else -> 0
                                 }
                                 AnimatedContent(
@@ -470,6 +493,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             copy = copy,
                                             onDismiss = { inConnectDesktop = false }
                                         )
+                                        6 -> net.syncswift.ui.notifications.NotificationsScreen(
+                                            copy = copy,
+                                            onBack = { inNotifications = false }
+                                        )
                                         else -> {
                                             Column(Modifier.fillMaxSize()) {
                                                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -508,6 +535,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                 },
                                                                 onViewAllTransfers = {
                                                                     mainTab = net.syncswift.ui.components.MainNavTab.Transfers
+                                                                },
+                                                                onOpenNotifications = {
+                                                                    inNotifications = true
                                                                 }
                                                             )
                                                         }
@@ -545,6 +575,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                 },
                                                                 onOpenConnectDesktop = {
                                                                     inConnectDesktop = true
+                                                                },
+                                                                onOpenNotifications = {
+                                                                    inNotifications = true
                                                                 }
                                                             )
                                                         }
@@ -878,39 +911,99 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
-            // Modern Minimalist Flat Black Toast (bottom slide-up, no emojis, clean matte pill)
+            // Modern Minimalist Toast with modern contextual icon and swipe-to-dismiss
             val currentToastMessage by ToastNotifier.currentToast.collectAsState()
+            var toastDragOffsetY by remember { mutableStateOf(0f) }
+
             LaunchedEffect(currentToastMessage) {
+                toastDragOffsetY = 0f
                 if (currentToastMessage != null) {
-                    kotlinx.coroutines.delay(2600)
+                    kotlinx.coroutines.delay(2800)
                     ToastNotifier.dismiss()
                 }
             }
 
             AnimatedVisibility(
                 visible = currentToastMessage != null,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(animationSpec = tween(220)),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(animationSpec = tween(220)),
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(animationSpec = androidx.compose.animation.core.tween(220)),
+                exit = slideOutVertically(targetOffsetY = { it * 2 }) + fadeOut(animationSpec = androidx.compose.animation.core.tween(220)),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 56.dp, start = 20.dp, end = 20.dp)
                     .zIndex(20000f)
             ) {
+                val msg = currentToastMessage ?: ""
+                val lower = msg.lowercase()
+                val isError = lower.contains("hata") || lower.contains("error") || lower.contains("iptal") ||
+                              lower.contains("reddedildi") || lower.contains("failed") || lower.contains("yanlış") ||
+                              lower.contains("uyuşmuyor") || lower.contains("bulunamadı")
+                val isSuccess = !isError && (lower.contains("başarı") || lower.contains("success") || lower.contains("senkronize") ||
+                                lower.contains("bağlandı") || lower.contains("gönderildi") || lower.contains("alındı") ||
+                                lower.contains("kaydedildi") || lower.contains("aktif"))
+                val isClipboard = lower.contains("pano") || lower.contains("clipboard")
+
+                val iconColor = when {
+                    isError -> ErrorRed
+                    isSuccess -> SuccessGreen
+                    isClipboard -> Blue
+                    else -> Cloud
+                }
+
                 Surface(
                     shape = RoundedCornerShape(26.dp),
                     color = Color(0xF2121214),
                     border = BorderStroke(1.dp, Color(0x28FFFFFF)),
-                    shadowElevation = 10.dp
+                    shadowElevation = 10.dp,
+                    modifier = Modifier
+                        .offset { IntOffset(0, toastDragOffsetY.roundToInt()) }
+                        .alpha(((120f - toastDragOffsetY) / 120f).coerceIn(0f, 1f))
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragEnd = {
+                                    if (toastDragOffsetY > 45f) {
+                                        ToastNotifier.dismiss()
+                                    }
+                                    toastDragOffsetY = 0f
+                                },
+                                onVerticalDrag = { _, dragAmount ->
+                                    if (dragAmount > 0 || toastDragOffsetY > 0) {
+                                        toastDragOffsetY = (toastDragOffsetY + dragAmount).coerceAtLeast(0f)
+                                    }
+                                }
+                            )
+                        }
+                        .clickable { ToastNotifier.dismiss() }
                 ) {
-                    Text(
-                        text = currentToastMessage ?: "",
-                        color = Color(0xFFF2F2F5),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 18.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(iconColor.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            when {
+                                isError -> WarningTriangleIcon(Modifier.size(13.dp), color = iconColor)
+                                isSuccess -> CheckIcon(Modifier.size(13.dp), color = iconColor)
+                                isClipboard -> ClipboardVectorIcon(Modifier.size(13.dp), color = iconColor)
+                                else -> NotificationBellIcon(Modifier.size(13.dp), color = iconColor)
+                            }
+                        }
+
+                        Text(
+                            text = msg,
+                            color = Color(0xFFF2F2F5),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 18.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
                 }
             }
         }

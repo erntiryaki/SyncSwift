@@ -60,6 +60,8 @@ private class QrCaptureDelegate(
     }
 }
 
+private var activeCaptureDelegate: QrCaptureDelegate? = null
+
 @OptIn(ExperimentalForeignApi::class)
 private class CustomScannerViewController(
     private val captureSession: AVCaptureSession
@@ -67,12 +69,15 @@ private class CustomScannerViewController(
 
     var cameraContainerView: UIView? = null
     var previewLayer: AVCaptureVideoPreviewLayer? = null
+    var captureDelegate: QrCaptureDelegate? = null
 
     @kotlinx.cinterop.ObjCAction
     fun dismissScanner() {
         try {
             captureSession.stopRunning()
         } catch (_: Exception) {}
+        activeCaptureDelegate = null
+        captureDelegate = null
         dismissViewControllerAnimated(true, null)
     }
 
@@ -158,11 +163,17 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         scannerVc.modalTransitionStyle = UIModalTransitionStyleCrossDissolve
 
         val captureDelegate = QrCaptureDelegate { qrText ->
-            captureSession.stopRunning()
+            try {
+                captureSession.stopRunning()
+            } catch (_: Exception) {}
+            activeCaptureDelegate = null
+            scannerVc.captureDelegate = null
             scannerVc.dismissViewControllerAnimated(true) {
                 onSuccess(qrText)
             }
         }
+        activeCaptureDelegate = captureDelegate
+        scannerVc.captureDelegate = captureDelegate
 
         val output = AVCaptureMetadataOutput()
         if (captureSession.canAddOutput(output)) {

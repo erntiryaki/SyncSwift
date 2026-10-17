@@ -46,14 +46,18 @@ fun HomeScreen(
     onSendClick: () -> Unit = {},
     onClipboardClick: () -> Unit = {},
     onDeviceClick: (DiscoveredDevice) -> Unit = {},
-    onViewAllTransfers: () -> Unit = {}
+    onViewAllTransfers: () -> Unit = {},
+    onOpenNotifications: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val discoveredDevices by DeviceDiscoveryManager.devices.collectAsState()
     val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
     val isScanning by DeviceDiscoveryManager.isScanning.collectAsState()
     val selfDevice = remember { DeviceDiscoveryManager.getSelfDevice() }
-    val recentTransfers by TransferEngine.transfers.collectAsState()
+    val allTransfers by TransferEngine.transfers.collectAsState()
+    val recentTransfers = remember(allTransfers) {
+        allTransfers.filter { it.status == TransferStatus.COMPLETED }
+    }
     val scope = rememberCoroutineScope()
 
     var deviceToPair by remember { mutableStateOf<DiscoveredDevice?>(null) }
@@ -125,7 +129,7 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.height(16.dp))
 
-        // Top Bar: Clean Minimalist Page Header (P2P removed)
+        // Top Bar: Clean Minimalist Page Header with Notification Bell
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -137,9 +141,33 @@ fun HomeScreen(
                 text = copy.homeTab,
                 color = Cloud,
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.6).sp
             )
+
+            val notificationsList by net.syncswift.notification.NotificationHistoryManager.notifications.collectAsState()
+            val unreadCount = remember(notificationsList) { notificationsList.count { !it.isRead } }
+
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(InputBg.copy(alpha = 0.7f))
+                    .clickable { onOpenNotifications() },
+                contentAlignment = Alignment.Center
+            ) {
+                NotificationBellIcon(Modifier.size(19.dp), color = Cloud)
+                if (unreadCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 8.dp, end = 8.dp)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Blue)
+                    )
+                }
+            }
         }
 
         // Modern Pull-to-Refresh: circular indicator with text underneath, no dots, no box

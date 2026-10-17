@@ -65,7 +65,7 @@ fun TransfersScreen(
                 text = copy.transfersTab,
                 color = Cloud,
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.6).sp
             )
         }

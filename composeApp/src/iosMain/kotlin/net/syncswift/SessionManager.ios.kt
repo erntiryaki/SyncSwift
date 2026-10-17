@@ -132,6 +132,14 @@ actual object SessionManager {
         return NSUserDefaults.standardUserDefaults.stringForKey("transfers_history_json")
     }
 
+    actual fun saveNotificationsJson(json: String) {
+        NSUserDefaults.standardUserDefaults.setObject(json, "notifications_history_json")
+    }
+
+    actual fun getSavedNotificationsJson(): String? {
+        return NSUserDefaults.standardUserDefaults.stringForKey("notifications_history_json")
+    }
+
     actual fun saveProStatus(isPro: Boolean) {
         NSUserDefaults.standardUserDefaults.setBool(isPro, "is_pro_member")
     }

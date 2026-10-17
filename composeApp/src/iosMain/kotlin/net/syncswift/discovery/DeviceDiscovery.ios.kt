@@ -102,7 +102,10 @@ actual object DeviceDiscoveryManager {
     private const val SERVICE_TYPE = "_syncswift._tcp."
     private const val DEFAULT_PORT = 52424
 
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        println("[SyncSwift iOS Discovery] Coroutine error caught: ${throwable.message}")
+    }
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob() + exceptionHandler)
     private val _devices = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
     actual val devices: StateFlow<List<DiscoveredDevice>> = _devices.asStateFlow()
 
@@ -346,7 +349,7 @@ actual object DeviceDiscoveryManager {
 
         val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, error ->
             if (error == null && data != null) {
-                val jsonString = NSString.create(data, NSUTF8StringEncoding).toString()
+                val jsonString = NSString.create(data, NSUTF8StringEncoding)?.toString() ?: return@dataTaskWithRequest
                 try {
                     val deviceRegex = Regex("""\{"id":"([^"]*)","device_name":"([^"]*)","local_ip":"([^"]*)","port":(\d+),"device_type":"([^"]*)"""")
                     val matches = deviceRegex.findAll(jsonString)

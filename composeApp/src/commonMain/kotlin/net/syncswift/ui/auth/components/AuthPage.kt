@@ -89,7 +89,7 @@ fun AuthPage(
                         ChevronBackIcon(Modifier.size(16.dp), color = Cloud)
                     }
                 }
-                BrandLogo(Modifier.height(64.dp))
+                BrandLogo(Modifier.height(50.dp))
             }
             LanguageControl(language, setLanguage)
         }

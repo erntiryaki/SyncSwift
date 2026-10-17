@@ -55,21 +55,30 @@ fun EmailAuthScreen(
     var pendingEmailToSend by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
+    var isGoogleLoading by remember { mutableStateOf(false) }
+    var isAppleLoading by remember { mutableStateOf(false) }
+    var isEmailSubmitting by remember { mutableStateOf(false) }
+    val isAnyLoading = isGoogleLoading || isAppleLoading || isEmailSubmitting
+
     val launchNativeGoogleAuth = rememberGoogleAuthLauncher(
         webClientId = SyncSwiftConfig.GOOGLE_WEB_CLIENT_ID,
         onSuccess = { userData ->
+            isGoogleLoading = false
             onGoogleSignIn(userData)
         },
         onError = { err ->
+            isGoogleLoading = false
             localWarning = err
         }
     )
 
     val launchNativeAppleAuth = rememberAppleAuthLauncher(
         onSuccess = { userData ->
+            isAppleLoading = false
             onAppleSignIn(userData)
         },
         onError = { err ->
+            isAppleLoading = false
             localWarning = err
         }
     )
@@ -202,34 +211,42 @@ fun EmailAuthScreen(
         // Main Action Button: "Giriş Yap" if registered with password, else "Devam Et"
         MainPill(
             text = if (isUserRegistered) copy.signIn else copy.continueText,
+            isLoading = isEmailSubmitting,
             action = {
                 val clean = email.trim().lowercase()
+                isEmailSubmitting = true
                 scope.launch {
-                    // Check provider
-                    val provider = SupabaseNetwork.getUserProvider(clean)
-                    registeredProvider = provider
-                    if (provider == IdentityProvider.Google) {
-                        return@launch
-                    }
-
-                    if (isUserRegistered || provider == IdentityProvider.EmailPassword) {
-                        isUserRegistered = true
-                        onSignInWithPassword(clean, password)
-                    } else {
-                        // Double check in case background check hasn't completed yet
-                        val exists = SupabaseNetwork.checkUserExists(clean)
-                        if (exists) {
-                            isUserRegistered = true
-                        } else {
-                            // New user -> Show confirmation modal before sending OTP
-                            pendingEmailToSend = clean
-                            showOtpConfirmDialog = true
+                    try {
+                        // Check provider
+                        val provider = SupabaseNetwork.getUserProvider(clean)
+                        registeredProvider = provider
+                        if (provider == IdentityProvider.Google) {
+                            return@launch
                         }
+
+                        if (isUserRegistered || provider == IdentityProvider.EmailPassword) {
+                            isUserRegistered = true
+                            onSignInWithPassword(clean, password)
+                        } else {
+                            // Double check in case background check hasn't completed yet
+                            val exists = SupabaseNetwork.checkUserExists(clean)
+                            if (exists) {
+                                isUserRegistered = true
+                            } else {
+                                // New user -> Show confirmation modal before sending OTP
+                                pendingEmailToSend = clean
+                                showOtpConfirmDialog = true
+                            }
+                        }
+                    } finally {
+                        isEmailSubmitting = false
                     }
                 }
             },
-            enabled = if (isUserRegistered) (email.contains("@") && email.contains(".") && password.isNotBlank())
-                      else (email.contains("@") && email.contains(".") && registeredProvider != IdentityProvider.Google)
+            enabled = !isAnyLoading && (
+                if (isUserRegistered) (email.contains("@") && email.contains(".") && password.isNotBlank())
+                else (email.contains("@") && email.contains(".") && registeredProvider != IdentityProvider.Google)
+            )
         )
 
         OrDivider(copy.or)
@@ -242,7 +259,12 @@ fun EmailAuthScreen(
                 label = if (currentPlatform() == PlatformFlavor.Ios) "Google" else copy.google,
                 provider = IdentityProvider.Google,
                 light = true,
-                action = launchNativeGoogleAuth,
+                isLoading = isGoogleLoading,
+                enabled = !isAnyLoading,
+                action = {
+                    isGoogleLoading = true
+                    launchNativeGoogleAuth()
+                },
                 modifier = Modifier.weight(1f)
             )
             if (currentPlatform() == PlatformFlavor.Ios) {
@@ -250,7 +272,12 @@ fun EmailAuthScreen(
                     label = "Apple",
                     provider = IdentityProvider.Apple,
                     light = false,
-                    action = launchNativeAppleAuth,
+                    isLoading = isAppleLoading,
+                    enabled = !isAnyLoading,
+                    action = {
+                        isAppleLoading = true
+                        launchNativeAppleAuth()
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }

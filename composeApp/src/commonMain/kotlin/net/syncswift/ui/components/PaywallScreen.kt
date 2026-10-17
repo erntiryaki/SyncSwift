@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +49,8 @@ fun PaywallScreen(
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+
     val themeColor = Blue
     val primaryButtonBg = PillButtonBg
     val pageBackground = Night
@@ -57,10 +60,11 @@ fun PaywallScreen(
             .fillMaxSize()
             .background(pageBackground)
     ) {
-        // Scrollable content
+        // Scrollable content (blurred when Pro active modal is showing)
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (isPro) Modifier.blur(24.dp) else Modifier)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -422,13 +426,12 @@ fun PaywallScreen(
         }
 
         // Overlay if user is ALREADY PRO: Frosted layer with active dates
-        val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
         if (isPro) {
             val dates = remember { net.syncswift.subscription.SubscriptionManager.getProSubscriptionDates() }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Night.copy(alpha = 0.88f))
+                    .background(Color(0xEB060911))
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }

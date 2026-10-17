@@ -335,7 +335,13 @@ actual object ConnectionManager {
         val selfOs = "iOS"
 
         var activeSocket: Int = -1
+        var isCancelled = false
+        var pairJob: Job? = null
+
         val cancelPairing: () -> Unit = {
+            isCancelled = true
+            pairJob?.cancel()
+            OutgoingStatusManager.dismiss()
             if (activeSocket >= 0) {
                 val cancelByte = byteArrayOf(10)
                 cancelByte.usePinned { pinned ->
@@ -372,15 +378,18 @@ actual object ConnectionManager {
             onCancel = cancelPairing
         )
 
-        scope.launch(Dispatchers.Default) {
-            // 1. Try direct local TCP socket pairing
-            if (target.host.isNotBlank() && target.host != "127.0.0.1" && !target.host.startsWith("remote-")) {
+        pairJob = scope.launch(Dispatchers.Default) {
+            val isLocalDiscovered = target.isOnline && !target.isRemote && !target.host.startsWith("remote-") &&
+                    !isRemoteDevice(target) && DeviceDiscoveryManager.devices.value.any { it.host == target.host && it.isOnline && !it.isRemote }
+
+            // 1. Try direct local TCP socket pairing only if discovered on local LAN
+            if (isLocalDiscovered && target.host.isNotBlank() && target.host != "127.0.0.1") {
                 val sock = socket(AF_INET, SOCK_STREAM, 0)
                 if (sock >= 0) {
                     activeSocket = sock
                     val connected = memScoped {
                         val timeout = alloc<timeval>()
-                        timeout.tv_sec = 30
+                        timeout.tv_sec = 2
                         timeout.tv_usec = 0
                         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
                         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
@@ -427,8 +436,12 @@ actual object ConnectionManager {
                 }
             }
 
-            // 2. Cross-network FCM Relay fallback
+            if (isCancelled || !isActive) return@launch
+
+            // 2. Cross-network FCM Relay fallback or direct
             val fcmSent = sendPairRequestViaFcm(target, selfName, selfHost, selfPort, selfOs)
+            if (isCancelled || !isActive) return@launch
+
             if (fcmSent) {
                 OutgoingStatusManager.show(
                     type = OutgoingStatusType.CONNECTION,
@@ -470,13 +483,61 @@ actual object ConnectionManager {
             return
         }
         val key = deviceKey(request.senderHost, request.senderPort)
-        markDeviceConnected(key)
-        markDeviceConnected(request.senderId)
+        markDeviceConnected(key, isRemote = true)
+        markDeviceConnected(request.senderId, isRemote = true)
+
+        scope.launch(Dispatchers.Default) {
+            val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
+            if (!senderToken.isNullOrBlank()) {
+                val copy = currentAppCopy()
+                val self = DeviceDiscoveryManager.getSelfDevice()
+                val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                val selfHost = self?.host ?: ""
+                val selfPort = self?.port ?: 52424
+                val selfId = UIDevice.currentDevice.identifierForVendor?.UUIDString ?: "ios-device"
+                sendFcmNotification(
+                    token = senderToken,
+                    title = copy.connectionAccepted,
+                    body = copy.notificationPairAcceptedStatus.replace("%s", selfName),
+                    data = mapOf(
+                        "type" to "pair_accepted",
+                        "senderName" to selfName,
+                        "senderHost" to selfHost,
+                        "senderPort" to "$selfPort",
+                        "senderId" to selfId
+                    )
+                )
+            }
+        }
     }
 
     actual fun rejectPairRequest(request: IncomingPairRequest) {
         _pendingPairRequest.value = null
         request.deferredResponse.complete(false)
+
+        scope.launch(Dispatchers.Default) {
+            val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
+            if (!senderToken.isNullOrBlank()) {
+                val copy = currentAppCopy()
+                val self = DeviceDiscoveryManager.getSelfDevice()
+                val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                val selfHost = self?.host ?: ""
+                val selfPort = self?.port ?: 52424
+                val selfId = UIDevice.currentDevice.identifierForVendor?.UUIDString ?: "ios-device"
+                sendFcmNotification(
+                    token = senderToken,
+                    title = copy.connectionRejected,
+                    body = copy.notificationPairRejectedStatus.replace("%s", selfName),
+                    data = mapOf(
+                        "type" to "pair_rejected",
+                        "senderName" to selfName,
+                        "senderHost" to selfHost,
+                        "senderPort" to "$selfPort",
+                        "senderId" to selfId
+                    )
+                )
+            }
+        }
     }
 
     actual fun acceptTransferRequest(request: IncomingTransferRequest) {
@@ -627,7 +688,7 @@ actual object ConnectionManager {
                 val result = suspendCancellableCoroutine<PairResult> { cont ->
                     val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, error ->
                         if (error == null && data != null) {
-                            val body = NSString.create(data, NSUTF8StringEncoding).toString()
+                            val body = NSString.create(data, NSUTF8StringEncoding)?.toString() ?: ""
                             if (body.contains("\"code\"")) {
                                 val expiresAt = Regex(""""expires_at"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: ""
                                 val isExpired = if (expiresAt.isNotBlank()) {
@@ -653,25 +714,22 @@ actual object ConnectionManager {
                                 if (!devId.isNullOrBlank() || devHost.isNotBlank()) {
                                     val targetHost = devHost.ifBlank { "remote-$clean" }
                                     DeviceDiscoveryManager.addManualDevice(targetHost, devPort, devName, devType)
-                                    val key = deviceKey(targetHost, devPort)
-                                    markDeviceConnected(key, isRemote = true)
-                                    if (!devId.isNullOrBlank()) {
-                                        markDeviceConnected(devId, isRemote = true)
-                                    }
 
                                     if (pToken.isNotBlank()) {
                                         val self = DeviceDiscoveryManager.getSelfDevice()
                                         val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                                        val copy = currentAppCopy()
                                         scope.launch(Dispatchers.Default) {
                                             sendFcmNotification(
                                                 token = pToken,
-                                                title = "SyncSwift Uzaktan Bağlantı",
-                                                body = "$selfName cihazınızla eşleşti.",
+                                                title = copy.notificationPairRequestTitle,
+                                                body = copy.notificationPairRequestBody.replace("%s", selfName),
                                                 data = mapOf(
                                                     "type" to "pair_request",
                                                     "senderName" to selfName,
                                                     "senderHost" to (self?.host ?: ""),
                                                     "senderPort" to "${self?.port ?: 52424}",
+                                                    "senderId" to (self?.id ?: UIDevice.currentDevice.identifierForVendor?.UUIDString ?: ""),
                                                     "senderOs" to "iOS"
                                                 )
                                             )
@@ -688,7 +746,14 @@ actual object ConnectionManager {
                                         NSURLSession.sharedSession.dataTaskWithRequest(delReq).resume()
                                     }
 
-                                    if (cont.isActive) cont.resume(PairResult.ACCEPTED) {}
+                                    OutgoingStatusManager.show(
+                                        type = OutgoingStatusType.CONNECTION,
+                                        deviceName = devName,
+                                        step = OutgoingStep.WAITING_APPROVAL,
+                                        message = currentAppCopy().transferNotificationSentWaiting
+                                    )
+
+                                    if (cont.isActive) cont.resume(PairResult.PENDING_APPROVAL) {}
                                     return@dataTaskWithRequest
                                 }
                             }

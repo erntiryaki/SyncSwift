@@ -23,23 +23,30 @@ import net.syncswift.ui.theme.*
 
 import androidx.compose.foundation.BorderStroke
 
+import androidx.compose.material3.CircularProgressIndicator
+
 @Composable
 fun SocialPill(
     label: String,
     provider: IdentityProvider,
     light: Boolean,
     action: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
+    enabled: Boolean = true
 ) {
     Button(
-        onClick = action,
+        onClick = { if (enabled && !isLoading) action() },
+        enabled = enabled && !isLoading,
         modifier = modifier.height(54.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
         shape = RoundedCornerShape(27.dp),
         border = if (light) null else BorderStroke(1.dp, InputBorder.copy(alpha = 0.45f)),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (light) Cloud else InputBg,
-            contentColor = if (light) DeepInk else Cloud
+            contentColor = if (light) DeepInk else Cloud,
+            disabledContainerColor = (if (light) Cloud else InputBg).copy(alpha = 0.65f),
+            disabledContentColor = (if (light) DeepInk else Cloud).copy(alpha = 0.65f)
         ),
         elevation = null
     ) {
@@ -48,17 +55,25 @@ fun SocialPill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            SocialProviderIcon(provider, Modifier.size(24.dp), if (light) DeepInk else Cloud)
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = label,
-                fontWeight = FontWeight.Bold,
-                fontFamily = platformFontFamily(),
-                fontSize = 16.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.2.dp,
+                    color = if (light) DeepInk else Cloud
+                )
+            } else {
+                SocialProviderIcon(provider, Modifier.size(24.dp), if (light) DeepInk else Cloud)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = label,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = platformFontFamily(),
+                    fontSize = 16.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

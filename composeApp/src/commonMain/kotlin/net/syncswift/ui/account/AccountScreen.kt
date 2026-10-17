@@ -38,7 +38,8 @@ fun AccountScreen(
     onLogout: () -> Unit,
     onSignInRequested: () -> Unit = {},
     onOpenConnectedDevices: () -> Unit = {},
-    onOpenConnectDesktop: () -> Unit = {}
+    onOpenConnectDesktop: () -> Unit = {},
+    onOpenNotifications: () -> Unit = {}
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showProModal by remember { mutableStateOf(false) }
@@ -351,7 +352,7 @@ fun AccountScreen(
                 title = copy.notificationsMenu,
                 subtitle = copy.notificationsMenuDesc,
                 icon = { BellIcon(Modifier.size(20.dp), color = Mist) },
-                onClick = { showNativeToast(copy.featureUnderDev) }
+                onClick = onOpenNotifications
             )
             HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
 
@@ -371,26 +372,102 @@ fun AccountScreen(
                 icon = { InfoIcon(Modifier.size(20.dp), color = Mist) },
                 onClick = { showAboutModal = true }
             )
-            HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+            Spacer(Modifier.height(14.dp))
 
             if (isLocal) {
-                // Giriş Yap (Yerel kullanıcı için autha yönlendirme)
-                BoxlessMenuItem(
-                    title = copy.signIn,
-                    subtitle = copy.localSignInCta,
-                    icon = { LoginIcon(Modifier.size(20.dp), color = Blue) },
-                    onClick = onSignInRequested,
-                    titleColor = Blue
-                )
+                // Giriş Yap Pill Frame
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .clickable(onClick = onSignInRequested),
+                    shape = RoundedCornerShape(22.dp),
+                    color = Blue.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, Blue.copy(alpha = 0.40f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Blue.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoginIcon(Modifier.size(20.dp), color = Blue)
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = copy.signIn,
+                                color = Cloud,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.2).sp
+                            )
+                            Text(
+                                text = copy.localSignInCta,
+                                color = Mist,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        ChevronRightIcon(Modifier.size(15.dp), color = Blue.copy(alpha = 0.8f))
+                    }
+                }
             } else {
-                // Log Out (Boxless Row)
-                BoxlessMenuItem(
-                    title = copy.logout,
-                    subtitle = copy.logoutConfirmDesc,
-                    icon = { LogoutIcon(Modifier.size(20.dp), color = ErrorRed) },
-                    onClick = { showLogoutDialog = true },
-                    titleColor = ErrorRed
-                )
+                // Çıkış Yap Pill Frame
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .clickable { showLogoutDialog = true },
+                    shape = RoundedCornerShape(22.dp),
+                    color = ErrorRed.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.38f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(ErrorRed.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LogoutIcon(Modifier.size(20.dp), color = ErrorRed)
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = copy.logout,
+                                color = ErrorRed,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.2).sp
+                            )
+                            Text(
+                                text = copy.logoutConfirmDesc,
+                                color = Mist,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        ChevronRightIcon(Modifier.size(15.dp), color = ErrorRed.copy(alpha = 0.8f))
+                    }
+                }
             }
         }
 
@@ -799,13 +876,14 @@ private fun BoxlessMenuItem(
                 text = title,
                 color = titleColor,
                 fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.2).sp
             )
             Text(
                 text = subtitle,
                 color = Mist,
                 fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(top = 3.dp),
                 lineHeight = 17.sp
             )

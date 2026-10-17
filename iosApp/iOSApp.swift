@@ -7,6 +7,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
+        // Prevent kernel SIGPIPE signal crash when sockets disconnect or reset
+        signal(SIGPIPE, SIG_IGN)
+
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound, .provisional]) { granted, error in
             if granted {
@@ -50,6 +53,16 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         options: [UIApplication.OpenURLOptionsKey : Any] = [:]
     ) -> Bool {
         return true
+    }
+
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        print("[SyncSwift iOS] applicationDidEnterBackground - safely pausing mDNS")
+        Platform_iosKt.onIosAppDidEnterBackground()
+    }
+
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        print("[SyncSwift iOS] applicationWillEnterForeground - resuming mDNS")
+        Platform_iosKt.onIosAppWillEnterForeground()
     }
 
     func application(

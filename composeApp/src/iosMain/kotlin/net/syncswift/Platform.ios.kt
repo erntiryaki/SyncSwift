@@ -71,6 +71,20 @@ fun getSavedIosPushToken(): String? {
     return platform.Foundation.NSUserDefaults.standardUserDefaults.stringForKey("syncswift_push_token")
 }
 
+fun onIosAppDidEnterBackground() {
+    println("[SyncSwift iOS] App entered background - safely stopping discovery")
+    try {
+        net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
+    } catch (_: Throwable) {}
+}
+
+fun onIosAppWillEnterForeground() {
+    println("[SyncSwift iOS] App will enter foreground - resuming discovery")
+    try {
+        net.syncswift.discovery.DeviceDiscoveryManager.startDiscovery()
+    } catch (_: Throwable) {}
+}
+
 private fun findRawInMap(map: Map<*, *>, targetKey: String): Any? {
     for ((k, v) in map) {
         if (k?.toString().equals(targetKey, ignoreCase = true)) {
@@ -120,15 +134,62 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             net.syncswift.connection.ConnectionManager.cancelIncomingPairRequest()
             showNativeToast(copy.requestCancelledBySender)
         }
+        "pair_accepted" -> {
+            val senderId = extractNotificationField(userInfo, "senderId") ?: ""
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            if (senderHost.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceConnected("$senderHost:$senderPort", isRemote = true)
+            }
+            if (senderId.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(senderId, isRemote = true)
+            }
+            net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.notificationPairAcceptedStatus.replace("%s", senderName))
+            net.syncswift.notification.NotificationHistoryManager.addNotification(
+                title = copy.connectionAccepted,
+                body = copy.notificationPairAcceptedStatus.replace("%s", senderName),
+                type = "pair",
+                senderName = senderName
+            )
+        }
+        "pair_rejected" -> {
+            val senderId = extractNotificationField(userInfo, "senderId") ?: ""
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            if (senderHost.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+            }
+            if (senderId.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderId)
+            }
+            net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
+            net.syncswift.notification.NotificationHistoryManager.addNotification(
+                title = copy.connectionRejected,
+                body = copy.notificationPairRejectedStatus.replace("%s", senderName),
+                type = "pair",
+                senderName = senderName
+            )
+        }
         "file_cancelled" -> {
             val transferId = extractNotificationField(userInfo, "transferId")
             net.syncswift.connection.ConnectionManager.cancelIncomingTransferRequest(transferId)
             showNativeToast(copy.transferCancelledBySender)
         }
         "clipboard_sync" -> {
-            val clipText = extractNotificationField(userInfo, "text") ?: ""
+            val clipText = extractNotificationField(userInfo, "text")
+                ?: extractNotificationField(userInfo, "content")
+                ?: extractNotificationField(userInfo, "body") ?: ""
+            val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
             if (clipText.isNotBlank()) {
                 net.syncswift.transfer.TransferEngine.applyIncomingClipboard(clipText)
+                net.syncswift.notification.NotificationHistoryManager.addNotification(
+                    title = copy.syncClipboardAction,
+                    body = copy.clipboardSynced.replace("%s", clipText.take(50)),
+                    type = "clipboard",
+                    senderName = senderName
+                )
             }
         }
         "pair_request" -> {
@@ -146,6 +207,12 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 senderOsType = senderOs
             )
             net.syncswift.connection.ConnectionManager.dispatchIncomingPairRequest(request)
+            net.syncswift.notification.NotificationHistoryManager.addNotification(
+                title = copy.notificationPairRequestTitle,
+                body = copy.notificationPairRequestBody.replace("%s", senderName),
+                type = "pair",
+                senderName = senderName
+            )
         }
         "file_request", "file_transfer" -> {
             val transferId = extractNotificationField(userInfo, "transferId") ?: ""
@@ -170,6 +237,16 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 isRemote = isRemote
             )
             net.syncswift.connection.ConnectionManager.dispatchIncomingTransferRequest(request)
+            val sizeStr = if (fileSize > 0) " (${net.syncswift.transfer.formatBytes(fileSize)})" else ""
+            net.syncswift.notification.NotificationHistoryManager.addNotification(
+                title = copy.notificationFileRequestTitle,
+                body = copy.notificationFileRequestBody
+                    .replace("%s", senderName)
+                    .replace("%s", fileName)
+                    .replace("(%s)", sizeStr),
+                type = "file",
+                senderName = senderName
+            )
         }
     }
 }

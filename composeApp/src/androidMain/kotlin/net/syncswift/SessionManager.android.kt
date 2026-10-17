@@ -170,6 +170,14 @@ actual object SessionManager {
         return getPrefs()?.getString("transfers_history_json", null)
     }
 
+    actual fun saveNotificationsJson(json: String) {
+        getPrefs()?.edit()?.putString("notifications_history_json", json)?.apply()
+    }
+
+    actual fun getSavedNotificationsJson(): String? {
+        return getPrefs()?.getString("notifications_history_json", null)
+    }
+
     actual fun saveProStatus(isPro: Boolean) {
         getPrefs()?.edit()?.putBoolean("is_pro_member", isPro)?.apply()
     }

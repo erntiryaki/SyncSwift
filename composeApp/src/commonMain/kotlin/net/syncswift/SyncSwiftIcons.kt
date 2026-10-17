@@ -1455,3 +1455,65 @@ fun RefreshIcon(modifier: Modifier = Modifier, color: Color = Cloud) = Canvas(mo
     }
     drawPath(arrow, color = color, style = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
 }
+
+@Composable
+fun NotificationBellIcon(modifier: Modifier = Modifier, color: Color = Cloud) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.08f
+    val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+    // Bell dome & flare
+    val bellPath = Path().apply {
+        moveTo(w * 0.5f, h * 0.18f)
+        cubicTo(w * 0.35f, h * 0.18f, w * 0.28f, h * 0.35f, w * 0.28f, h * 0.55f)
+        cubicTo(w * 0.28f, h * 0.68f, w * 0.20f, h * 0.74f, w * 0.20f, h * 0.76f)
+        lineTo(w * 0.80f, h * 0.76f)
+        cubicTo(w * 0.80f, h * 0.74f, w * 0.72f, h * 0.68f, w * 0.72f, h * 0.55f)
+        cubicTo(w * 0.72f, h * 0.35f, w * 0.65f, h * 0.18f, w * 0.50f, h * 0.18f)
+    }
+    drawPath(bellPath, color = color, style = s)
+
+    // Bell top small loop
+    drawArc(
+        color = color,
+        startAngle = 180f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(w * 0.44f, h * 0.10f),
+        size = Size(w * 0.12f, h * 0.10f),
+        style = s
+    )
+
+    // Clapper at bottom
+    drawArc(
+        color = color,
+        startAngle = 0f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(w * 0.42f, h * 0.76f),
+        size = Size(w * 0.16f, h * 0.12f),
+        style = s
+    )
+}
+
+@Composable
+fun WarningTriangleIcon(modifier: Modifier = Modifier, color: Color = ErrorRed) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.085f
+    val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+    val tri = Path().apply {
+        moveTo(w * 0.5f, h * 0.16f)
+        lineTo(w * 0.86f, h * 0.82f)
+        lineTo(w * 0.14f, h * 0.82f)
+        close()
+    }
+    drawPath(tri, color = color, style = s)
+    // Exclamation point stem
+    drawLine(color, Offset(w * 0.5f, h * 0.40f), Offset(w * 0.5f, h * 0.60f), strokeWidth = sw, cap = StrokeCap.Round)
+    // Dot
+    drawCircle(color, radius = sw * 0.7f, center = Offset(w * 0.5f, h * 0.72f))
+}
+

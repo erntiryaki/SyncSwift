@@ -102,7 +102,7 @@ fun SettingsScreen(
                 text = copy.settingsTitle,
                 color = Cloud,
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.4).sp
             )
         }
@@ -132,7 +132,7 @@ fun SettingsScreen(
                     text = copy.languageSelection,
                     color = Cloud,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.2).sp
                 )
                 Text(
@@ -186,7 +186,7 @@ fun SettingsScreen(
                     text = copy.themeSelection,
                     color = Cloud,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.2).sp
                 )
                 Text(
@@ -287,7 +287,7 @@ fun SettingsScreen(
                             text = copy.changePassword,
                             color = Cloud,
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             letterSpacing = (-0.2).sp
                         )
                         Text(
@@ -451,7 +451,9 @@ fun SettingsScreen(
                 )
             }
         } else if (!isLocalUser) {
-            // Google authenticated note (kutusuz)
+            // OAuth authenticated note (Apple or Google)
+            val isApple = provider == IdentityProvider.Apple
+            val noteText = if (isApple) copy.appleManagedNote else copy.googleManagedNote
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -465,11 +467,15 @@ fun SettingsScreen(
                         .background(InputBg.copy(alpha = 0.7f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    ShieldVectorIcon(Modifier.size(20.dp), color = Blue)
+                    if (isApple) {
+                        SocialProviderIcon(IdentityProvider.Apple, Modifier.size(22.dp), tint = Cloud)
+                    } else {
+                        ShieldVectorIcon(Modifier.size(20.dp), color = Blue)
+                    }
                 }
                 Spacer(Modifier.width(16.dp))
                 Text(
-                    text = copy.googleManagedNote,
+                    text = noteText,
                     color = Mist,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
@@ -505,7 +511,7 @@ fun SettingsScreen(
                             text = copy.deleteAccount,
                             color = if (isLocalUser) Cloud.copy(alpha = 0.45f) else ErrorRed,
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             letterSpacing = (-0.2).sp
                         )
                         if (isLocalUser) {

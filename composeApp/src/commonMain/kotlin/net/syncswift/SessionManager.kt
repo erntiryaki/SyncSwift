@@ -42,6 +42,8 @@ expect object SessionManager {
     fun getSavedManualDevicesJson(): String?
     fun saveTransfersJson(json: String)
     fun getSavedTransfersJson(): String?
+    fun saveNotificationsJson(json: String)
+    fun getSavedNotificationsJson(): String?
 
     fun saveProStatus(isPro: Boolean)
     fun getSavedProStatus(): Boolean

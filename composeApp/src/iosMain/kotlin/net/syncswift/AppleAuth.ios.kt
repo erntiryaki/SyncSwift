@@ -33,7 +33,7 @@ private class AppleSignInHandler(
         if (credential != null) {
             val userIdentifier = credential.user
             val idTokenData = credential.identityToken
-            val idToken = idTokenData?.let { NSString.create(it, NSUTF8StringEncoding).toString() } ?: userIdentifier
+            val idToken = idTokenData?.let { NSString.create(it, NSUTF8StringEncoding)?.toString() } ?: userIdentifier
             val jwtEmail = decodeAppleJwtEmail(idToken)
             val defaults = platform.Foundation.NSUserDefaults.standardUserDefaults
 
@@ -46,16 +46,59 @@ private class AppleSignInHandler(
                 defaults.setObject(email, "apple_email_$userIdentifier")
             }
 
-            val givenName = credential.fullName?.givenName?.ifBlank { null }
+            var givenName = credential.fullName?.givenName?.ifBlank { null }
+                ?: credential.fullName?.nickname?.ifBlank { null }
                 ?: defaults.stringForKey("apple_given_name_$userIdentifier")?.ifBlank { null }
-            val familyName = credential.fullName?.familyName?.ifBlank { null }
-                ?: defaults.stringForKey("apple_family_name_$userIdentifier")?.ifBlank { null }
+                ?: defaults.stringForKey("apple_given_name")?.ifBlank { null }
+                ?: SessionManager.getUserFirstName().ifBlank { null }
 
-            if (!credential.fullName?.givenName.isNullOrBlank()) {
-                defaults.setObject(credential.fullName!!.givenName, "apple_given_name_$userIdentifier")
+            var familyName = credential.fullName?.familyName?.ifBlank { null }
+                ?: credential.fullName?.middleName?.ifBlank { null }
+                ?: defaults.stringForKey("apple_family_name_$userIdentifier")?.ifBlank { null }
+                ?: defaults.stringForKey("apple_family_name")?.ifBlank { null }
+                ?: SessionManager.getUserLastName().ifBlank { null }
+
+            // Fallback 1: Extract from device name (e.g. "Eren's iPhone", "Eren Tiryaki's iPhone", "Eren'in iPhone'u")
+            if (givenName.isNullOrBlank() && familyName.isNullOrBlank()) {
+                try {
+                    val devName = platform.UIKit.UIDevice.currentDevice.name
+                    val cleaned = devName
+                        .replace(Regex("""(?i)['’](?:s|in|nin|un|nun)\s+(?:iPhone|iPad|Mac|Apple\s*Watch|iPod).*"""), "")
+                        .replace(Regex("""(?i)\s+(?:iPhone|iPad|Mac|device).*"""), "")
+                        .trim()
+                    if (cleaned.isNotBlank() && !cleaned.equals("iPhone", ignoreCase = true) && !cleaned.equals("iPad", ignoreCase = true)) {
+                        val parts = cleaned.split(" ").filter { it.isNotBlank() }
+                        if (parts.size >= 2) {
+                            givenName = parts.first()
+                            familyName = parts.drop(1).joinToString(" ")
+                        } else if (parts.size == 1) {
+                            givenName = parts.first()
+                            familyName = ""
+                        }
+                    }
+                } catch (_: Exception) {}
             }
-            if (!credential.fullName?.familyName.isNullOrBlank()) {
-                defaults.setObject(credential.fullName!!.familyName, "apple_family_name_$userIdentifier")
+
+            // Fallback 2: Extract from email prefix if not private relay
+            if (givenName.isNullOrBlank() && familyName.isNullOrBlank() && email.isNotBlank() && !email.contains("@privaterelay") && !email.endsWith("@apple.id")) {
+                val prefix = email.substringBefore("@")
+                val parts = prefix.replace(".", " ").replace("_", " ").replace("-", " ").split(" ").filter { it.isNotBlank() }
+                if (parts.size >= 2) {
+                    givenName = parts.first().replaceFirstChar { it.uppercase() }
+                    familyName = parts.drop(1).joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                } else if (parts.size == 1) {
+                    givenName = parts.first().replaceFirstChar { it.uppercase() }
+                    familyName = ""
+                }
+            }
+
+            if (!givenName.isNullOrBlank()) {
+                defaults.setObject(givenName, "apple_given_name_$userIdentifier")
+                defaults.setObject(givenName, "apple_given_name")
+            }
+            if (!familyName.isNullOrBlank()) {
+                defaults.setObject(familyName, "apple_family_name_$userIdentifier")
+                defaults.setObject(familyName, "apple_family_name")
             }
 
             onSuccess(

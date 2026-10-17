@@ -167,13 +167,19 @@ actual object ConnectionManager {
                 val copy = currentAppCopy()
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                val selfHost = self?.host ?: ""
+                val selfPort = self?.port ?: 52424
+                val selfId = java.util.UUID.nameUUIDFromBytes("${Build.MANUFACTURER}_${Build.MODEL}_${Build.ID}".toByteArray()).toString()
                 sendFcmNotification(
                     token = senderToken,
                     title = copy.connectionRejected,
                     body = copy.notificationPairRejectedStatus.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_rejected",
-                        "senderName" to selfName
+                        "senderName" to selfName,
+                        "senderHost" to selfHost,
+                        "senderPort" to "$selfPort",
+                        "senderId" to selfId
                     )
                 )
             }
@@ -385,20 +391,15 @@ actual object ConnectionManager {
                             osType = deviceType
                         )
 
-                        // Mark connected as remote
-                        markDeviceConnected(deviceId, isRemote = true)
-                        if (host.isNotBlank()) {
-                            markDeviceConnected(deviceKey(host, port), isRemote = true)
-                        }
-
-                        // Send FCM pair request to notify the target
+                        // Send FCM pair request to notify the target for approval
                         if (pushToken.isNotBlank()) {
                             val self = DeviceDiscoveryManager.getSelfDevice()
-                            val selfName = self?.name ?: Build.MODEL
+                            val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                            val copy = currentAppCopy()
                             sendFcmNotification(
                                 token = pushToken,
-                                title = "SyncSwift Uzaktan Bağlantı",
-                                body = "$selfName cihazınızla uzaktan eşleşti.",
+                                title = copy.notificationPairRequestTitle,
+                                body = copy.notificationPairRequestBody.replace("%s", selfName),
                                 data = mapOf(
                                     "type" to "pair_request",
                                     "senderId" to (self?.id ?: ""),
@@ -422,8 +423,15 @@ actual object ConnectionManager {
                             } catch (_: Exception) {}
                         }
 
+                        OutgoingStatusManager.show(
+                            type = OutgoingStatusType.CONNECTION,
+                            deviceName = deviceName,
+                            step = OutgoingStep.WAITING_APPROVAL,
+                            message = currentAppCopy().transferNotificationSentWaiting
+                        )
+
                         withContext(Dispatchers.Main) {
-                            onResult(PairResult.ACCEPTED)
+                            onResult(PairResult.PENDING_APPROVAL)
                         }
                         return@launch
                     }
@@ -449,9 +457,13 @@ actual object ConnectionManager {
         val selfOs = self?.osType ?: "Android"
 
         var activeSocket: Socket? = null
+        var isCancelled = false
         var pairJob: Job? = null
 
         val cancelPairing: () -> Unit = {
+            isCancelled = true
+            pairJob?.cancel()
+            OutgoingStatusManager.dismiss()
             try {
                 activeSocket?.let { s ->
                     try {
@@ -462,7 +474,7 @@ actual object ConnectionManager {
                     s.close()
                 }
             } catch (_: Exception) {}
-            pairJob?.cancel()
+            activeSocket = null
 
             // If target has push token, send pair_cancelled via FCM so peer dialog/notification closes instantly
             scope.launch {
@@ -494,12 +506,15 @@ actual object ConnectionManager {
         )
 
         pairJob = scope.launch {
-            // 1. Direct TCP handshake if valid IP
-            if (target.host.isNotBlank() && !target.host.startsWith("remote-")) {
+            val isLocalDiscovered = target.isOnline && !target.isRemote && !target.host.startsWith("remote-") &&
+                    !isRemoteDevice(target) && DeviceDiscoveryManager.devices.value.any { it.host == target.host && it.isOnline && !it.isRemote }
+
+            // 1. Direct TCP handshake if local discovered
+            if (isLocalDiscovered && target.host.isNotBlank()) {
                 try {
                     val socket = Socket()
                     activeSocket = socket
-                    socket.connect(InetSocketAddress(target.host, target.port), 3000)
+                    socket.connect(InetSocketAddress(target.host, target.port), 1200)
                     socket.soTimeout = 25000
                     socket.use { s ->
                         val out = DataOutputStream(s.getOutputStream())
@@ -538,11 +553,15 @@ actual object ConnectionManager {
                 }
             }
 
-            // 2. Fallback to FCM Wake-up Push Notification (App closed / device sleeping)
+            if (isCancelled || !isActive) return@launch
+
+            // 2. Fallback or Direct to FCM Wake-up Push Notification
             var token = target.pushToken
             if (token.isNullOrBlank() && target.host.isNotBlank()) {
                 token = queryPushTokenFromSupabase(target.host, target.name)
             }
+            if (isCancelled || !isActive) return@launch
+
             val currentCopy = currentAppCopy()
             if (!token.isNullOrBlank()) {
                 Log.d(TAG, "Sending FCM wake-up pairing request to token: $token")
@@ -559,6 +578,8 @@ actual object ConnectionManager {
                         "senderOs" to selfOs
                     )
                 )
+                if (isCancelled || !isActive) return@launch
+
                 if (fcmSent) {
                     OutgoingStatusManager.show(
                         type = OutgoingStatusType.CONNECTION,
@@ -574,6 +595,7 @@ actual object ConnectionManager {
                 }
             }
 
+            if (isCancelled || !isActive) return@launch
             OutgoingStatusManager.fail(currentCopy.deviceDidNotRespond)
             withContext(Dispatchers.Main) {
                 onResult(PairResult.UNAVAILABLE)

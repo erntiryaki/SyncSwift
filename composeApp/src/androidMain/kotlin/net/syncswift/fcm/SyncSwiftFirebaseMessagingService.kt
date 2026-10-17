@@ -74,7 +74,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 return
             }
             "clipboard_sync" -> {
-                val clipText = data["text"] ?: ""
+                val clipText = data["text"] ?: data["content"] ?: data["body"] ?: remoteMessage.notification?.body ?: ""
                 if (clipText.isNotBlank()) {
                     net.syncswift.transfer.TransferEngine.applyReceivedClipboard(clipText, copy)
                 }
@@ -130,6 +130,15 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.notificationPairAcceptedStatus.replace("%s", senderName))
             }
             "pair_rejected" -> {
+                val senderId = data["senderId"] ?: ""
+                val senderHost = data["senderHost"] ?: ""
+                val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
+                if (senderHost.isNotBlank()) {
+                    ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+                }
+                if (senderId.isNotBlank()) {
+                    ConnectionManager.markDeviceDisconnected(senderId)
+                }
                 net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
             }
             "file_rejected" -> {
@@ -180,8 +189,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
             }
             "clipboard_sync" -> {
                 title = copy.syncClipboardAction
-                val clipText = data["text"] ?: ""
-                body = copy.clipboardSynced.replace("%s", clipText.take(30))
+                val clipText = data["text"] ?: data["content"] ?: data["body"] ?: remoteMessage.notification?.body ?: ""
+                body = copy.clipboardSynced.replace("%s", clipText.take(50))
                 notificationId = (System.currentTimeMillis() % 100000).toInt()
             }
             else -> {
@@ -190,6 +199,14 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 notificationId = (System.currentTimeMillis() % 100000).toInt()
             }
         }
+
+        // Record to in-app Notification History
+        net.syncswift.notification.NotificationHistoryManager.addNotification(
+            title = title,
+            body = body,
+            type = type,
+            senderName = senderName
+        )
 
         // Show native Android system notification with localized actions
         showSystemNotification(title, body, data, notificationId)

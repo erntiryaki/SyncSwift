@@ -187,6 +187,7 @@ fun ConnectedDevicesScreen(
     val scanQr = rememberQrScanner(
         onSuccess = { scannedText ->
             showScanModal = false
+            showQrModal = false
             processConnectionUrl(scannedText)
         },
         onError = { err ->
@@ -203,6 +204,7 @@ fun ConnectedDevicesScreen(
     val pickQrImage = rememberQrImagePicker(
         onSuccess = { scannedText ->
             showScanModal = false
+            showQrModal = false
             processConnectionUrl(scannedText)
         },
         onError = { err ->
@@ -282,7 +284,7 @@ fun ConnectedDevicesScreen(
                     text = copy.connectedDevicesTitle,
                     color = Cloud,
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-0.4).sp
                 )
             }
@@ -844,7 +846,10 @@ fun ConnectedDevicesScreen(
                             .fillMaxWidth()
                             .height(52.dp)
                             .clip(RoundedCornerShape(26.dp))
-                            .clickable { scanQr() },
+                            .clickable {
+                                showScanModal = false
+                                scanQr()
+                            },
                         shape = RoundedCornerShape(26.dp),
                         color = PillButtonBg
                     ) {
@@ -872,7 +877,10 @@ fun ConnectedDevicesScreen(
                             .fillMaxWidth()
                             .height(52.dp)
                             .clip(RoundedCornerShape(26.dp))
-                            .clickable { pickQrImage() },
+                            .clickable {
+                                showScanModal = false
+                                pickQrImage()
+                            },
                         shape = RoundedCornerShape(26.dp),
                         color = InputBg,
                         border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))

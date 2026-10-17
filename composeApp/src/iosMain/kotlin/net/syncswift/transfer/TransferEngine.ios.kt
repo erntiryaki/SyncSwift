@@ -48,7 +48,10 @@ actual object TransferEngine {
     private const val RESP_REJECTED: Byte = 8
     private const val TYPE_REQUEST_FILE_DOWNLOAD: Byte = 9
 
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        println("[SyncSwift iOS Transfer] Coroutine error caught: ${throwable.message}")
+    }
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob() + exceptionHandler)
     private val _transfers = MutableStateFlow<List<TransferItem>>(emptyList())
     actual val transfers: StateFlow<List<TransferItem>> = _transfers.asStateFlow()
 
@@ -70,6 +73,10 @@ actual object TransferEngine {
     }
 
     private fun updateTransferProgress(id: String, bytes: Long, status: TransferStatus, localFilePath: String? = null) {
+        if (status == TransferStatus.CANCELLED) {
+            _transfers.value = _transfers.value.filter { it.id != id }
+            return
+        }
         _transfers.value = _transfers.value.map {
             if (it.id == id) {
                 it.copy(bytesTransferred = bytes, status = status, localFilePath = localFilePath ?: it.localFilePath)
@@ -501,7 +508,20 @@ actual object TransferEngine {
         recordTransfer(item)
 
         var activeSocket: Int = -1
+        var isCancelled = false
+        var transferJob: Job? = null
+
+        val cleanTarget = cleanDeviceDisplayName(targetDeviceName)
+        val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+            cleanDeviceDisplayName(it.name) == cleanTarget
+        }
+        val isLocalDiscovered = targetDev != null && targetDev.isOnline && !targetDev.isRemote &&
+                !targetHost.startsWith("remote-") && !ConnectionManager.isRemoteDevice(targetDev)
+
         val cancelTransfer: () -> Unit = {
+            isCancelled = true
+            transferJob?.cancel()
+            OutgoingStatusManager.dismiss()
             if (activeSocket >= 0) {
                 val cancelByte = byteArrayOf(10)
                 cancelByte.usePinned { pinned ->
@@ -512,9 +532,6 @@ actual object TransferEngine {
             }
             updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
             scope.launch {
-                val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
-                    net.syncswift.discovery.cleanDeviceDisplayName(it.name) == targetDeviceName
-                }
                 var tok = targetDev?.pushToken
                 if (tok.isNullOrBlank() && targetHost.isNotBlank()) {
                     tok = ConnectionManager.queryPushTokenFromSupabase(targetHost, targetDeviceName)
@@ -544,18 +561,18 @@ actual object TransferEngine {
             onCancel = cancelTransfer
         )
 
-        scope.launch(Dispatchers.Default) {
+        transferJob = scope.launch(Dispatchers.Default) {
             val self = DeviceDiscoveryManager.getSelfDevice()
             val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
 
-            // 1. Direct Socket Transfer
-            if (targetHost.isNotBlank() && targetHost != "127.0.0.1" && !targetHost.startsWith("remote-")) {
+            // 1. Direct Socket Transfer only if local discovered
+            if (isLocalDiscovered && targetHost.isNotBlank() && targetHost != "127.0.0.1") {
                 val sock = socket(AF_INET, SOCK_STREAM, 0)
                 if (sock >= 0) {
                     activeSocket = sock
                     val directSuccess = memScoped {
                         val timeout = alloc<timeval>()
-                        timeout.tv_sec = 40
+                        timeout.tv_sec = 2
                         timeout.tv_usec = 0
                         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
                         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
@@ -668,7 +685,9 @@ actual object TransferEngine {
                 }
             }
 
-            // 2. Direct socket failed -> Remote Transfer via Supabase Storage
+            if (isCancelled || !isActive) return@launch
+
+            // 2. Direct socket failed or remote -> Remote Transfer via Supabase Storage
             if (!net.syncswift.subscription.SubscriptionManager.canRemoteTransfer()) {
                 updateTransferProgress(transferId, 0, TransferStatus.FAILED)
                 OutgoingStatusManager.fail(copy.remoteTransferProRequired)
@@ -690,7 +709,9 @@ actual object TransferEngine {
                 mimeType = mimeType,
                 transferId = transferId,
                 onSuccess = onSuccess,
-                onError = onError
+                onError = onError,
+                isCancelledCheck = { isCancelled || !isActive },
+                cancelAction = cancelTransfer
             )
         }
     }
@@ -703,7 +724,9 @@ actual object TransferEngine {
         mimeType: String,
         transferId: String,
         onSuccess: () -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        isCancelledCheck: () -> Boolean = { false },
+        cancelAction: (() -> Unit)? = null
     ) {
         val copy = currentAppCopy()
         OutgoingStatusManager.updateProgress(
@@ -716,6 +739,8 @@ actual object TransferEngine {
         val token = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
 
         val downloadUrl = uploadToSupabaseStorage(transferId, fileName, fileBytes, mimeType)
+        if (isCancelledCheck()) return
+
         if (downloadUrl == null) {
             updateTransferProgress(transferId, 0, TransferStatus.FAILED)
             OutgoingStatusManager.fail(copy.transferFailed)
@@ -725,6 +750,8 @@ actual object TransferEngine {
             }
             return
         }
+
+        if (isCancelledCheck()) return
 
         if (!token.isNullOrBlank()) {
             val self = DeviceDiscoveryManager.getSelfDevice()
@@ -743,17 +770,27 @@ actual object TransferEngine {
                     "downloadUrl" to downloadUrl
                 )
             )
+            if (isCancelledCheck()) return
+
             if (fcmSent) {
-                updateTransferProgress(transferId, fileBytes.size.toLong(), TransferStatus.COMPLETED)
-                OutgoingStatusManager.completeSuccess(copy.remoteTransferUploaded)
+                OutgoingStatusManager.show(
+                    type = OutgoingStatusType.FILE,
+                    deviceName = targetDeviceName,
+                    fileName = fileName,
+                    totalBytes = fileBytes.size.toLong(),
+                    step = OutgoingStep.WAITING_APPROVAL,
+                    message = copy.transferNotificationSentWaiting,
+                    onCancel = cancelAction
+                )
                 withContext(Dispatchers.Main) {
-                    showNativeToast(copy.remoteTransferUploaded)
+                    showNativeToast(copy.transferNotificationSentWaiting)
                     onSuccess()
                 }
                 return
             }
         }
 
+        if (isCancelledCheck()) return
         updateTransferProgress(transferId, 0, TransferStatus.FAILED)
         OutgoingStatusManager.fail(copy.deviceNotAvailable)
         withContext(Dispatchers.Main) {
@@ -823,8 +860,36 @@ actual object TransferEngine {
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        scope.launch {
-            val transferId = NSUUID().UUIDString
+        val transferId = NSUUID().UUIDString
+        val copy = currentAppCopy()
+        var isCancelled = false
+        var clipJob: Job? = null
+
+        val cleanTarget = cleanDeviceDisplayName(targetDeviceName)
+        val targetDev = DeviceDiscoveryManager.devices.value.firstOrNull {
+            cleanDeviceDisplayName(it.name) == cleanTarget
+        }
+        val isLocalDiscovered = targetDev != null && targetDev.isOnline && !targetDev.isRemote &&
+                !targetHost.startsWith("remote-") && !ConnectionManager.isRemoteDevice(targetDev)
+
+        val cancelClipboard: () -> Unit = {
+            isCancelled = true
+            clipJob?.cancel()
+            updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+            OutgoingStatusManager.dismiss()
+        }
+
+        OutgoingStatusManager.show(
+            type = OutgoingStatusType.FILE,
+            deviceName = targetDeviceName,
+            fileName = "${copy.clipboard}: ${text.take(30).replace("\n", " ")}",
+            totalBytes = text.encodeToByteArray().size.toLong(),
+            step = OutgoingStep.WAITING_APPROVAL,
+            message = copy.waitingForRecipientApproval,
+            onCancel = cancelClipboard
+        )
+
+        clipJob = scope.launch(Dispatchers.Default) {
             val textBytes = text.encodeToByteArray()
             val item = TransferItem(
                 id = transferId,
@@ -839,47 +904,51 @@ actual object TransferEngine {
             )
             recordTransfer(item)
 
-            val self = DeviceDiscoveryManager.getSelfDevice()
-            val selfName = cleanDeviceDisplayName(self?.name ?: "iPhone")
-            val nameBytes = selfName.encodeToByteArray()
+            if (isLocalDiscovered) {
+                val self = DeviceDiscoveryManager.getSelfDevice()
+                val selfName = cleanDeviceDisplayName(self?.name ?: "iPhone")
+                val nameBytes = selfName.encodeToByteArray()
 
-            val size = 2 + (2 + nameBytes.size) + (2 + textBytes.size)
-            val payload = ByteArray(size)
-            var idx = 0
-            payload[idx++] = PROTOCOL_VERSION
-            payload[idx++] = TYPE_CLIPBOARD
-            // writeUTF(selfName)
-            payload[idx++] = ((nameBytes.size shr 8) and 0xFF).toByte()
-            payload[idx++] = (nameBytes.size and 0xFF).toByte()
-            nameBytes.copyInto(payload, idx); idx += nameBytes.size
-            // writeUTF(text)
-            payload[idx++] = ((textBytes.size shr 8) and 0xFF).toByte()
-            payload[idx++] = (textBytes.size and 0xFF).toByte()
-            textBytes.copyInto(payload, idx); idx += textBytes.size
+                val size = 2 + (2 + nameBytes.size) + (2 + textBytes.size)
+                val payload = ByteArray(size)
+                var idx = 0
+                payload[idx++] = PROTOCOL_VERSION
+                payload[idx++] = TYPE_CLIPBOARD
+                payload[idx++] = ((nameBytes.size shr 8) and 0xFF).toByte()
+                payload[idx++] = (nameBytes.size and 0xFF).toByte()
+                nameBytes.copyInto(payload, idx); idx += nameBytes.size
+                payload[idx++] = ((textBytes.size shr 8) and 0xFF).toByte()
+                payload[idx++] = (textBytes.size and 0xFF).toByte()
+                textBytes.copyInto(payload, idx); idx += textBytes.size
 
-            val socketOk = sendViaSocket(targetHost, targetPort, payload)
-            if (socketOk) {
-                val copy = currentAppCopy()
-                updateTransferProgress(transferId, textBytes.size.toLong(), TransferStatus.COMPLETED)
-                withContext(Dispatchers.Main) {
-                    showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
-                    onSuccess()
+                val socketOk = sendViaSocket(targetHost, targetPort, payload)
+                if (socketOk && !isCancelled && isActive) {
+                    updateTransferProgress(transferId, textBytes.size.toLong(), TransferStatus.COMPLETED)
+                    OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", text.take(30)))
+                    withContext(Dispatchers.Main) {
+                        showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
+                        onSuccess()
+                    }
+                    return@launch
                 }
-                return@launch
             }
 
-            // Fallback: FCM Push Relay
+            if (isCancelled || !isActive) return@launch
+
+            // Fallback or Direct: FCM Push Relay
             val fcmSent = sendViaFcmRelay(targetDeviceName, targetHost, text)
+            if (isCancelled || !isActive) return@launch
+
             if (fcmSent) {
-                val copy = currentAppCopy()
                 updateTransferProgress(transferId, textBytes.size.toLong(), TransferStatus.COMPLETED)
+                OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", text.take(30)))
                 withContext(Dispatchers.Main) {
                     showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
                     onSuccess()
                 }
             } else {
-                val copy = currentAppCopy()
                 updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                OutgoingStatusManager.fail(copy.deviceNotAvailable)
                 withContext(Dispatchers.Main) {
                     showNativeToast(copy.deviceNotAvailable)
                     onError(copy.deviceNotAvailable)
@@ -947,13 +1016,17 @@ actual object TransferEngine {
         val self = DeviceDiscoveryManager.getSelfDevice()
         val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
         val copy = currentAppCopy()
+        val preview = text.trim().replace("\n", " ").take(100)
+        val notificationBody = copy.clipboardSynced.replace("%s", preview)
         return ConnectionManager.sendFcmNotification(
             token = token,
-            title = copy.clipboard,
-            body = text.take(30),
+            title = copy.syncClipboardAction,
+            body = notificationBody,
             data = mapOf(
                 "type" to "clipboard_sync",
                 "text" to text,
+                "content" to text,
+                "body" to preview,
                 "senderName" to selfName
             )
         )
