@@ -8,6 +8,18 @@ local.properties
 *.jks
 *.keystore
 *firebase-service-account*.json
+*service-account*.json
+credentials.json
+secrets.json
+google-services.json
+**/google-services.json
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+*.p8
+*.p12
+*.mobileprovision
+*.key
+
 
 # Build and IDE
 .gradle/
