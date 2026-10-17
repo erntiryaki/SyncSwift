@@ -546,6 +546,7 @@ actual object ConnectionManager {
         return header + hostBytes + portBytes + idBytes + nameBytes
     }
 
+    @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
     actual fun disconnectDevice(target: DiscoveredDevice) {
         val key = deviceKey(target.host, target.port)
         val clean = cleanDeviceDisplayName(target.name)
@@ -619,12 +620,14 @@ actual object ConnectionManager {
 
             // 2. Try remote FCM unpair push notification
             try {
-                val targetPushToken = target.pushToken.ifBlank {
+                val targetPushToken = (target.pushToken ?: "").ifBlank {
                     queryPushTokenFromSupabase(target.host, target.name) ?: ""
                 }
                 if (targetPushToken.isNotBlank()) {
-                    net.syncswift.fcm.FcmSyncManager.sendNotificationToDevice(
-                        targetToken = targetPushToken,
+                    sendFcmNotification(
+                        token = targetPushToken,
+                        title = "",
+                        body = "",
                         data = mapOf(
                             "type" to "unpair",
                             "senderHost" to selfHost,

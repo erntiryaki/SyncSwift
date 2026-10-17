@@ -16,6 +16,7 @@ import net.syncswift.connection.OutgoingStatusType
 import net.syncswift.connection.OutgoingStep
 import net.syncswift.currentAppCopy
 import net.syncswift.discovery.DeviceDiscoveryManager
+import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.showNativeToast
 import platform.Foundation.*
