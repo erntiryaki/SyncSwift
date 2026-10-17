@@ -127,21 +127,20 @@ actual object DeviceDiscoveryManager {
     private fun loadSavedManualDevices() {
         val saved = SessionManager.getSavedManualDevicesJson() ?: return
         try {
-            val regex = Regex("""\{"id":"([^"]*)","name":"([^"]*)","host":"([^"]*)","port":(\d+),"osType":"([^"]*)"""")
+            val regex = Regex("""\{"id":"([^"]*)","name":"([^"]*)","host":"([^"]*)","port":(\d+),"osType":"([^"]*)"(?:,"isRemote":(true|false))?""")
             val restored = regex.findAll(saved).mapNotNull { match ->
-                val (id, name, host, port, osType) = match.destructured
-                if (id.startsWith("manual-") || id.startsWith("remote-")) {
-                    DiscoveredDevice(
-                        id = id,
-                        name = name,
-                        host = host,
-                        port = port.toIntOrNull() ?: DEFAULT_PORT,
-                        osType = osType,
-                        isSelf = false,
-                        isOnline = false,
-                        isRemote = id.startsWith("remote-")
-                    )
-                } else null
+                val (id, name, host, port, osType, isRemoteStr) = match.destructured
+                val isRemote = isRemoteStr == "true" || id.startsWith("remote-")
+                DiscoveredDevice(
+                    id = id,
+                    name = name,
+                    host = host,
+                    port = port.toIntOrNull() ?: DEFAULT_PORT,
+                    osType = osType,
+                    isSelf = false,
+                    isOnline = false,
+                    isRemote = isRemote
+                )
             }.toList()
             if (restored.isNotEmpty()) {
                 _devices.value = restored
@@ -149,17 +148,37 @@ actual object DeviceDiscoveryManager {
         } catch (_: Exception) {}
     }
 
-    private fun saveManualDevices() {
+    fun saveManualDevices() {
         try {
-            val list = _devices.value.filter { !it.isSelf && (it.id.startsWith("manual-") || it.id.startsWith("remote-")) }
+            val list = _devices.value.filter { dev ->
+                !dev.isSelf && (dev.id.startsWith("manual-") || dev.id.startsWith("remote-") || dev.isRemote || net.syncswift.connection.ConnectionManager.isDeviceConnected(dev))
+            }
             val sb = StringBuilder("[")
             list.forEachIndexed { idx, dev ->
-                sb.append("""{"id":"${dev.id}","name":"${dev.name}","host":"${dev.host}","port":${dev.port},"osType":"${dev.osType}"}""")
+                val isRemote = dev.isRemote || net.syncswift.connection.ConnectionManager.isRemoteDevice(dev)
+                sb.append("""{"id":"${dev.id}","name":"${dev.name}","host":"${dev.host}","port":${dev.port},"osType":"${dev.osType}","isRemote":$isRemote}""")
                 if (idx < list.size - 1) sb.append(",")
             }
             sb.append("]")
             SessionManager.saveManualDevicesJson(sb.toString())
         } catch (_: Exception) {}
+    }
+
+    fun addOrUpdateConnectedDevice(device: DiscoveredDevice) {
+        val current = _devices.value.toMutableList()
+        val clean = cleanDeviceDisplayName(device.name)
+        val idx = current.indexOfFirst {
+            it.id == device.id ||
+            (it.host.isNotBlank() && it.host == device.host) ||
+            cleanDeviceDisplayName(it.name) == clean
+        }
+        if (idx >= 0) {
+            current[idx] = device.copy(name = clean)
+        } else {
+            current.add(0, device.copy(name = clean))
+        }
+        _devices.value = current
+        saveManualDevices()
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -206,8 +225,26 @@ actual object DeviceDiscoveryManager {
                     onLost = { lostService ->
                         resolvingServices.remove(lostService.name)
                         val lostName = cleanDeviceDisplayName(lostService.name)
-                        _devices.value = _devices.value.filterNot { dev ->
-                            !dev.isRemote && (dev.name == lostName || dev.id == lostService.name)
+                        val current = _devices.value.toMutableList()
+                        var changed = false
+                        val iterator = current.listIterator()
+                        while (iterator.hasNext()) {
+                            val dev = iterator.next()
+                            val cleanDevName = cleanDeviceDisplayName(dev.name)
+                            val matches = !dev.isRemote && (dev.name == lostName || dev.id == lostService.name || cleanDevName == lostName)
+                            if (matches) {
+                                changed = true
+                                val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
+                                if (isConnected) {
+                                    iterator.set(dev.copy(isOnline = false))
+                                } else {
+                                    iterator.remove()
+                                }
+                            }
+                        }
+                        if (changed) {
+                            _devices.value = current
+                            saveManualDevices()
                         }
                     }
                 )

@@ -51,7 +51,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ConnectedDevicesScreen(
     copy: Copy,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSendFileToDevice: (DiscoveredDevice) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val discoveredDevices by DeviceDiscoveryManager.devices.collectAsState()
@@ -360,8 +361,22 @@ fun ConnectedDevicesScreen(
                 !dev.isSelf &&
                 (selfDevice == null || (dev.host != selfDevice.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name)))
             }
-            val localConnected = otherDevices.filter { ConnectionManager.isDeviceConnected(it) && !ConnectionManager.isRemoteDevice(it) && it.isOnline }
-            val remoteConnected = otherDevices.filter { ConnectionManager.isDeviceConnected(it) && ConnectionManager.isRemoteDevice(it) }
+            val localConnected = otherDevices.filter { dev ->
+                val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                             connectedKeys.contains(dev.id) ||
+                             connectedKeys.contains(dev.host) ||
+                             connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                             ConnectionManager.isDeviceConnected(dev)
+                isConn && !ConnectionManager.isRemoteDevice(dev)
+            }
+            val remoteConnected = otherDevices.filter { dev ->
+                val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                             connectedKeys.contains(dev.id) ||
+                             connectedKeys.contains(dev.host) ||
+                             connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                             ConnectionManager.isDeviceConnected(dev)
+                isConn && ConnectionManager.isRemoteDevice(dev)
+            }
 
             // SECTION 1: Yerel Cihazlar (Aynı Ağ)
             Row(
@@ -1126,7 +1141,7 @@ fun ConnectedDevicesScreen(
                 copy = copy,
                 onSendFile = {
                     deviceForAction = null
-                    onBack()
+                    onSendFileToDevice(target)
                 },
                 onDisconnect = {
                     deviceForAction = null

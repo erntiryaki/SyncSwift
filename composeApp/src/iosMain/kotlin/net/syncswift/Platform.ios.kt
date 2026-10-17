@@ -254,6 +254,65 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
         "clipboard_rejected" -> {
             net.syncswift.connection.OutgoingStatusManager.fail(copy.operationRejectedOrTimeout)
         }
+        "pair_accepted" -> {
+            val senderId = extractNotificationField(userInfo, "senderId") ?: ""
+            val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val senderPushToken = extractNotificationField(userInfo, "senderPushToken") ?: ""
+            val key = "$senderHost:$senderPort"
+
+            val matchedDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+                net.syncswift.discovery.cleanDeviceDisplayName(it.name) == net.syncswift.discovery.cleanDeviceDisplayName(senderName) ||
+                (it.host.isNotBlank() && it.host == senderHost) ||
+                it.id == senderId
+            }
+            val isRemote = when {
+                matchedDev != null -> matchedDev.isRemote
+                senderHost.startsWith("remote-") -> true
+                senderHost.isBlank() || !senderHost.contains(".") -> true
+                else -> false
+            }
+            if (senderHost.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(key, isRemote = isRemote)
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(senderHost, isRemote = isRemote)
+            }
+            if (senderId.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(senderId, isRemote = isRemote)
+            }
+            if (senderName.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(senderName, isRemote = isRemote)
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(net.syncswift.discovery.cleanDeviceDisplayName(senderName), isRemote = isRemote)
+            }
+            if (matchedDev != null) {
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(matchedDev.id, isRemote = isRemote)
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(matchedDev.host, isRemote = isRemote)
+                val devKey = "${matchedDev.host}:${matchedDev.port}"
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(devKey, isRemote = isRemote)
+                net.syncswift.discovery.DeviceDiscoveryManager.saveManualDevices()
+            } else if (senderHost.isNotBlank() || senderPushToken.isNotBlank()) {
+                net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(
+                    host = senderHost.ifBlank { "remote-${net.syncswift.discovery.cleanDeviceDisplayName(senderName)}" },
+                    port = senderPort,
+                    name = senderName,
+                    osType = extractNotificationField(userInfo, "senderOs") ?: "iOS"
+                )
+            }
+            net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.notificationPairAcceptedStatus.replace("%s", senderName))
+        }
+        "pair_rejected" -> {
+            val senderId = extractNotificationField(userInfo, "senderId") ?: ""
+            val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            if (senderHost.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+            }
+            if (senderId.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderId)
+            }
+            net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
+        }
         "clipboard_request", "clipboard_sync" -> {
             val clipText = extractNotificationField(userInfo, "text")
                 ?: extractNotificationField(userInfo, "content")

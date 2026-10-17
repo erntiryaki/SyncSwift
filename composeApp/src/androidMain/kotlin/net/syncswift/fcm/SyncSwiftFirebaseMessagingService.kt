@@ -204,11 +204,41 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     }
                     return
                 }
+                val matchedDev = DeviceDiscoveryManager.devices.value.firstOrNull {
+                    cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(senderName) ||
+                    (it.host.isNotBlank() && it.host == senderHost) ||
+                    it.id == senderId
+                }
+                val isRemote = when {
+                    matchedDev != null -> matchedDev.isRemote
+                    senderHost.startsWith("remote-") -> true
+                    senderHost.isBlank() || !senderHost.contains(".") -> true
+                    else -> false
+                }
                 if (senderHost.isNotBlank()) {
-                    ConnectionManager.markDeviceConnected(key, isRemote = true)
+                    ConnectionManager.markDeviceConnected(key, isRemote = isRemote)
+                    ConnectionManager.markDeviceConnected(senderHost, isRemote = isRemote)
                 }
                 if (senderId.isNotBlank()) {
-                    ConnectionManager.markDeviceConnected(senderId, isRemote = true)
+                    ConnectionManager.markDeviceConnected(senderId, isRemote = isRemote)
+                }
+                if (senderName.isNotBlank()) {
+                    ConnectionManager.markDeviceConnected(senderName, isRemote = isRemote)
+                    ConnectionManager.markDeviceConnected(cleanDeviceDisplayName(senderName), isRemote = isRemote)
+                }
+                if (matchedDev != null) {
+                    ConnectionManager.markDeviceConnected(matchedDev.id, isRemote = isRemote)
+                    ConnectionManager.markDeviceConnected(matchedDev.host, isRemote = isRemote)
+                    val devKey = "${matchedDev.host}:${matchedDev.port}"
+                    ConnectionManager.markDeviceConnected(devKey, isRemote = isRemote)
+                    DeviceDiscoveryManager.saveManualDevices()
+                } else if (senderHost.isNotBlank() || senderPushToken.isNotBlank()) {
+                    DeviceDiscoveryManager.addManualDevice(
+                        host = senderHost.ifBlank { "remote-${cleanDeviceDisplayName(senderName)}" },
+                        port = senderPort,
+                        name = senderName,
+                        osType = data["senderOs"] ?: "Mobile"
+                    )
                 }
                 net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.notificationPairAcceptedStatus.replace("%s", senderName))
             }

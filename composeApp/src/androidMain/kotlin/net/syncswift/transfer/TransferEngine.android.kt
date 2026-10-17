@@ -18,6 +18,8 @@ import net.syncswift.connection.IncomingTransferRequest
 import net.syncswift.connection.OutgoingStatusManager
 import net.syncswift.connection.OutgoingStatusType
 import net.syncswift.connection.OutgoingStep
+import net.syncswift.discovery.DeviceDiscoveryManager
+import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.currentAppCopy
 import net.syncswift.showNativeToast
 import kotlinx.coroutines.*
@@ -248,6 +250,16 @@ actual object TransferEngine {
                                 output.flush()
                                 ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
                                 ConnectionManager.markDeviceConnected(request.senderId)
+                                ConnectionManager.markDeviceConnected(senderHost)
+                                ConnectionManager.markDeviceConnected(senderName)
+                                ConnectionManager.markDeviceConnected(cleanDeviceDisplayName(senderName))
+                                val dev = DeviceDiscoveryManager.devices.value.firstOrNull {
+                                    it.host == senderHost || cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(senderName)
+                                }
+                                if (dev != null) {
+                                    ConnectionManager.markDeviceConnected(dev.id)
+                                    ConnectionManager.markDeviceConnected(dev.host)
+                                }
                             } catch (e: Exception) {
                                 ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
                                 ConnectionManager.markDeviceDisconnected(request.senderId)

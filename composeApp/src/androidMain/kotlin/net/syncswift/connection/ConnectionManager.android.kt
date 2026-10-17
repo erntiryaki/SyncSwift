@@ -72,17 +72,25 @@ actual object ConnectionManager {
 
     actual fun isDeviceConnected(device: DiscoveredDevice): Boolean {
         val key = deviceKey(device.host, device.port)
-        return _connectedDeviceKeys.value.contains(key) ||
-               _connectedDeviceKeys.value.contains(device.id) ||
-               _remoteConnectedDeviceKeys.value.contains(key) ||
-               _remoteConnectedDeviceKeys.value.contains(device.id)
+        val clean = cleanDeviceDisplayName(device.name)
+        val set = _connectedDeviceKeys.value + _remoteConnectedDeviceKeys.value
+        return set.contains(key) ||
+               set.contains(device.id) ||
+               (device.host.isNotBlank() && set.contains(device.host)) ||
+               (clean.isNotBlank() && set.contains(clean)) ||
+               (device.name.isNotBlank() && set.contains(device.name))
     }
 
     actual fun isRemoteDevice(device: DiscoveredDevice): Boolean {
         val key = deviceKey(device.host, device.port)
+        val clean = cleanDeviceDisplayName(device.name)
         return device.isRemote ||
+               device.id.startsWith("remote-") ||
+               device.host.startsWith("remote-") ||
                _remoteConnectedDeviceKeys.value.contains(key) ||
-               _remoteConnectedDeviceKeys.value.contains(device.id)
+               _remoteConnectedDeviceKeys.value.contains(device.id) ||
+               (device.host.isNotBlank() && _remoteConnectedDeviceKeys.value.contains(device.host)) ||
+               (clean.isNotBlank() && _remoteConnectedDeviceKeys.value.contains(clean))
     }
 
     private val cancelledRequestIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
@@ -103,21 +111,25 @@ actual object ConnectionManager {
             Log.d(TAG, "Skipping markDeviceConnected for cancelled device: $deviceKey")
             return
         }
-        val newConnected = _connectedDeviceKeys.value + deviceKey
+        val clean = cleanDeviceDisplayName(deviceKey)
+        val keysToAdd = setOf(deviceKey, clean).filter { it.isNotBlank() }
+        val newConnected = _connectedDeviceKeys.value + keysToAdd
         _connectedDeviceKeys.value = newConnected
         SessionManager.saveConnectedDeviceKeys(newConnected)
         if (isRemote) {
-            val newRemote = _remoteConnectedDeviceKeys.value + deviceKey
+            val newRemote = _remoteConnectedDeviceKeys.value + keysToAdd
             _remoteConnectedDeviceKeys.value = newRemote
             SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
         }
     }
 
     actual fun markDeviceDisconnected(deviceKey: String) {
-        val newConnected = _connectedDeviceKeys.value - deviceKey
+        val clean = cleanDeviceDisplayName(deviceKey)
+        val keysToRemove = setOf(deviceKey, clean).filter { it.isNotBlank() }
+        val newConnected = _connectedDeviceKeys.value - keysToRemove
         _connectedDeviceKeys.value = newConnected
         SessionManager.saveConnectedDeviceKeys(newConnected)
-        val newRemote = _remoteConnectedDeviceKeys.value - deviceKey
+        val newRemote = _remoteConnectedDeviceKeys.value - keysToRemove
         _remoteConnectedDeviceKeys.value = newRemote
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
     }
@@ -147,10 +159,33 @@ actual object ConnectionManager {
             showNativeToast(currentAppCopy().requestCancelledBySender)
             return
         }
-        val isRemote = request.senderHost.startsWith("remote-") || request.senderPushToken.isNotBlank() || !request.senderHost.contains(".")
+        val matchedDev = DeviceDiscoveryManager.devices.value.firstOrNull {
+            it.host == request.senderHost || cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(request.senderName)
+        }
+        val isRemote = when {
+            matchedDev != null -> matchedDev.isRemote
+            request.senderHost.startsWith("remote-") -> true
+            request.senderHost.isBlank() || !request.senderHost.contains(".") -> true
+            else -> false
+        }
         markDeviceConnected(key, isRemote = isRemote)
         markDeviceConnected(request.senderId, isRemote = isRemote)
         markDeviceConnected(request.senderHost, isRemote = isRemote)
+        markDeviceConnected(request.senderName, isRemote = isRemote)
+        markDeviceConnected(cleanDeviceDisplayName(request.senderName), isRemote = isRemote)
+
+        if (matchedDev != null) {
+            markDeviceConnected(matchedDev.id, isRemote = isRemote)
+            markDeviceConnected(matchedDev.host, isRemote = isRemote)
+            DeviceDiscoveryManager.saveManualDevices()
+        } else if (isRemote || request.senderHost.isNotBlank()) {
+            DeviceDiscoveryManager.addManualDevice(
+                host = request.senderHost.ifBlank { "remote-${cleanDeviceDisplayName(request.senderName)}" },
+                port = request.senderPort,
+                name = request.senderName,
+                osType = request.senderOsType
+            )
+        }
 
         // Notify sender via FCM using sender's own language
         scope.launch {
@@ -632,7 +667,7 @@ actual object ConnectionManager {
                 try {
                     val socket = Socket()
                     activeSocket = socket
-                    socket.connect(InetSocketAddress(target.host, target.port), 1200)
+                    socket.connect(InetSocketAddress(target.host, target.port), 3500)
                     socket.soTimeout = 25000
                     socket.use { s ->
                         val out = DataOutputStream(s.getOutputStream())
@@ -651,6 +686,11 @@ actual object ConnectionManager {
                         if (response == RESP_ACCEPTED) {
                             markDeviceConnected(deviceKey(target.host, target.port), isRemote = target.isRemote)
                             markDeviceConnected(target.id, isRemote = target.isRemote)
+                            markDeviceConnected(target.host, isRemote = target.isRemote)
+                            markDeviceConnected(target.name, isRemote = target.isRemote)
+                            markDeviceConnected(cleanDeviceDisplayName(target.name), isRemote = target.isRemote)
+                            DeviceDiscoveryManager.addOrUpdateConnectedDevice(target)
+                            DeviceDiscoveryManager.saveManualDevices()
                             OutgoingStatusManager.completeSuccess(currentCopy.connectionAccepted)
                             withContext(Dispatchers.Main) {
                                 onResult(PairResult.ACCEPTED)

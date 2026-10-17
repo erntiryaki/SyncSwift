@@ -284,11 +284,21 @@ fun HomeScreen(
             (selfDevice == null || (dev.host != selfDevice.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name)))
         }
         // Home screen shows ONLY online local devices (no remote devices, no offline ghosts)
-        val connectedList = otherDevices.filter {
-            ConnectionManager.isDeviceConnected(it) && !ConnectionManager.isRemoteDevice(it) && it.isOnline
+        val connectedList = otherDevices.filter { dev ->
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                         connectedKeys.contains(dev.id) ||
+                         connectedKeys.contains(dev.host) ||
+                         connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                         ConnectionManager.isDeviceConnected(dev)
+            isConn && !ConnectionManager.isRemoteDevice(dev) && dev.isOnline
         }
-        val availableList = otherDevices.filter {
-            !ConnectionManager.isDeviceConnected(it) && !ConnectionManager.isRemoteDevice(it) && it.isOnline
+        val availableList = otherDevices.filter { dev ->
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                         connectedKeys.contains(dev.id) ||
+                         connectedKeys.contains(dev.host) ||
+                         connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                         ConnectionManager.isDeviceConnected(dev)
+            !isConn && !ConnectionManager.isRemoteDevice(dev) && dev.isOnline
         }
 
         // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)

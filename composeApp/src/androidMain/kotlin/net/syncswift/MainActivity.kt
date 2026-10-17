@@ -50,13 +50,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        net.syncswift.discovery.DeviceDiscoveryManager.startDiscovery()
+    }
+
     override fun onResume() {
         super.onResume()
         SessionManager.setCurrentActivity(this)
     }
 
+    override fun onStop() {
+        super.onStop()
+        net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
         SessionManager.setCurrentActivity(null)
     }
 

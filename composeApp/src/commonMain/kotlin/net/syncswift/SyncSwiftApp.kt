@@ -116,6 +116,17 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             (self == null || (dev.host != self.host && net.syncswift.discovery.cleanDeviceDisplayName(dev.name) != net.syncswift.discovery.cleanDeviceDisplayName(self.name)))
         }.distinctBy { it.host to net.syncswift.discovery.cleanDeviceDisplayName(it.name) }
     }
+    val connectedKeys by net.syncswift.connection.ConnectionManager.connectedDeviceKeys.collectAsState()
+    val selectableDevicesForTransfer = remember(otherDevices, connectedKeys) {
+        otherDevices.filter { dev ->
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                         connectedKeys.contains(dev.id) ||
+                         connectedKeys.contains(dev.host) ||
+                         connectedKeys.contains(net.syncswift.discovery.cleanDeviceDisplayName(dev.name)) ||
+                         net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
+            (!net.syncswift.connection.ConnectionManager.isRemoteDevice(dev) && dev.isOnline) || isConn
+        }
+    }
     val pendingPairRequest by net.syncswift.connection.ConnectionManager.pendingPairRequest.collectAsState()
     val pendingTransferRequest by net.syncswift.connection.ConnectionManager.pendingTransferRequest.collectAsState()
     val allTransfers by net.syncswift.transfer.TransferEngine.transfers.collectAsState()
@@ -168,7 +179,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 fileBytes = bytes,
                 mimeType = mimeType
             )
-        } else if (otherDevices.isEmpty()) {
+        } else if (selectableDevicesForTransfer.isEmpty()) {
             showNativeToast(copy.noDevicesOnNetwork)
         } else {
             pendingFileToSend = Triple(fileName, bytes, mimeType)
@@ -518,7 +529,12 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                         )
                                         4 -> net.syncswift.ui.account.ConnectedDevicesScreen(
                                             copy = copy,
-                                            onBack = { inConnectedDevices = false }
+                                            onBack = { inConnectedDevices = false },
+                                            onSendFileToDevice = { dev ->
+                                                inConnectedDevices = false
+                                                targetedDevice = dev
+                                                pickFile()
+                                            }
                                         )
                                         5 -> net.syncswift.ui.account.ConnectDesktopScreen(
                                             copy = copy,
@@ -554,7 +570,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                     val clipText = clipboardManager.getText()?.text ?: ""
                                                                     if (clipText.isBlank()) {
                                                                         showNativeToast(copy.noTextInClipboard)
-                                                                    } else if (otherDevices.isEmpty()) {
+                                                                    } else if (selectableDevicesForTransfer.isEmpty()) {
                                                                         showNativeToast(copy.noDevicesOnNetwork)
                                                                     } else {
                                                                         pendingClipboardToSend = clipText
@@ -829,7 +845,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 net.syncswift.ui.components.FileDeviceSelectScreen(
                                     fileName = fileData.first,
                                     fileSizeFormatted = formattedSize,
-                                    devices = otherDevices,
+                                    devices = selectableDevicesForTransfer,
                                     copy = copy,
                                     isDeviceConnected = { dev -> net.syncswift.connection.ConnectionManager.isDeviceConnected(dev) },
                                     onSelectDevice = { dev ->
@@ -869,7 +885,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 net.syncswift.ui.components.FileDeviceSelectScreen(
                                     fileName = "${copy.clipboard}: $previewText",
                                     fileSizeFormatted = formattedSize,
-                                    devices = otherDevices,
+                                    devices = selectableDevicesForTransfer,
                                     copy = copy,
                                     isDeviceConnected = { dev -> net.syncswift.connection.ConnectionManager.isDeviceConnected(dev) },
                                     onSelectDevice = { dev ->
