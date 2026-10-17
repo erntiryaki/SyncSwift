@@ -521,7 +521,6 @@ actual object ConnectionManager {
             showNativeToast(currentAppCopy().requestCancelledBySender)
             return
         }
-        val key = deviceKey(request.senderHost, request.senderPort)
         val isRemote = request.senderHost.startsWith("remote-") || request.senderPushToken.isNotBlank() || !request.senderHost.contains(".")
         markDeviceConnected(key, isRemote = isRemote)
         markDeviceConnected(request.senderId, isRemote = isRemote)

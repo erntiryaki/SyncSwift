@@ -1,5 +1,7 @@
 package net.syncswift
 
+import kotlinx.coroutines.launch
+import net.syncswift.discovery.cleanDeviceDisplayName
 import platform.Foundation.NSDate
 import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.preferredLanguages
