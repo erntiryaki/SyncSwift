@@ -79,8 +79,15 @@ private class CustomScannerViewController(
     @kotlinx.cinterop.ObjCAction
     fun onBackgroundTapped(gesture: UITapGestureRecognizer) {
         val container = cameraContainerView ?: return
-        val loc = gesture.locationInView(view)
-        val isInside = platform.CoreGraphics.CGRectContainsPoint(container.frame, loc)
+        val locX = gesture.locationInView(view).useContents { x.toDouble() }
+        val locY = gesture.locationInView(view).useContents { y.toDouble() }
+        val frameX = container.frame.useContents { origin.x.toDouble() }
+        val frameY = container.frame.useContents { origin.y.toDouble() }
+        val frameW = container.frame.useContents { size.width.toDouble() }
+        val frameH = container.frame.useContents { size.height.toDouble() }
+
+        val isInside = locX >= frameX && locX <= (frameX + frameW) &&
+                locY >= frameY && locY <= (frameY + frameH)
         if (!isInside) {
             dismissScanner()
         }
@@ -164,13 +171,13 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
             output.metadataObjectTypes = listOf(AVMetadataObjectTypeQRCode)
         }
 
-        // Screen dimensions
+        // Screen dimensions (explicit Double)
         val screenBounds = UIScreen.mainScreen.bounds
-        val screenWidth = screenBounds.useContents { size.width }
-        val screenHeight = screenBounds.useContents { size.height }
+        val screenWidth: Double = screenBounds.useContents { size.width.toDouble() }
+        val screenHeight: Double = screenBounds.useContents { size.height.toDouble() }
 
         // Dark translucent background (#730B101B)
-        scannerVc.view.backgroundColor = UIColor.colorWithRed(11.0 / 255.0, green: 16.0 / 255.0, blue: 27.0 / 255.0, alpha: 0.85)
+        scannerVc.view.backgroundColor = UIColor.colorWithRed(11.0 / 255.0, 16.0 / 255.0, 27.0 / 255.0, 0.85)
 
         // Native blur effect
         val blurEffect = UIBlurEffect.effectWithStyle(UIBlurEffectStyleDark)
@@ -180,9 +187,9 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         scannerVc.view.addSubview(blurView)
 
         // Center camera container (260x260 dp square)
-        val boxSize = minOf(260.0, screenWidth - 48.0)
-        val boxX = (screenWidth - boxSize) / 2.0
-        val boxY = (screenHeight - boxSize) / 2.0 - 40.0
+        val boxSize: Double = if (screenWidth - 48.0 < 260.0) screenWidth - 48.0 else 260.0
+        val boxX: Double = (screenWidth - boxSize) / 2.0
+        val boxY: Double = (screenHeight - boxSize) / 2.0 - 40.0
 
         val cameraContainer = UIView(frame = platform.CoreGraphics.CGRectMake(boxX, boxY, boxSize, boxSize))
         cameraContainer.layer.cornerRadius = 24.0
@@ -203,23 +210,23 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         borderOverlay.backgroundColor = UIColor.clearColor
         borderOverlay.layer.cornerRadius = 24.0
         borderOverlay.layer.borderWidth = 2.5
-        borderOverlay.layer.borderColor = UIColor.colorWithRed(56.0 / 255.0, green: 213.0 / 255.0, blue: 226.0 / 255.0, alpha: 1.0).CGColor
+        borderOverlay.layer.borderColor = UIColor.colorWithRed(56.0 / 255.0, 213.0 / 255.0, 226.0 / 255.0, 1.0).CGColor
         borderOverlay.userInteractionEnabled = false
         scannerVc.view.addSubview(borderOverlay)
 
         // SyncSwift white logo below the scanner
-        val logoWidth = minOf(300.0, screenWidth - 40.0)
-        val logoHeight = 70.0
-        val logoX = (screenWidth - logoWidth) / 2.0
-        val logoY = boxY + boxSize + 28.0
+        val logoWidth: Double = if (screenWidth - 40.0 < 300.0) screenWidth - 40.0 else 300.0
+        val logoHeight: Double = 70.0
+        val logoX: Double = (screenWidth - logoWidth) / 2.0
+        val logoY: Double = boxY + boxSize + 28.0
 
         val logoView = UIImageView(frame = platform.CoreGraphics.CGRectMake(logoX, logoY, logoWidth, logoHeight))
-        logoView.contentMode = UIViewContentModeScaleAspectFit
+        logoView.contentMode = UIViewContentMode.UIViewContentModeScaleAspectFit
         val logoImage = UIImage.imageNamed("logo_syncswift")
             ?: NSBundle.mainBundle.pathForResource("logo_syncswift", "png")?.let { UIImage.imageWithContentsOfFile(it) }
 
         if (logoImage != null) {
-            logoView.image = logoImage.imageWithRenderingMode(UIImageRenderingModeAlwaysTemplate)
+            logoView.image = logoImage.imageWithRenderingMode(UIImageRenderingMode.UIImageRenderingModeAlwaysTemplate)
             logoView.tintColor = UIColor.whiteColor
         }
         scannerVc.view.addSubview(logoView)
@@ -229,9 +236,9 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         closeButton.setFrame(platform.CoreGraphics.CGRectMake(20.0, 50.0, 38.0, 38.0))
         closeButton.layer.cornerRadius = 19.0
         closeButton.layer.masksToBounds = true
-        closeButton.backgroundColor = UIColor.colorWithRed(26.0 / 255.0, green: 36.0 / 255.0, blue: 54.0 / 255.0, alpha: 0.95)
+        closeButton.backgroundColor = UIColor.colorWithRed(26.0 / 255.0, 36.0 / 255.0, 54.0 / 255.0, 0.95)
         closeButton.layer.borderWidth = 1.0
-        closeButton.layer.borderColor = UIColor.colorWithRed(40.0 / 255.0, green: 54.0 / 255.0, blue: 77.0 / 255.0, alpha: 1.0).CGColor
+        closeButton.layer.borderColor = UIColor.colorWithRed(40.0 / 255.0, 54.0 / 255.0, 77.0 / 255.0, 1.0).CGColor
 
         val backIcon = UIImage.systemImageNamed("chevron.left")
         if (backIcon != null) {
