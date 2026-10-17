@@ -56,7 +56,8 @@ object FcmSyncManager {
         val deviceId = java.util.UUID.nameUUIDFromBytes("${Build.MANUFACTURER}_${Build.MODEL}_${Build.ID}".toByteArray()).toString()
         val localIp = getLocalIpAddress() ?: ""
         val subnet = if (localIp.contains(".")) localIp.substringBeforeLast(".") else ""
-        val cleanName = net.syncswift.discovery.cleanDeviceDisplayName(Build.MODEL)
+        val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+        val cleanName = net.syncswift.discovery.cleanDeviceDisplayName(selfDev?.name ?: Build.MODEL)
 
         Log.w(TAG, "Syncing FCM token for $email (Device ID: $deviceId, Name: $cleanName, IP: $localIp)")
 

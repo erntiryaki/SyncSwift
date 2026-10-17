@@ -66,6 +66,14 @@ fun HomeScreen(
     var deviceToPair by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var deviceForAction by remember { mutableStateOf<DiscoveredDevice?>(null) }
 
+    val pendingPairRequest by ConnectionManager.pendingPairRequest.collectAsState()
+    LaunchedEffect(pendingPairRequest) {
+        if (pendingPairRequest != null) {
+            deviceToPair = null
+            deviceForAction = null
+        }
+    }
+
     var isRefreshing by remember { mutableStateOf(false) }
     var showScanningBanner by remember { mutableStateOf(false) }
     var pullOffset by remember { mutableStateOf(0f) }
@@ -178,12 +186,6 @@ fun HomeScreen(
         // Current Device Info (Boxless, across the width)
         val selfDev = remember { DeviceDiscoveryManager.getSelfDevice() }
         val selfDeviceName = selfDev?.name ?: "SyncSwift Device"
-        val modelCode = selfDev?.modelCode.orEmpty()
-        val nameWithModel = if (modelCode.isNotBlank() && !selfDeviceName.contains(modelCode, ignoreCase = true)) {
-            "$selfDeviceName ($modelCode)"
-        } else {
-            selfDeviceName
-        }
         val osText = selfDev?.osType ?: (if (currentPlatform() == PlatformFlavor.Android) "Android" else "iOS")
         val deviceSubtitle = "$osText (${copy.yourDevice})"
         val isMobileDevice = osText.equals("Android", ignoreCase = true) || osText.equals("iOS", ignoreCase = true)
@@ -214,7 +216,7 @@ fun HomeScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = nameWithModel,
+                    text = selfDeviceName,
                     color = Cloud,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,

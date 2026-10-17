@@ -156,6 +156,11 @@ actual object DeviceDiscoveryManager {
             if (ctx != null) {
                 android.provider.Settings.Global.getString(ctx.contentResolver, "device_name")
                     ?: android.provider.Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
+                    ?: android.provider.Settings.System.getString(ctx.contentResolver, "device_name")
+                    ?: try {
+                        val adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+                        adapter?.name
+                    } catch (_: Exception) { null }
             } else null
         } catch (_: Exception) { null }
 
@@ -211,6 +216,9 @@ actual object DeviceDiscoveryManager {
         if (isRegistered || nsdManager == null) return
         try {
             actualPort = net.syncswift.transfer.TransferEngine.getServerPort()
+            val selfDev = getSelfDevice()
+            val preferredName = selfDev?.name?.ifBlank { Build.MODEL } ?: Build.MODEL
+            selfServiceName = "SyncSwift-${preferredName.replace(" ", "-")}"
 
             val serviceInfo = NsdServiceInfo().apply {
                 serviceName = selfServiceName

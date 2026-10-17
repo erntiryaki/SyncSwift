@@ -761,10 +761,13 @@ actual object TransferEngine {
                     val output = DataOutputStream(s.getOutputStream())
                     val input = DataInputStream(s.getInputStream())
 
+                    val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = net.syncswift.discovery.cleanDeviceDisplayName(selfDev?.name ?: Build.MODEL)
+
                     // 1. Send Handshake
                     output.writeByte(PROTOCOL_VERSION.toInt())
                     output.writeByte(TYPE_FILE_HANDSHAKE.toInt())
-                    output.writeUTF(Build.MODEL)
+                    output.writeUTF(selfName)
                     output.writeUTF(fileName)
                     output.writeLong(fileBytes.size.toLong())
                     output.writeUTF(mimeType)
@@ -915,17 +918,19 @@ actual object TransferEngine {
 
             if (!pushToken.isNullOrBlank()) {
                 val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
+                val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                 val fcmSent = ConnectionManager.sendFcmNotification(
                     token = pushToken,
                     title = targetCopy.notificationFileRequestTitle,
                     body = targetCopy.notificationFileRequestBody
-                        .replace("%s", Build.MODEL)
+                        .replace("%s", selfName)
                         .replace("%s", fileName)
                         .replace("(%s)", "(${formatBytes(fileBytes.size.toLong())})"),
                     data = mapOf(
                         "type" to "file_request",
                         "transferId" to transferId,
-                        "senderName" to Build.MODEL,
+                        "senderName" to selfName,
                         "fileName" to fileName,
                         "fileSize" to "${fileBytes.size}",
                         "mimeType" to mimeType,
@@ -1315,9 +1320,12 @@ actual object TransferEngine {
                     val output = DataOutputStream(s.getOutputStream())
                     val input = DataInputStream(s.getInputStream())
 
+                    val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = net.syncswift.discovery.cleanDeviceDisplayName(selfDev?.name ?: Build.MODEL)
+
                     output.writeByte(PROTOCOL_VERSION.toInt())
                     output.writeByte(TYPE_CLIPBOARD.toInt())
-                    output.writeUTF(Build.MODEL)
+                    output.writeUTF(selfName)
                     output.writeUTF(text)
                     output.flush()
 
@@ -1373,10 +1381,13 @@ actual object TransferEngine {
                     val out = DataOutputStream(s.getOutputStream())
                     val input = DataInputStream(s.getInputStream())
 
+                    val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = net.syncswift.discovery.cleanDeviceDisplayName(selfDev?.name ?: Build.MODEL)
+
                     out.writeByte(PROTOCOL_VERSION.toInt())
                     out.writeByte(TYPE_REQUEST_FILE_DOWNLOAD.toInt())
                     out.writeUTF(transferId)
-                    out.writeUTF(Build.MODEL)
+                    out.writeUTF(selfName)
                     out.flush()
 
                     val resp = input.readByte()

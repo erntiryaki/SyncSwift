@@ -558,7 +558,7 @@ actual object ConnectionManager {
     actual fun requestPairing(target: DiscoveredDevice, onResult: (PairResult) -> Unit) {
         val copy = currentAppCopy()
         val self = DeviceDiscoveryManager.getSelfDevice()
-        val selfName = self?.name ?: Build.MODEL
+        val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
         val selfHost = self?.host ?: ""
         val selfPort = self?.port ?: 52424
         val selfOs = self?.osType ?: "Android"

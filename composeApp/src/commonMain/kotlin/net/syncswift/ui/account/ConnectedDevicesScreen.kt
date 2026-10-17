@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.*
 import net.syncswift.connection.ConnectionManager
+import net.syncswift.connection.OutgoingStatusManager
 import net.syncswift.connection.PairResult
 import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.discovery.DiscoveredDevice
@@ -71,6 +72,35 @@ fun ConnectedDevicesScreen(
 
     var showQrModal by remember { mutableStateOf(false) }
     var showScanModal by remember { mutableStateOf(false) }
+
+    val pendingPairRequest by ConnectionManager.pendingPairRequest.collectAsState()
+    val pendingTransferRequest by ConnectionManager.pendingTransferRequest.collectAsState()
+    val outgoingStatus by OutgoingStatusManager.state.collectAsState()
+
+    LaunchedEffect(pendingPairRequest) {
+        if (pendingPairRequest != null) {
+            showQrModal = false
+            showScanModal = false
+            deviceToPair = null
+            deviceForAction = null
+        }
+    }
+
+    LaunchedEffect(pendingTransferRequest) {
+        if (pendingTransferRequest != null) {
+            showQrModal = false
+            showScanModal = false
+            deviceToPair = null
+            deviceForAction = null
+        }
+    }
+
+    LaunchedEffect(outgoingStatus) {
+        if (outgoingStatus != null) {
+            showQrModal = false
+            showScanModal = false
+        }
+    }
 
     var isRefreshing by remember { mutableStateOf(false) }
     var showScanningBanner by remember { mutableStateOf(false) }
