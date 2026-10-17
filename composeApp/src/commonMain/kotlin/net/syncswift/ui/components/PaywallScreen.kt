@@ -43,11 +43,13 @@ import net.syncswift.ui.theme.*
 fun PaywallScreen(
     reason: PaywallReason,
     copy: Copy,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onNavigateToAuth: (() -> Unit)? = null
 ) {
     var selectedPlan by remember { mutableStateOf(0) } // 0: 7 Days Free Trial, 1: 1 Month
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showLoginRequiredDialog by remember { mutableStateOf(false) }
 
     val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
 
@@ -355,6 +357,10 @@ fun PaywallScreen(
                 Button(
                     onClick = {
                         if (isProcessing) return@Button
+                        if (!SubscriptionManager.hasActiveAccount()) {
+                            showLoginRequiredDialog = true
+                            return@Button
+                        }
                         isProcessing = true
                         errorMessage = null
                         SubscriptionManager.purchasePro(null, isAnnual = (selectedPlan == 0)) { success, err ->
@@ -520,6 +526,30 @@ fun PaywallScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (showLoginRequiredDialog) {
+            SyncSwiftModal(
+                onDismissRequest = { showLoginRequiredDialog = false },
+                title = copy.requireLoginForProTitle,
+                confirmText = copy.signInOrRegister,
+                confirmColor = PillButtonBg,
+                confirmTextColor = PillButtonText,
+                onConfirm = {
+                    showLoginRequiredDialog = false
+                    onDismiss()
+                    onNavigateToAuth?.invoke()
+                },
+                dismissText = copy.cancelAction,
+                onDismiss = { showLoginRequiredDialog = false }
+            ) {
+                Text(
+                    text = copy.requireLoginForProDesc,
+                    color = Mist,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
             }
         }
     }

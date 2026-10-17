@@ -63,16 +63,30 @@ object SubscriptionManager {
     private val _paywallReason = MutableStateFlow(PaywallReason.UPGRADE_BUTTON)
     val paywallReason: StateFlow<PaywallReason> = _paywallReason.asStateFlow()
 
-    fun init() {
-        // Load initial pro state from local session / persistence
+    fun hasActiveAccount(): Boolean {
+        val loggedIn = SessionManager.isLoggedIn()
+        val provider = SessionManager.getLoggedInProvider()
+        val email = SessionManager.getLoggedInEmail()
+        return loggedIn && provider != net.syncswift.IdentityProvider.Local && !email.isNullOrBlank()
+    }
+
+    fun isProActive(): Boolean {
+        return _isPro.value && hasActiveAccount()
+    }
+
+    fun refreshProState() {
         val cachedPro = SessionManager.getSavedProStatus()
-        _isPro.value = cachedPro
+        _isPro.value = cachedPro && hasActiveAccount()
+    }
+
+    fun init() {
+        refreshProState()
         SubscriptionPlatform.init()
     }
 
     fun setProState(pro: Boolean) {
-        _isPro.value = pro
         SessionManager.saveProStatus(pro)
+        _isPro.value = pro && hasActiveAccount()
         if (pro) {
             if (SessionManager.getProStartDateMillis() <= 0L) {
                 SessionManager.saveProStartDateMillis(net.syncswift.currentTimeMs())
@@ -80,6 +94,16 @@ object SubscriptionManager {
             if (SessionManager.getProRenewalDateMillis() <= 0L) {
                 SessionManager.saveProRenewalDateMillis(net.syncswift.currentTimeMs() + 365L * 24 * 60 * 60 * 1000L)
             }
+        }
+    }
+
+    fun checkTimedPaywall() {
+        if (isProActive()) return
+        val currentSlot = net.syncswift.getCurrentPaywallSlotKey()
+        val lastSlot = SessionManager.getLastShownPaywallSlot()
+        if (currentSlot != lastSlot) {
+            SessionManager.saveLastShownPaywallSlot(currentSlot)
+            triggerPaywall(PaywallReason.UPGRADE_BUTTON)
         }
     }
 
@@ -122,29 +146,29 @@ object SubscriptionManager {
 
     // Restriction checks
     fun canAddDevice(currentConnectedCount: Int): Boolean {
-        if (_isPro.value) return true
+        if (isProActive()) return true
         return currentConnectedCount < FREE_MAX_DEVICES
     }
 
     fun canTransferFileSize(sizeBytes: Long): Boolean {
-        if (_isPro.value) return true
+        if (isProActive()) return true
         return sizeBytes <= FREE_MAX_FILE_BYTES
     }
 
     fun canRemoteTransfer(): Boolean {
-        return _isPro.value
+        return isProActive()
     }
 
     fun canBackgroundWake(): Boolean {
-        return _isPro.value
+        return isProActive()
     }
 
     fun canSyncClipboard(): Boolean {
-        return _isPro.value
+        return isProActive()
     }
 
     fun shouldShowAds(): Boolean {
-        return !_isPro.value
+        return !isProActive()
     }
 
     fun purchasePro(activity: Any? = null, isAnnual: Boolean = true, onResult: (Boolean, String?) -> Unit) {

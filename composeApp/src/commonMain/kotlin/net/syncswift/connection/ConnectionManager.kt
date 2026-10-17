@@ -25,6 +25,7 @@ data class IncomingPairRequest(
     val senderHost: String,
     val senderPort: Int,
     val senderOsType: String,
+    val senderLanguage: String = "en",
     val deferredResponse: CompletableDeferred<Boolean> = CompletableDeferred()
 )
 
@@ -39,6 +40,7 @@ data class IncomingTransferRequest(
     val transferId: String = "",
     val downloadUrl: String = "",
     val isRemote: Boolean = false,
+    val senderLanguage: String = "en",
     val deferredResponse: CompletableDeferred<Boolean> = CompletableDeferred()
 ) {
     val formattedSize: String
@@ -71,6 +73,8 @@ expect object ConnectionManager {
     fun cancelIncomingTransferRequest(transferId: String? = null)
     fun markDeviceConnected(deviceKey: String, isRemote: Boolean = false)
     fun markDeviceDisconnected(deviceKey: String)
+    fun isRequestCancelled(requestId: String): Boolean
+    fun markRequestCancelled(requestId: String)
     fun generateOrRotatePairingCode()
     fun connectViaPairingCode(code: String, onResult: (PairResult) -> Unit)
 }

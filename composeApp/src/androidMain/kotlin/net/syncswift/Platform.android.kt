@@ -197,3 +197,13 @@ actual fun formatEpochToDate(epochMillis: Long): String {
     val sdf = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault())
     return sdf.format(java.util.Date(epochMillis))
 }
+
+actual fun getCurrentPaywallSlotKey(): String {
+    val cal = java.util.Calendar.getInstance()
+    val year = cal.get(java.util.Calendar.YEAR)
+    val month = cal.get(java.util.Calendar.MONTH) + 1
+    val day = cal.get(java.util.Calendar.DAY_OF_MONTH)
+    val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+    val slot = hour / 3
+    return "$year-$month-$day-$slot"
+}

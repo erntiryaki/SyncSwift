@@ -79,14 +79,26 @@ class MainActivity : ComponentActivity() {
             val senderPort = intent.getIntExtra("senderPort", 52424)
             val senderId = intent.getStringExtra("senderId") ?: ""
             val senderOs = intent.getStringExtra("senderOs") ?: "Android"
+            val senderLanguage = intent.getStringExtra("senderLanguage") ?: "en"
+            val timestamp = intent.getLongExtra("timestamp", 0L)
+            val key = "$senderHost:$senderPort"
+            val isExpired = timestamp > 0L && (System.currentTimeMillis() - timestamp > 120_000L)
+
+            if (isExpired || ConnectionManager.isRequestCancelled(key) ||
+                ConnectionManager.isRequestCancelled(senderId) ||
+                ConnectionManager.isRequestCancelled(senderHost)) {
+                showNativeToast(currentAppCopy().requestCancelledBySender)
+                return
+            }
 
             ConnectionManager.dispatchIncomingPairRequest(
                 IncomingPairRequest(
-                    senderId = senderId.ifBlank { "$senderHost:$senderPort" },
+                    senderId = senderId.ifBlank { key },
                     senderName = senderName,
                     senderHost = senderHost,
                     senderPort = senderPort,
-                    senderOsType = senderOs
+                    senderOsType = senderOs,
+                    senderLanguage = senderLanguage
                 )
             )
         } else if (type == "file_request") {
@@ -96,6 +108,14 @@ class MainActivity : ComponentActivity() {
             val fileName = intent.getStringExtra("fileName") ?: "Dosya"
             val fileSize = intent.getStringExtra("fileSize")?.toLongOrNull() ?: 0L
             val mimeType = intent.getStringExtra("mimeType") ?: "application/octet-stream"
+            val senderLanguage = intent.getStringExtra("senderLanguage") ?: "en"
+            val timestamp = intent.getLongExtra("timestamp", 0L)
+            val isExpired = timestamp > 0L && (System.currentTimeMillis() - timestamp > 180_000L)
+
+            if (isExpired || ConnectionManager.isRequestCancelled(transferId)) {
+                showNativeToast(currentAppCopy().transferCancelledBySender)
+                return
+            }
 
             ConnectionManager.dispatchIncomingTransferRequest(
                 IncomingTransferRequest(
@@ -105,7 +125,8 @@ class MainActivity : ComponentActivity() {
                     mimeType = mimeType,
                     senderHost = senderHost,
                     senderPort = senderPort,
-                    transferId = transferId
+                    transferId = transferId,
+                    senderLanguage = senderLanguage
                 )
             )
         }

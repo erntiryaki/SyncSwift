@@ -84,13 +84,15 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val senderHost = data["senderHost"] ?: ""
                 val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
                 val senderOs = data["senderOs"] ?: "Android"
+                val senderLanguage = data["senderLanguage"] ?: "en"
 
                 val request = IncomingPairRequest(
                     senderId = senderId,
                     senderName = senderName,
                     senderHost = senderHost,
                     senderPort = senderPort,
-                    senderOsType = senderOs
+                    senderOsType = senderOs,
+                    senderLanguage = senderLanguage
                 )
                 ConnectionManager.dispatchIncomingPairRequest(request)
             }
@@ -103,6 +105,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val mimeType = data["mimeType"] ?: "application/octet-stream"
                 val downloadUrl = data["downloadUrl"] ?: ""
                 val isRemote = data["isRemote"] == "true"
+                val senderLanguage = data["senderLanguage"] ?: "en"
 
                 val request = IncomingTransferRequest(
                     senderName = senderName,
@@ -113,7 +116,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     senderPort = senderPort,
                     transferId = transferId,
                     downloadUrl = downloadUrl,
-                    isRemote = isRemote
+                    isRemote = isRemote,
+                    senderLanguage = senderLanguage
                 )
                 ConnectionManager.dispatchIncomingTransferRequest(request)
             }
@@ -121,8 +125,15 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val senderId = data["senderId"] ?: ""
                 val senderHost = data["senderHost"] ?: ""
                 val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
+                val key = "$senderHost:$senderPort"
+                if (ConnectionManager.isRequestCancelled(key) ||
+                    ConnectionManager.isRequestCancelled(senderId) ||
+                    ConnectionManager.isRequestCancelled(senderHost)) {
+                    Log.d(TAG, "Ignoring pair_accepted for cancelled request from $senderName")
+                    return
+                }
                 if (senderHost.isNotBlank()) {
-                    ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
+                    ConnectionManager.markDeviceConnected(key)
                 }
                 if (senderId.isNotBlank()) {
                     ConnectionManager.markDeviceConnected(senderId)
@@ -244,6 +255,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
             putExtra("fileName", data["fileName"] ?: "")
             putExtra("fileSize", data["fileSize"] ?: "")
             putExtra("mimeType", data["mimeType"] ?: "")
+            putExtra("timestamp", data["timestamp"]?.toLongOrNull() ?: System.currentTimeMillis())
+            putExtra("senderLanguage", data["senderLanguage"] ?: "en")
         }
 
         val pendingIntent = PendingIntent.getActivity(

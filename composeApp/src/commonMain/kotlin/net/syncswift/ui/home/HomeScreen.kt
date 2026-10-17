@@ -54,6 +54,7 @@ fun HomeScreen(
     val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
     val isScanning by DeviceDiscoveryManager.isScanning.collectAsState()
     val selfDevice = remember { DeviceDiscoveryManager.getSelfDevice() }
+    val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
     val allTransfers by TransferEngine.transfers.collectAsState()
     val recentTransfers = remember(allTransfers) {
         allTransfers.filter { it.status == TransferStatus.COMPLETED }
@@ -359,28 +360,53 @@ fun HomeScreen(
             }
 
             // Ortak Pano (Clipboard Action)
-            Surface(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .height(52.dp)
-                    .clip(RoundedCornerShape(26.dp))
-                    .clickable(onClick = onClipboardClick),
-                shape = RoundedCornerShape(26.dp),
-                color = InputBg
             ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(26.dp))
+                        .clickable(onClick = onClipboardClick),
+                    shape = RoundedCornerShape(26.dp),
+                    color = if (isPro) InputBg else InputBg.copy(alpha = 0.6f),
+                    border = if (!isPro) BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f)) else null
                 ) {
-                    ClipboardVectorIcon(Modifier.size(18.dp), color = Blue)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = copy.clipboard,
-                        color = Cloud,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        ClipboardVectorIcon(Modifier.size(18.dp), color = if (isPro) Blue else Mist)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = copy.clipboard,
+                            color = if (isPro) Cloud else Mist,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                if (!isPro) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-8).dp, y = (-5).dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Blue)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = copy.proBadge,
+                            color = Color.White,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.6.sp
+                        )
+                    }
                 }
             }
         }

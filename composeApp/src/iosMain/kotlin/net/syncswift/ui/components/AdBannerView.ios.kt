@@ -17,10 +17,64 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.SyncArrowIcon
 import net.syncswift.subscription.PaywallReason
-import net.syncswift.subscription.SubscriptionManager
+import androidx.compose.runtime.*
+import androidx.compose.ui.interop.UIKitView
+import kotlinx.cinterop.ExperimentalForeignApi
+import platform.Foundation.NSClassFromString
+import platform.UIKit.UIView
+import platform.UIKit.UIApplication
+import platform.UIKit.UIViewController
 
+@OptIn(ExperimentalForeignApi::class)
 @Composable
 actual fun AdBannerView(modifier: Modifier) {
+    var hasGadClass by remember { mutableStateOf<Boolean?>(null) }
+    var adMobError by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            hasGadClass = NSClassFromString("GADBannerView") != null
+        } catch (_: Throwable) {
+            hasGadClass = false
+        }
+    }
+
+    if (hasGadClass == true && !adMobError) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .wrapContentHeight(),
+            contentAlignment = Alignment.Center
+        ) {
+            UIKitView(
+                factory = {
+                    try {
+                        val cls = NSClassFromString("GADBannerView")
+                        if (cls != null) {
+                            // Try allocating GADBannerView safely
+                            val alloc = platform.Foundation.NSSelectorFromString("alloc")
+                            val initSel = platform.Foundation.NSSelectorFromString("init")
+                            val rawObj = (cls as? platform.darwin.NSObject)?.performSelector(alloc)
+                            val view = (rawObj as? platform.darwin.NSObject)?.performSelector(initSel) as? UIView
+                            view ?: UIView()
+                        } else {
+                            UIView()
+                        }
+                    } catch (e: Throwable) {
+                        adMobError = true
+                        UIView()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp)
+            )
+        }
+    } else {
+        CustomFallbackBanner(modifier)
+    }
+}
+
+@Composable
+private fun CustomFallbackBanner(modifier: Modifier) {
     val electricColor = Color(0xFF2BC5D3)
     val skyColor = Color(0xFF38BDF8)
     val midnightColor = Color(0xFF0B101B)
@@ -44,7 +98,7 @@ actual fun AdBannerView(modifier: Modifier) {
                 .background(cardSurfaceColor)
                 .border(1.dp, inputBorderColor.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
                 .clickable {
-                    SubscriptionManager.triggerPaywall(PaywallReason.UPGRADE_BUTTON)
+                    net.syncswift.subscription.SubscriptionManager.triggerPaywall(net.syncswift.subscription.PaywallReason.UPGRADE_BUTTON)
                 }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically

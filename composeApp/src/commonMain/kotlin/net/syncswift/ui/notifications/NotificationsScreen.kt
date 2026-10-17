@@ -163,6 +163,33 @@ private fun SwipeableNotificationCard(
 ) {
     var offsetX by remember { mutableStateOf(0f) }
     val maxSwipeThreshold = -120f
+    val pendingPair by net.syncswift.connection.ConnectionManager.pendingPairRequest.collectAsState()
+    val pendingTransfer by net.syncswift.connection.ConnectionManager.pendingTransferRequest.collectAsState()
+
+    val handleItemClick = {
+        when (item.type.lowercase()) {
+            "pair" -> {
+                if (pendingPair == null || (item.senderName.isNotBlank() && pendingPair?.senderName != item.senderName)) {
+                    showNativeToast(copy.requestCancelledBySender)
+                } else {
+                    showNativeToast(copy.waitingForRecipientApproval)
+                }
+            }
+            "file" -> {
+                if (pendingTransfer == null) {
+                    showNativeToast(copy.transferCancelledBySender)
+                } else {
+                    showNativeToast(copy.waitingForRecipientApproval)
+                }
+            }
+            "clipboard" -> {
+                showNativeToast(copy.clipboardCancelledBySender)
+            }
+            else -> {
+                showNativeToast(item.body.ifBlank { item.title })
+            }
+        }
+    }
 
     val iconColor = when (item.type.lowercase()) {
         "clipboard" -> Blue
@@ -196,6 +223,7 @@ private fun SwipeableNotificationCard(
                 .fillMaxWidth()
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
                 .alpha(((200f + offsetX) / 200f).coerceIn(0.2f, 1f))
+                .clickable { handleItemClick() }
                 .pointerInput(item.id) {
                     detectHorizontalDragGestures(
                         onDragEnd = {

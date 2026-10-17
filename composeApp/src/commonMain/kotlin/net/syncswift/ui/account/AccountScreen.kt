@@ -100,10 +100,16 @@ fun AccountScreen(
 
             if (extractedCode != null && extractedCode.length == 6 && extractedCode.all { it.isDigit() }) {
                 ConnectionManager.connectViaPairingCode(extractedCode) { res ->
-                    if (res == PairResult.ACCEPTED) {
-                        showNativeToast(copy.connectionAccepted)
-                    } else {
-                        attemptDirectLocal()
+                    when (res) {
+                        PairResult.ACCEPTED -> {
+                            showNativeToast(copy.connectionAccepted)
+                        }
+                        PairResult.PENDING_APPROVAL -> {
+                            // Dialog is showing with Cancel button
+                        }
+                        PairResult.EXPIRED_OR_USED, PairResult.UNAVAILABLE, PairResult.REJECTED -> {
+                            attemptDirectLocal()
+                        }
                     }
                 }
             } else {
@@ -651,14 +657,22 @@ fun AccountScreen(
                                 val clean = desktopCodeInput.trim().replace(" ", "")
                                 ConnectionManager.connectViaPairingCode(clean) { res ->
                                     isDesktopConnecting = false
-                                    if (res == PairResult.ACCEPTED) {
-                                        showDesktopConnectModal = false
-                                        desktopCodeInput = ""
-                                        showNativeToast(copy.connectionAccepted)
-                                    } else if (res == PairResult.EXPIRED_OR_USED) {
-                                        showNativeToast(copy.codeExpiredOrAlreadyUsed)
-                                    } else {
-                                        showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                    when (res) {
+                                        PairResult.ACCEPTED -> {
+                                            showDesktopConnectModal = false
+                                            desktopCodeInput = ""
+                                            showNativeToast(copy.connectionAccepted)
+                                        }
+                                        PairResult.PENDING_APPROVAL -> {
+                                            showDesktopConnectModal = false
+                                            desktopCodeInput = ""
+                                        }
+                                        PairResult.EXPIRED_OR_USED -> {
+                                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                        }
+                                        PairResult.UNAVAILABLE, PairResult.REJECTED -> {
+                                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                        }
                                     }
                                 }
                             },

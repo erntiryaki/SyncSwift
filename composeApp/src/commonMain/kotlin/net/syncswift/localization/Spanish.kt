@@ -397,4 +397,10 @@ val SpanishCopy = Copy().apply {
     remoteTransferUploaded = "¡Archivo enviado al dispositivo remoto!"
     requestCancelledBySender = "La solicitud de conexión fue cancelada por el remitente."
     transferCancelledBySender = "La transferencia de archivos fue cancelada por el remitente."
+    clipboardCancelledBySender = "La transferencia del portapapeles fue cancelada por el remitente."
+    requireLoginForProTitle = "Cuenta requerida"
+    requireLoginForProDesc = "Inicia sesión o crea una cuenta para comprar SyncSwift Pro."
+    signInOrRegister = "Iniciar sesión / Registrarse"
+    remoteConnectionLockedDesc = "La conexión remota y el código de 6 dígitos son exclusivos de SyncSwift Pro."
+    unlockWithPro = "Desbloquear con Pro"
 }

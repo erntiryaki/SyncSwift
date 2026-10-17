@@ -171,4 +171,12 @@ actual object SessionManager {
     actual fun isOnboardingSeen(): Boolean {
         return NSUserDefaults.standardUserDefaults.boolForKey("onboarding_seen")
     }
+
+    actual fun saveLastShownPaywallSlot(slot: String) {
+        NSUserDefaults.standardUserDefaults.setObject(slot, forKey = "last_shown_paywall_slot")
+    }
+
+    actual fun getLastShownPaywallSlot(): String? {
+        return NSUserDefaults.standardUserDefaults.stringForKey("last_shown_paywall_slot")
+    }
 }

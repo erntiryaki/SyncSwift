@@ -397,4 +397,10 @@ val ArabicCopy = Copy().apply {
     remoteTransferUploaded = "تم إرسال الملف إلى الجهاز البعيد!"
     requestCancelledBySender = "تم إلغاء طلب الاتصال من قبل المرسل."
     transferCancelledBySender = "تم إلغاء نقل الملف من قبل المرسل."
+    clipboardCancelledBySender = "تم إلغاء نقل الحافظة من قبل المرسل."
+    requireLoginForProTitle = "الحساب مطلوب"
+    requireLoginForProDesc = "يرجى تسجيل الدخول أو إنشاء حساب لشراء SyncSwift Pro."
+    signInOrRegister = "تسجيل الدخول / إنشاء حساب"
+    remoteConnectionLockedDesc = "الاتصال عن بعد والرمز المكون من 6 أرقام مخصصان حصريًا لـ SyncSwift Pro."
+    unlockWithPro = "فتح القفل مع Pro"
 }

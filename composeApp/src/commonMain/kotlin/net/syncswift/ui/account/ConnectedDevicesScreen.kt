@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -56,6 +57,7 @@ fun ConnectedDevicesScreen(
     val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
     val isScanning by DeviceDiscoveryManager.isScanning.collectAsState()
     val selfDevice = remember { DeviceDiscoveryManager.getSelfDevice() }
+    val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
@@ -168,10 +170,14 @@ fun ConnectedDevicesScreen(
                 showScanModal = false
                 showNativeToast(copy.connecting)
                 ConnectionManager.connectViaPairingCode(remoteCode) { result ->
-                    if (result == PairResult.ACCEPTED) {
-                        showNativeToast(copy.connectionAccepted)
-                    } else {
-                        attemptDirectLocalPairing()
+                    when (result) {
+                        PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
+                        PairResult.PENDING_APPROVAL -> {
+                            // Dialog is showing waiting for approval with cancel button
+                        }
+                        PairResult.EXPIRED_OR_USED, PairResult.UNAVAILABLE, PairResult.REJECTED -> {
+                            attemptDirectLocalPairing()
+                        }
                     }
                 }
                 return
@@ -388,7 +394,15 @@ fun ConnectedDevicesScreen(
 
             // SECTION 2: Uzaktan Bağlı Cihazlar (Farklı Ağ - PRO)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (!isPro) {
+                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
+                            )
+                        }
+                    },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
@@ -403,24 +417,26 @@ fun ConnectedDevicesScreen(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.3).sp
                     )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Blue.copy(alpha = 0.2f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = copy.proBadge,
-                            color = Blue,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 0.8.sp
-                        )
+                    if (!isPro) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Blue.copy(alpha = 0.2f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = copy.proBadge,
+                                color = Blue,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = copy.formatDeviceCount(remoteConnected.size),
+                    text = if (isPro) copy.formatDeviceCount(remoteConnected.size) else "",
                     color = Mist,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -428,28 +444,76 @@ fun ConnectedDevicesScreen(
             }
             Spacer(Modifier.height(10.dp))
 
-            Column(modifier = Modifier.fillMaxWidth()) {
-                if (remoteConnected.isNotEmpty()) {
-                    remoteConnected.forEach { dev ->
-                        val status = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
-                        DeviceItemRow(
-                            name = cleanDeviceDisplayName(dev.name),
-                            details = status,
-                            badge = dev.osType,
-                            isOnline = dev.isOnline,
-                            isConnected = true,
-                            isSelf = false,
-                            onClick = { deviceForAction = dev }
+            if (!isPro) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
+                            )
+                        },
+                    shape = RoundedCornerShape(12.dp),
+                    color = CardSurface,
+                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Blue.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LockIcon(Modifier.size(18.dp), color = Blue)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = copy.remoteConnectionLockedDesc,
+                                color = Mist,
+                                fontSize = 12.5.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = copy.unlockWithPro,
+                            color = Blue,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
                     }
-                } else {
-                    Text(
-                        text = copy.noRemoteConnectedDevices,
-                        color = Mist,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (remoteConnected.isNotEmpty()) {
+                        remoteConnected.forEach { dev ->
+                            val status = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
+                            DeviceItemRow(
+                                name = cleanDeviceDisplayName(dev.name),
+                                details = status,
+                                badge = dev.osType,
+                                isOnline = dev.isOnline,
+                                isConnected = true,
+                                isSelf = false,
+                                onClick = { deviceForAction = dev }
+                            )
+                            HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+                        }
+                    } else {
+                        Text(
+                            text = copy.noRemoteConnectedDevices,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                 }
             }
 
@@ -457,269 +521,344 @@ fun ConnectedDevicesScreen(
 
             // SECTION 4: Uzaktan Bağlama (PRO Özellik) Card
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (!isPro) {
+                            Modifier.clickable {
+                                net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                    net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
+                                )
+                            }
+                        } else Modifier
+                    ),
                 shape = RoundedCornerShape(16.dp),
                 color = CardSurface,
-                border = BorderStroke(1.2.dp, Blue.copy(alpha = 0.45f))
+                border = BorderStroke(1.2.dp, if (isPro) Blue.copy(alpha = 0.45f) else InputBorder.copy(alpha = 0.35f))
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = copy.remotePairingTitle,
-                                color = Cloud,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Blue.copy(alpha = 0.25f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = copy.proBadge,
-                                    color = Blue,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.8.sp
-                                )
-                            }
-                        }
-
-                        // Live countdown timer badge without icon, enlarged
-                        Text(
-                            text = "${codeRemainingSeconds}s",
-                            color = Blue,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-
-                    Text(
-                        text = copy.remotePairingSubtitle,
-                        color = Mist,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
-                    )
-
-                    // Rotating Code Showcase Bar with Refresh Action
-                    Row(
+                Box(Modifier.fillMaxWidth()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(InputBg)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(18.dp)
+                            .then(if (!isPro) Modifier.alpha(0.42f) else Modifier)
                     ) {
-                        Column {
-                            Text(
-                                text = copy.enter6DigitCode,
-                                color = Mist,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = activePairingCode,
-                                color = Cloud,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 3.sp
-                            )
-                        }
-
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = "${codeRemainingSeconds}s",
-                                color = Mist,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Surface(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .clickable { ConnectionManager.generateOrRotatePairingCode() },
-                                shape = CircleShape,
-                                color = InputBg,
-                                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    RefreshIcon(Modifier.size(16.dp), color = Cloud)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    // 2 Action Buttons: QR Göster & QR Okut
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .clip(RoundedCornerShape(23.dp))
-                                .clickable { showQrModal = true },
-                            shape = RoundedCornerShape(23.dp),
-                            color = PillButtonBg
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                QrCodeVectorIcon(Modifier.size(16.dp), color = PillButtonText)
-                                Spacer(Modifier.width(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = copy.showQrAction,
-                                    color = PillButtonText,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .clip(RoundedCornerShape(23.dp))
-                                .clickable { showScanModal = true },
-                            shape = RoundedCornerShape(23.dp),
-                            color = InputBg
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                QrScanVectorIcon(Modifier.size(16.dp), color = Blue)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = copy.scanQrAction,
-                                    color = Cloud,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-                    Spacer(Modifier.height(14.dp))
-
-                    // 6-digit code direct input area
-                    Text(
-                        text = copy.enter6DigitCode,
-                        color = Cloud,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(InputBg)
-                                .border(1.dp, InputBorder.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            BasicTextField(
-                                value = manualCodeInput,
-                                onValueChange = {
-                                    if (it.length <= 7) manualCodeInput = it
-                                },
-                                textStyle = TextStyle(
+                                    text = copy.remotePairingTitle,
                                     color = Cloud,
                                     fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 2.sp
-                                ),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                decorationBox = { innerTextField ->
-                                    if (manualCodeInput.isEmpty()) {
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (!isPro) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Blue.copy(alpha = 0.25f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
                                         Text(
-                                            text = copy.enter6DigitCodeHint,
-                                            color = Mist.copy(alpha = 0.5f),
-                                            fontSize = 15.sp,
-                                            letterSpacing = 2.sp
+                                            text = copy.proBadge,
+                                            color = Blue,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 0.8.sp
                                         )
                                     }
-                                    innerTextField()
                                 }
-                            )
+                            }
+
+                            if (isPro) {
+                                // Live countdown timer badge without icon, enlarged
+                                Text(
+                                    text = "${codeRemainingSeconds}s",
+                                    color = Blue,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
                         }
 
-                        Surface(
+                        Text(
+                            text = copy.remotePairingSubtitle,
+                            color = Mist,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                        )
+
+                        // Rotating Code Showcase Bar with Refresh Action
+                        Row(
                             modifier = Modifier
-                                .height(46.dp)
+                                .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable(enabled = manualCodeInput.trim().replace(" ", "").length == 6 && !isManualConnecting) {
-                                    if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
-                                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                            net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
-                                        )
-                                        return@clickable
-                                    }
-                                    isManualConnecting = true
-                                    val clean = manualCodeInput.trim().replace(" ", "")
-                                    ConnectionManager.connectViaPairingCode(clean) { res ->
-                                        isManualConnecting = false
-                                        if (res == PairResult.ACCEPTED) {
-                                            manualCodeInput = ""
-                                            showNativeToast(copy.connectionAccepted)
-                                        } else if (res == PairResult.EXPIRED_OR_USED) {
-                                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
-                                        } else {
-                                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                .background(InputBg)
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = copy.enter6DigitCode,
+                                    color = Mist,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = if (isPro) activePairingCode else "••• •••",
+                                    color = Cloud,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 3.sp
+                                )
+                            }
+
+                            if (isPro) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "${codeRemainingSeconds}s",
+                                        color = Mist,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Surface(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .clickable { ConnectionManager.generateOrRotatePairingCode() },
+                                        shape = CircleShape,
+                                        color = InputBg,
+                                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            RefreshIcon(Modifier.size(16.dp), color = Cloud)
                                         }
                                     }
-                                },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (manualCodeInput.trim().replace(" ", "").length == 6) Blue else InputBg
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
+                        // 2 Action Buttons: QR Göster & QR Okut
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                                    .clip(RoundedCornerShape(23.dp))
+                                    .clickable {
+                                        if (isPro) {
+                                            showQrModal = true
+                                        } else {
+                                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
+                                            )
+                                        }
+                                    },
+                                shape = RoundedCornerShape(23.dp),
+                                color = PillButtonBg
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    QrCodeVectorIcon(Modifier.size(16.dp), color = PillButtonText)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = copy.showQrAction,
+                                        color = PillButtonText,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                                    .clip(RoundedCornerShape(23.dp))
+                                    .clickable {
+                                        if (isPro) {
+                                            showScanModal = true
+                                        } else {
+                                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
+                                            )
+                                        }
+                                    },
+                                shape = RoundedCornerShape(23.dp),
+                                color = InputBg
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    QrScanVectorIcon(Modifier.size(16.dp), color = Blue)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = copy.scanQrAction,
+                                        color = Cloud,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+                        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+                        Spacer(Modifier.height(14.dp))
+
+                        // 6-digit code direct input area
+                        Text(
+                            text = copy.enter6DigitCode,
+                            color = Cloud,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                contentAlignment = Alignment.Center
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(InputBg)
+                                    .border(1.dp, InputBorder.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.CenterStart
                             ) {
-                                if (isManualConnecting) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
-                                } else {
+                                BasicTextField(
+                                    value = manualCodeInput,
+                                    onValueChange = {
+                                        if (isPro && it.length <= 7) manualCodeInput = it
+                                    },
+                                    enabled = isPro,
+                                    textStyle = TextStyle(
+                                        color = Cloud,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 2.sp
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    decorationBox = { innerTextField ->
+                                        if (manualCodeInput.isEmpty()) {
+                                            Text(
+                                                text = copy.enter6DigitCodeHint,
+                                                color = Mist.copy(alpha = 0.5f),
+                                                fontSize = 15.sp,
+                                                letterSpacing = 2.sp
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                )
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .height(46.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(enabled = isPro && manualCodeInput.trim().replace(" ", "").length == 6 && !isManualConnecting) {
+                                        if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
+                                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                                net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
+                                            )
+                                            return@clickable
+                                        }
+                                        isManualConnecting = true
+                                        val clean = manualCodeInput.trim().replace(" ", "")
+                                        ConnectionManager.connectViaPairingCode(clean) { res ->
+                                            isManualConnecting = false
+                                            when (res) {
+                                                PairResult.ACCEPTED -> {
+                                                    manualCodeInput = ""
+                                                    showNativeToast(copy.connectionAccepted)
+                                                }
+                                                PairResult.PENDING_APPROVAL -> {
+                                                    manualCodeInput = ""
+                                                }
+                                                PairResult.EXPIRED_OR_USED, PairResult.UNAVAILABLE, PairResult.REJECTED -> {
+                                                    showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                                }
+                                            }
+                                        }
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isPro && manualCodeInput.trim().replace(" ", "").length == 6) Blue else InputBg
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isManualConnecting) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                    } else {
+                                        Text(
+                                            text = copy.connectAction,
+                                            color = if (isPro && manualCodeInput.trim().replace(" ", "").length == 6) Color.White else Mist.copy(alpha = 0.6f),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!isPro) {
+                        // Sleek Lock Overlay Pill
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Night.copy(alpha = 0.45f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(22.dp),
+                                color = PillButtonBg,
+                                border = BorderStroke(1.dp, Blue.copy(alpha = 0.45f)),
+                                modifier = Modifier.clickable {
+                                    net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                        net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
+                                    )
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    LockIcon(Modifier.size(16.dp), color = Blue)
                                     Text(
-                                        text = copy.connectAction,
-                                        color = if (manualCodeInput.trim().replace(" ", "").length == 6) Color.White else Mist,
+                                        text = copy.unlockWithPro,
+                                        color = PillButtonText,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold
                                     )

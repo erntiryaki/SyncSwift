@@ -397,4 +397,10 @@ val RussianCopy = Copy().apply {
     remoteTransferUploaded = "Файл отправлен на удаленное устройство!"
     requestCancelledBySender = "Запрос на подключение отменен отправителем."
     transferCancelledBySender = "Передача файла отменена отправителем."
+    clipboardCancelledBySender = "Передача буфера обмена отменена отправителем."
+    requireLoginForProTitle = "Требуется аккаунт"
+    requireLoginForProDesc = "Пожалуйста, войдите или зарегистрируйтесь, чтобы приобрести SyncSwift Pro."
+    signInOrRegister = "Войти / Регистрация"
+    remoteConnectionLockedDesc = "Удаленное подключение и 6-значный код доступны только в SyncSwift Pro."
+    unlockWithPro = "Разблокировать с Pro"
 }

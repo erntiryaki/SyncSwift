@@ -554,24 +554,7 @@ actual object TransferEngine {
                 activeSocket = -1
             }
             updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
-            scope.launch {
-                var tok = targetDev?.pushToken
-                if (tok.isNullOrBlank() && targetHost.isNotBlank()) {
-                    tok = ConnectionManager.queryPushTokenFromSupabase(targetHost, targetDeviceName)
-                }
-                if (!tok.isNullOrBlank()) {
-                    ConnectionManager.sendFcmNotification(
-                        token = tok,
-                        title = "SyncSwift",
-                        body = "",
-                        data = mapOf(
-                            "type" to "file_cancelled",
-                            "transferId" to transferId,
-                            "senderName" to (net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()?.name ?: "iOS")
-                        )
-                    )
-                }
-            }
+            ConnectionManager.markRequestCancelled(transferId)
         }
 
         OutgoingStatusManager.show(
@@ -779,10 +762,12 @@ actual object TransferEngine {
         if (!token.isNullOrBlank()) {
             val self = DeviceDiscoveryManager.getSelfDevice()
             val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+            val targetDev = DeviceDiscoveryManager.devices.value.find { it.host == targetHost || it.name == targetDeviceName }
+            val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
             val fcmSent = ConnectionManager.sendFcmNotification(
                 token = token,
-                title = copy.notificationFileRequestTitle,
-                body = copy.notificationFileRequestBody.replace("%s", selfName).replace("%f", fileName),
+                title = targetCopy.notificationFileRequestTitle,
+                body = targetCopy.notificationFileRequestBody.replace("%s", selfName).replace("%f", fileName),
                 data = mapOf(
                     "type" to "file_request",
                     "transferId" to transferId,
@@ -790,7 +775,9 @@ actual object TransferEngine {
                     "fileName" to fileName,
                     "fileSize" to "${fileBytes.size}",
                     "mimeType" to mimeType,
-                    "downloadUrl" to downloadUrl
+                    "downloadUrl" to downloadUrl,
+                    "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                    "timestamp" to "${currentTimeMs()}"
                 )
             )
             if (isCancelledCheck()) return
@@ -1038,19 +1025,21 @@ actual object TransferEngine {
 
         val self = DeviceDiscoveryManager.getSelfDevice()
         val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
-        val copy = currentAppCopy()
+        val targetDev = DeviceDiscoveryManager.devices.value.find { it.host == targetHost || it.name == targetName }
+        val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
         val preview = text.trim().replace("\n", " ").take(100)
-        val notificationBody = copy.clipboardSynced.replace("%s", preview)
+        val notificationBody = targetCopy.clipboardSynced.replace("%s", preview)
         return ConnectionManager.sendFcmNotification(
             token = token,
-            title = copy.syncClipboardAction,
+            title = targetCopy.syncClipboardAction,
             body = notificationBody,
             data = mapOf(
                 "type" to "clipboard_sync",
                 "text" to text,
                 "content" to text,
                 "body" to preview,
-                "senderName" to selfName
+                "senderName" to selfName,
+                "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
             )
         )
     }

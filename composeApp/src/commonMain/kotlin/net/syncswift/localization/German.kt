@@ -397,5 +397,11 @@ val GermanCopy = Copy().apply {
     remoteTransferUploaded = "Datei an Remote-Gerät gesendet!"
     requestCancelledBySender = "Verbindungsanfrage wurde vom Absender abgebrochen."
     transferCancelledBySender = "Dateiübertragung wurde vom Absender abgebrochen."
+    clipboardCancelledBySender = "Zwischenablageübertragung wurde vom Absender abgebrochen."
+    requireLoginForProTitle = "Konto erforderlich"
+    requireLoginForProDesc = "Bitte melden Sie sich an oder erstellen Sie ein Konto, um SyncSwift Pro zu erwerben."
+    signInOrRegister = "Anmelden / Registrieren"
+    remoteConnectionLockedDesc = "Fernverbindung und 6-stelliger Code sind exklusiv für SyncSwift Pro."
+    unlockWithPro = "Mit Pro freischalten"
 }
 

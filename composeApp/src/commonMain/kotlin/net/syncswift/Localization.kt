@@ -427,6 +427,12 @@ class Copy {
     var remoteTransferUploaded: String = "File sent to remote device!"
     var requestCancelledBySender: String = "Connection request was cancelled by sender."
     var transferCancelledBySender: String = "File transfer was cancelled by sender."
+    var clipboardCancelledBySender: String = "Clipboard transfer was cancelled by sender."
+    var requireLoginForProTitle: String = "Account Required"
+    var requireLoginForProDesc: String = "Please sign in or create an account to purchase SyncSwift Pro."
+    var signInOrRegister: String = "Sign In / Register"
+    var remoteConnectionLockedDesc: String = "Remote connection and 6-digit code pairing are exclusive to SyncSwift Pro."
+    var unlockWithPro: String = "Unlock with Pro"
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {
@@ -444,6 +450,11 @@ fun copyFor(language: AppLanguage): Copy = when (language) {
 fun resolveInitialLanguage(code: String): AppLanguage {
     val clean = code.lowercase().take(2)
     return AppLanguage.entries.firstOrNull { it.code == clean } ?: AppLanguage.English
+}
+
+fun copyForLanguageCode(code: String?): Copy {
+    if (code.isNullOrBlank()) return EnglishCopy
+    return copyFor(resolveInitialLanguage(code))
 }
 
 fun Copy.formatDeviceCount(count: Int): String = "$count $deviceSingle"

@@ -243,6 +243,13 @@ actual object DeviceDiscoveryManager {
         return device
     }
 
+    actual fun removeManualDevice(host: String) {
+        val current = _devices.value.toMutableList()
+        current.removeAll { it.host == host || it.id.contains(host) }
+        _devices.value = current
+        saveManualDevices()
+    }
+
     private fun registerService() {
         if (isRegistered || nsdManager == null) return
         try {

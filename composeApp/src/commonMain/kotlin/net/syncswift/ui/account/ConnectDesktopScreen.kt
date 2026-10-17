@@ -94,12 +94,19 @@ fun ConnectDesktopScreen(
             if (extractedCode != null && extractedCode.length == 6 && extractedCode.all { it.isDigit() }) {
                 isConnecting = true
                 ConnectionManager.connectViaPairingCode(extractedCode) { res ->
-                    if (res == PairResult.ACCEPTED) {
-                        isConnecting = false
-                        showNativeToast(copy.connectionAccepted)
-                        onDismiss()
-                    } else {
-                        attemptDirectLocalPairing()
+                    when (res) {
+                        PairResult.ACCEPTED -> {
+                            isConnecting = false
+                            showNativeToast(copy.connectionAccepted)
+                            onDismiss()
+                        }
+                        PairResult.PENDING_APPROVAL -> {
+                            isConnecting = false
+                            onDismiss()
+                        }
+                        PairResult.EXPIRED_OR_USED, PairResult.UNAVAILABLE, PairResult.REJECTED -> {
+                            attemptDirectLocalPairing()
+                        }
                     }
                 }
             } else {
@@ -333,14 +340,22 @@ fun ConnectDesktopScreen(
                                         isConnecting = true
                                         ConnectionManager.connectViaPairingCode(cleanDigits) { res ->
                                             isConnecting = false
-                                            if (res == PairResult.ACCEPTED) {
-                                                desktopCodeInput = ""
-                                                showNativeToast(copy.connectionAccepted)
-                                                onDismiss()
-                                            } else if (res == PairResult.EXPIRED_OR_USED) {
-                                                showNativeToast(copy.codeExpiredOrAlreadyUsed)
-                                            } else {
-                                                showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                            when (res) {
+                                                PairResult.ACCEPTED -> {
+                                                    desktopCodeInput = ""
+                                                    showNativeToast(copy.connectionAccepted)
+                                                    onDismiss()
+                                                }
+                                                PairResult.PENDING_APPROVAL -> {
+                                                    desktopCodeInput = ""
+                                                    onDismiss()
+                                                }
+                                                PairResult.EXPIRED_OR_USED -> {
+                                                    showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                                }
+                                                PairResult.UNAVAILABLE, PairResult.REJECTED -> {
+                                                    showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                                                }
                                             }
                                         }
                                     }

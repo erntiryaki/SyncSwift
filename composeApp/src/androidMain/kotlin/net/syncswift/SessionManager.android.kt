@@ -209,4 +209,12 @@ actual object SessionManager {
     actual fun isOnboardingSeen(): Boolean {
         return getPrefs()?.getBoolean("onboarding_seen", false) ?: false
     }
+
+    actual fun saveLastShownPaywallSlot(slot: String) {
+        getPrefs()?.edit()?.putString("last_shown_paywall_slot", slot)?.apply()
+    }
+
+    actual fun getLastShownPaywallSlot(): String? {
+        return getPrefs()?.getString("last_shown_paywall_slot", null)
+    }
 }

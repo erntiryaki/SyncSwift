@@ -138,7 +138,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             latestCompletedItem = null
         }
     }
-
+    LaunchedEffect(Unit) {
+        net.syncswift.subscription.SubscriptionManager.checkTimedPaywall()
+    }
     var targetedDevice by remember { mutableStateOf<net.syncswift.discovery.DiscoveredDevice?>(null) }
     var pendingFileToSend by remember { mutableStateOf<Triple<String, ByteArray, String>?>(null) }
     var pendingClipboardToSend by remember { mutableStateOf<String?>(null) }
@@ -931,6 +933,16 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         copy = copy,
                         onDismiss = {
                             net.syncswift.subscription.SubscriptionManager.dismissPaywall()
+                        },
+                        onNavigateToAuth = {
+                            net.syncswift.subscription.SubscriptionManager.dismissPaywall()
+                            inConnectedDevices = false
+                            inConnectDesktop = false
+                            inNotifications = false
+                            inSettings = false
+                            inEditProfile = false
+                            inHelpSupport = false
+                            screen = AuthStep.Email
                         }
                     )
                 }
@@ -967,11 +979,16 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 lower.contains("kaydedildi") || lower.contains("aktif"))
                 val isClipboard = lower.contains("pano") || lower.contains("clipboard")
 
-                val iconColor = when {
-                    isError -> ErrorRed
-                    isSuccess -> SuccessGreen
-                    isClipboard -> Blue
-                    else -> Cloud
+                val isDark = LocalSyncSwiftColors.current.isDark
+                val iconColor = if (!isDark) {
+                    Color.White
+                } else {
+                    when {
+                        isError -> ErrorRed
+                        isSuccess -> SuccessGreen
+                        isClipboard -> Blue
+                        else -> Color.White
+                    }
                 }
 
                 Surface(

@@ -85,7 +85,24 @@ actual object ConnectionManager {
                _remoteConnectedDeviceKeys.value.contains(device.id)
     }
 
+    private val cancelledRequestIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    actual fun isRequestCancelled(requestId: String): Boolean {
+        if (requestId.isBlank()) return false
+        return cancelledRequestIds.contains(requestId)
+    }
+
+    actual fun markRequestCancelled(requestId: String) {
+        if (requestId.isNotBlank()) {
+            cancelledRequestIds.add(requestId)
+        }
+    }
+
     actual fun markDeviceConnected(deviceKey: String, isRemote: Boolean) {
+        if (isRequestCancelled(deviceKey)) {
+            Log.d(TAG, "Skipping markDeviceConnected for cancelled device: $deviceKey")
+            return
+        }
         val newConnected = _connectedDeviceKeys.value + deviceKey
         _connectedDeviceKeys.value = newConnected
         SessionManager.saveConnectedDeviceKeys(newConnected)
@@ -128,11 +145,11 @@ actual object ConnectionManager {
         markDeviceConnected(key)
         markDeviceConnected(request.senderId)
 
-        // Notify sender via FCM that their connection request was accepted
+        // Notify sender via FCM using sender's own language
         scope.launch {
             val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
-                val copy = currentAppCopy()
+                val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                 val selfHost = self?.host ?: ""
@@ -141,14 +158,15 @@ actual object ConnectionManager {
 
                 sendFcmNotification(
                     token = senderToken,
-                    title = copy.connectionAccepted,
-                    body = copy.notificationPairAcceptedStatus.replace("%s", selfName),
+                    title = targetCopy.connectionAccepted,
+                    body = targetCopy.notificationPairAcceptedStatus.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_accepted",
                         "senderName" to selfName,
                         "senderHost" to selfHost,
                         "senderPort" to "$selfPort",
-                        "senderId" to selfId
+                        "senderId" to selfId,
+                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
                     )
                 )
             }
@@ -164,7 +182,7 @@ actual object ConnectionManager {
         scope.launch {
             val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
-                val copy = currentAppCopy()
+                val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                 val selfHost = self?.host ?: ""
@@ -172,14 +190,15 @@ actual object ConnectionManager {
                 val selfId = java.util.UUID.nameUUIDFromBytes("${Build.MANUFACTURER}_${Build.MODEL}_${Build.ID}".toByteArray()).toString()
                 sendFcmNotification(
                     token = senderToken,
-                    title = copy.connectionRejected,
-                    body = copy.notificationPairRejectedStatus.replace("%s", selfName),
+                    title = targetCopy.connectionRejected,
+                    body = targetCopy.notificationPairRejectedStatus.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_rejected",
                         "senderName" to selfName,
                         "senderHost" to selfHost,
                         "senderPort" to "$selfPort",
-                        "senderId" to selfId
+                        "senderId" to selfId,
+                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
                     )
                 )
             }
@@ -253,17 +272,18 @@ actual object ConnectionManager {
         scope.launch {
             val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
-                val copy = currentAppCopy()
+                val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                 sendFcmNotification(
                     token = senderToken,
-                    title = copy.transferRejectedByRecipient,
-                    body = copy.notificationFileRejectedStatus.replace("%s", selfName),
+                    title = targetCopy.transferRejectedByRecipient,
+                    body = targetCopy.notificationFileRejectedStatus.replace("%s", selfName),
                     data = mapOf(
                         "type" to "file_rejected",
                         "transferId" to request.transferId,
-                        "senderName" to selfName
+                        "senderName" to selfName,
+                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
                     )
                 )
             }
@@ -305,6 +325,7 @@ actual object ConnectionManager {
                 val selfPort = self?.port ?: 52424
                 val ctx = SessionManager.getAppContext()
                 val pushToken = if (ctx != null) SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
+                val currentLang = SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()
 
                 val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes")
                 val conn = url.openConnection() as HttpURLConnection
@@ -326,6 +347,7 @@ actual object ConnectionManager {
                     put("push_token", pushToken)
                     put("host", selfHost)
                     put("port", selfPort)
+                    put("language", currentLang)
                 }
 
                 conn.outputStream.use { os ->
@@ -383,31 +405,36 @@ actual object ConnectionManager {
                         val pushToken = obj.optString("push_token", "")
                         val host = obj.optString("host", "")
                         val port = obj.optInt("port", 52424)
+                        val targetLang = obj.optString("language", "")
+                        val targetHost = host.ifBlank { "remote-$clean" }
+                        val targetDevKey = deviceKey(targetHost, port)
 
                         // Register remote device in DeviceDiscoveryManager
                         DeviceDiscoveryManager.addManualDevice(
-                            host = host.ifBlank { "remote-$clean" },
+                            host = targetHost,
                             port = port,
                             name = deviceName,
                             osType = deviceType
                         )
 
-                        // Send FCM pair request to notify the target for approval
+                        // Send FCM pair request to notify the target for approval in their language
                         if (pushToken.isNotBlank()) {
                             val self = DeviceDiscoveryManager.getSelfDevice()
                             val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
-                            val copy = currentAppCopy()
+                            val targetCopy = net.syncswift.copyForLanguageCode(targetLang.ifBlank { null })
                             sendFcmNotification(
                                 token = pushToken,
-                                title = copy.notificationPairRequestTitle,
-                                body = copy.notificationPairRequestBody.replace("%s", selfName),
+                                title = targetCopy.notificationPairRequestTitle,
+                                body = targetCopy.notificationPairRequestBody.replace("%s", selfName),
                                 data = mapOf(
                                     "type" to "pair_request",
                                     "senderId" to (self?.id ?: ""),
                                     "senderName" to selfName,
                                     "senderHost" to (self?.host ?: ""),
                                     "senderPort" to "${self?.port ?: 52424}",
-                                    "senderOs" to "Android"
+                                    "senderOs" to "Android",
+                                    "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                                    "timestamp" to "${System.currentTimeMillis()}"
                                 )
                             )
                         }
@@ -424,11 +451,24 @@ actual object ConnectionManager {
                             } catch (_: Exception) {}
                         }
 
+                        val cancelAction: () -> Unit = {
+                            markRequestCancelled(clean)
+                            markRequestCancelled(deviceId)
+                            markRequestCancelled(targetHost)
+                            markRequestCancelled(targetDevKey)
+                            markDeviceDisconnected(targetHost)
+                            markDeviceDisconnected(deviceId)
+                            markDeviceDisconnected(targetDevKey)
+                            DeviceDiscoveryManager.removeManualDevice(targetHost)
+                            OutgoingStatusManager.dismiss()
+                        }
+
                         OutgoingStatusManager.show(
                             type = OutgoingStatusType.CONNECTION,
                             deviceName = deviceName,
                             step = OutgoingStep.WAITING_APPROVAL,
-                            message = currentAppCopy().transferNotificationSentWaiting
+                            message = currentAppCopy().transferNotificationSentWaiting,
+                            onCancel = cancelAction
                         )
 
                         withContext(Dispatchers.Main) {
@@ -477,25 +517,13 @@ actual object ConnectionManager {
             } catch (_: Exception) {}
             activeSocket = null
 
-            // If target has push token, send pair_cancelled via FCM so peer dialog/notification closes instantly
-            scope.launch {
-                var tok = target.pushToken
-                if (tok.isNullOrBlank() && target.host.isNotBlank()) {
-                    tok = queryPushTokenFromSupabase(target.host, target.name)
-                }
-                if (!tok.isNullOrBlank()) {
-                    sendFcmNotification(
-                        token = tok,
-                        title = "SyncSwift",
-                        body = "",
-                        data = mapOf(
-                            "type" to "pair_cancelled",
-                            "senderName" to selfName,
-                            "senderHost" to selfHost
-                        )
-                    )
-                }
-            }
+            // Mark locally cancelled so any late pair_accepted doesn't register as connected
+            markRequestCancelled(target.id)
+            markRequestCancelled(target.host)
+            markRequestCancelled(deviceKey(target.host, target.port))
+            markDeviceDisconnected(deviceKey(target.host, target.port))
+            markDeviceDisconnected(target.id)
+            DeviceDiscoveryManager.removeManualDevice(target.host)
         }
 
         OutgoingStatusManager.show(
@@ -556,27 +584,29 @@ actual object ConnectionManager {
 
             if (isCancelled || !isActive) return@launch
 
-            // 2. Fallback or Direct to FCM Wake-up Push Notification
+            // 2. Fallback or Direct to FCM Wake-up Push Notification in target's language
             var token = target.pushToken
             if (token.isNullOrBlank() && target.host.isNotBlank()) {
                 token = queryPushTokenFromSupabase(target.host, target.name)
             }
             if (isCancelled || !isActive) return@launch
 
-            val currentCopy = currentAppCopy()
+            val targetCopy = net.syncswift.copyForLanguageCode(target.language)
             if (!token.isNullOrBlank()) {
                 Log.d(TAG, "Sending FCM wake-up pairing request to token: $token")
                 val fcmSent = sendFcmNotification(
                     token = token,
-                    title = currentCopy.notificationPairRequestTitle,
-                    body = currentCopy.notificationPairRequestBody.replace("%s", selfName),
+                    title = targetCopy.notificationPairRequestTitle,
+                    body = targetCopy.notificationPairRequestBody.replace("%s", selfName),
                     data = mapOf(
                         "type" to "pair_request",
                         "senderId" to (self?.id ?: ""),
                         "senderName" to selfName,
                         "senderHost" to selfHost,
                         "senderPort" to "$selfPort",
-                        "senderOs" to selfOs
+                        "senderOs" to selfOs,
+                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                        "timestamp" to "${System.currentTimeMillis()}"
                     )
                 )
                 if (isCancelled || !isActive) return@launch
@@ -586,7 +616,7 @@ actual object ConnectionManager {
                         type = OutgoingStatusType.CONNECTION,
                         deviceName = target.name,
                         step = OutgoingStep.WAITING_APPROVAL,
-                        message = currentCopy.transferNotificationSentWaiting,
+                        message = copy.transferNotificationSentWaiting,
                         onCancel = cancelPairing
                     )
                     withContext(Dispatchers.Main) {
@@ -597,7 +627,7 @@ actual object ConnectionManager {
             }
 
             if (isCancelled || !isActive) return@launch
-            OutgoingStatusManager.fail(currentCopy.deviceDidNotRespond)
+            OutgoingStatusManager.fail(copy.deviceDidNotRespond)
             withContext(Dispatchers.Main) {
                 onResult(PairResult.UNAVAILABLE)
             }

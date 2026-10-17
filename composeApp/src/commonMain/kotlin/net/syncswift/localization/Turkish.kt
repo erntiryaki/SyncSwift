@@ -397,5 +397,11 @@ val TurkishCopy = Copy().apply {
     remoteTransferUploaded = "Dosya uzak cihaza iletildi!"
     requestCancelledBySender = "Bağlantı isteği gönderen tarafından iptal edildi."
     transferCancelledBySender = "Dosya aktarımı gönderen tarafından iptal edildi."
+    clipboardCancelledBySender = "Pano aktarımı gönderen tarafından iptal edildi."
+    requireLoginForProTitle = "Hesap Gerekli"
+    requireLoginForProDesc = "SyncSwift Pro satın almak ve özelliklerini kullanabilmek için lütfen giriş yapın veya kayıt olun."
+    signInOrRegister = "Giriş Yap / Kayıt Ol"
+    remoteConnectionLockedDesc = "Uzaktan bağlantı ve 6 haneli kod ile eşleşme SyncSwift Pro'ya özeldir."
+    unlockWithPro = "Pro ile Kilidi Aç"
 }
 

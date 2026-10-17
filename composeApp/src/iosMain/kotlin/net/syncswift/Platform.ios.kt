@@ -50,6 +50,24 @@ actual fun formatEpochToDate(epochMillis: Long): String {
     return formatter.stringFromDate(date)
 }
 
+actual fun getCurrentPaywallSlotKey(): String {
+    val cal = platform.Foundation.NSCalendar.currentCalendar
+    val date = platform.Foundation.NSDate()
+    val comps = cal.components(
+        platform.Foundation.NSCalendarUnitYear or
+        platform.Foundation.NSCalendarUnitMonth or
+        platform.Foundation.NSCalendarUnitDay or
+        platform.Foundation.NSCalendarUnitHour,
+        fromDate = date
+    )
+    val year = comps.year
+    val month = comps.month
+    val day = comps.day
+    val hour = comps.hour.toInt()
+    val slot = hour / 3
+    return "$year-$month-$day-$slot"
+}
+
 fun requestIosPermissions() {
     try {
         val center = platform.UserNotifications.UNUserNotificationCenter.currentNotificationCenter()
@@ -141,8 +159,15 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
             val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
             val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            val key = "$senderHost:$senderPort"
+            if (net.syncswift.connection.ConnectionManager.isRequestCancelled(key) ||
+                net.syncswift.connection.ConnectionManager.isRequestCancelled(senderId) ||
+                net.syncswift.connection.ConnectionManager.isRequestCancelled(senderHost)) {
+                println("[SyncSwift iOS] Ignoring pair_accepted for cancelled request from $senderName")
+                return
+            }
             if (senderHost.isNotBlank()) {
-                net.syncswift.connection.ConnectionManager.markDeviceConnected("$senderHost:$senderPort", isRemote = true)
+                net.syncswift.connection.ConnectionManager.markDeviceConnected(key, isRemote = true)
             }
             if (senderId.isNotBlank()) {
                 net.syncswift.connection.ConnectionManager.markDeviceConnected(senderId, isRemote = true)
@@ -200,13 +225,25 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
             val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
             val senderOs = extractNotificationField(userInfo, "senderOs") ?: "iOS"
+            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: "en"
+            val timestamp = extractNotificationField(userInfo, "timestamp")?.toLongOrNull() ?: 0L
+            val key = "$senderHost:$senderPort"
+            val isExpired = timestamp > 0L && (currentTimeMs() - timestamp > 120_000L)
+
+            if (isExpired || net.syncswift.connection.ConnectionManager.isRequestCancelled(key) ||
+                net.syncswift.connection.ConnectionManager.isRequestCancelled(senderId) ||
+                net.syncswift.connection.ConnectionManager.isRequestCancelled(senderHost)) {
+                showNativeToast(copy.requestCancelledBySender)
+                return
+            }
 
             val request = net.syncswift.connection.IncomingPairRequest(
                 senderId = senderId,
                 senderName = senderName,
                 senderHost = senderHost,
                 senderPort = senderPort,
-                senderOsType = senderOs
+                senderOsType = senderOs,
+                senderLanguage = senderLanguage
             )
             net.syncswift.connection.ConnectionManager.dispatchIncomingPairRequest(request)
             net.syncswift.notification.NotificationHistoryManager.addNotification(
@@ -226,6 +263,14 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val mimeType = extractNotificationField(userInfo, "mimeType") ?: "application/octet-stream"
             val downloadUrl = extractNotificationField(userInfo, "downloadUrl") ?: ""
             val isRemote = extractNotificationField(userInfo, "isRemote")?.equals("true", ignoreCase = true) == true || downloadUrl.isNotBlank()
+            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: "en"
+            val timestamp = extractNotificationField(userInfo, "timestamp")?.toLongOrNull() ?: 0L
+            val isExpired = timestamp > 0L && (currentTimeMs() - timestamp > 180_000L)
+
+            if (isExpired || net.syncswift.connection.ConnectionManager.isRequestCancelled(transferId)) {
+                showNativeToast(copy.transferCancelledBySender)
+                return
+            }
 
             val request = net.syncswift.connection.IncomingTransferRequest(
                 senderName = senderName,
@@ -236,7 +281,8 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 senderPort = senderPort,
                 transferId = transferId,
                 downloadUrl = downloadUrl,
-                isRemote = isRemote
+                isRemote = isRemote,
+                senderLanguage = senderLanguage
             )
             net.syncswift.connection.ConnectionManager.dispatchIncomingTransferRequest(request)
             val sizeStr = if (fileSize > 0) " (${net.syncswift.transfer.formatBytes(fileSize)})" else ""

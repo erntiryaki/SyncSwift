@@ -54,5 +54,8 @@ expect object SessionManager {
 
     fun saveOnboardingSeen(seen: Boolean)
     fun isOnboardingSeen(): Boolean
+
+    fun saveLastShownPaywallSlot(slot: String)
+    fun getLastShownPaywallSlot(): String?
 }
 
