@@ -26,6 +26,7 @@ data class IncomingPairRequest(
     val senderPort: Int,
     val senderOsType: String,
     val senderLanguage: String = "en",
+    val senderPushToken: String = "",
     val deferredResponse: CompletableDeferred<Boolean> = CompletableDeferred()
 )
 
@@ -76,5 +77,6 @@ expect object ConnectionManager {
     fun isRequestCancelled(requestId: String): Boolean
     fun markRequestCancelled(requestId: String)
     fun generateOrRotatePairingCode()
+    fun ensurePairingCodeActive()
     fun connectViaPairingCode(code: String, onResult: (PairResult) -> Unit)
 }

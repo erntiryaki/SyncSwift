@@ -73,11 +73,42 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 net.syncswift.showNativeToast(copy.transferCancelledBySender)
                 return
             }
-            "clipboard_sync" -> {
+            "clipboard_cancelled" -> {
+                val transferId = data["transferId"] ?: ""
+                ConnectionManager.cancelIncomingTransferRequest(transferId)
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(NOTIFICATION_FILE_ID)
+                net.syncswift.showNativeToast(copy.clipboardCancelledBySender)
+                return
+            }
+            "clipboard_request", "clipboard_sync" -> {
                 val clipText = data["text"] ?: data["content"] ?: data["body"] ?: remoteMessage.notification?.body ?: ""
-                if (clipText.isNotBlank()) {
-                    net.syncswift.transfer.TransferEngine.applyReceivedClipboard(clipText, copy)
-                }
+                val transferId = data["transferId"] ?: "clip-${System.currentTimeMillis()}"
+                val senderHost = data["senderHost"] ?: ""
+                val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
+                val senderLanguage = data["senderLanguage"] ?: "en"
+                val preview = clipText.take(35).replace("\n", " ")
+
+                val request = IncomingTransferRequest(
+                    senderName = senderName,
+                    fileName = "${copy.clipboard}: $preview",
+                    fileSize = clipText.toByteArray().size.toLong(),
+                    mimeType = "text/plain",
+                    senderHost = senderHost,
+                    senderPort = senderPort,
+                    transferId = transferId,
+                    downloadUrl = clipText,
+                    isRemote = true,
+                    senderLanguage = senderLanguage
+                )
+                ConnectionManager.dispatchIncomingTransferRequest(request)
+            }
+            "clipboard_accepted" -> {
+                val preview = data["preview"] ?: ""
+                net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", preview))
+            }
+            "clipboard_rejected" -> {
+                net.syncswift.connection.OutgoingStatusManager.fail(copy.operationRejectedOrTimeout)
             }
             "pair_request" -> {
                 val senderId = data["senderId"] ?: ""
@@ -85,6 +116,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
                 val senderOs = data["senderOs"] ?: "Android"
                 val senderLanguage = data["senderLanguage"] ?: "en"
+                val senderPushToken = data["senderPushToken"] ?: ""
 
                 val request = IncomingPairRequest(
                     senderId = senderId,
@@ -92,7 +124,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     senderHost = senderHost,
                     senderPort = senderPort,
                     senderOsType = senderOs,
-                    senderLanguage = senderLanguage
+                    senderLanguage = senderLanguage,
+                    senderPushToken = senderPushToken
                 )
                 ConnectionManager.dispatchIncomingPairRequest(request)
             }
@@ -133,10 +166,10 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     return
                 }
                 if (senderHost.isNotBlank()) {
-                    ConnectionManager.markDeviceConnected(key)
+                    ConnectionManager.markDeviceConnected(key, isRemote = true)
                 }
                 if (senderId.isNotBlank()) {
-                    ConnectionManager.markDeviceConnected(senderId)
+                    ConnectionManager.markDeviceConnected(senderId, isRemote = true)
                 }
                 net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.notificationPairAcceptedStatus.replace("%s", senderName))
             }
@@ -198,11 +231,12 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 body = copy.notificationFileRejectedStatus.replace("%s", senderName)
                 notificationId = (System.currentTimeMillis() % 100000).toInt()
             }
-            "clipboard_sync" -> {
+            "clipboard_request", "clipboard_sync" -> {
                 title = copy.syncClipboardAction
                 val clipText = data["text"] ?: data["content"] ?: data["body"] ?: remoteMessage.notification?.body ?: ""
-                body = copy.clipboardSynced.replace("%s", clipText.take(50))
-                notificationId = (System.currentTimeMillis() % 100000).toInt()
+                val preview = clipText.take(35).replace("\n", " ")
+                body = "$senderName: $preview"
+                notificationId = NOTIFICATION_FILE_ID
             }
             else -> {
                 title = remoteMessage.notification?.title ?: data["title"] ?: copy.notificationPairRequestTitle

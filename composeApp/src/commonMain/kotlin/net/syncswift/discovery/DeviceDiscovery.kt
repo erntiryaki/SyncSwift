@@ -12,7 +12,8 @@ data class DiscoveredDevice(
     val isOnline: Boolean = true,
     val isRemote: Boolean = false,
     val pushToken: String? = null,
-    val language: String? = null
+    val language: String? = null,
+    val modelCode: String = ""
 )
 
 expect object DeviceDiscoveryManager {

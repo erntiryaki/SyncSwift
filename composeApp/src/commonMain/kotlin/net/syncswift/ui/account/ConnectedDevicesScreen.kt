@@ -93,6 +93,7 @@ fun ConnectedDevicesScreen(
 
     LaunchedEffect(Unit) {
         DeviceDiscoveryManager.startDiscovery()
+        ConnectionManager.ensurePairingCodeActive()
     }
 
     val selfHost = selfDevice?.host ?: "127.0.0.1"
@@ -329,7 +330,7 @@ fun ConnectedDevicesScreen(
                 !dev.isSelf &&
                 (selfDevice == null || (dev.host != selfDevice.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name)))
             }
-            val localConnected = otherDevices.filter { ConnectionManager.isDeviceConnected(it) && !ConnectionManager.isRemoteDevice(it) }
+            val localConnected = otherDevices.filter { ConnectionManager.isDeviceConnected(it) && !ConnectionManager.isRemoteDevice(it) && it.isOnline }
             val remoteConnected = otherDevices.filter { ConnectionManager.isDeviceConnected(it) && ConnectionManager.isRemoteDevice(it) }
 
             // SECTION 1: Yerel Cihazlar (Aynı Ağ)
@@ -349,7 +350,7 @@ fun ConnectedDevicesScreen(
                     maxLines = 1,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                val localCount = localConnected.size + (if (selfDevice != null) 1 else 0)
+                val localCount = localConnected.size
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = copy.formatDeviceCount(localCount),
@@ -362,17 +363,6 @@ fun ConnectedDevicesScreen(
             Spacer(Modifier.height(10.dp))
 
             Column(modifier = Modifier.fillMaxWidth()) {
-                if (selfDevice != null) {
-                    DeviceItemRow(
-                        name = cleanDeviceDisplayName(selfDevice.name),
-                        details = copy.thisDeviceOnline,
-                        badge = selfDevice.osType,
-                        isOnline = true,
-                        isSelf = true
-                    )
-                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-                }
-
                 if (localConnected.isNotEmpty()) {
                     localConnected.forEach { dev ->
                         val status = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
@@ -387,6 +377,13 @@ fun ConnectedDevicesScreen(
                         )
                         HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
                     }
+                } else {
+                    Text(
+                        text = copy.noDevicesOnNetwork,
+                        color = Mist,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
                 }
             }
 

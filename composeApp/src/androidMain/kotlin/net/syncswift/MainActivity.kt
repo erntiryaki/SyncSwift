@@ -69,17 +69,39 @@ class MainActivity : ComponentActivity() {
     private fun handleNotificationIntent(intent: Intent?) {
         val type = intent?.getStringExtra("type") ?: return
         val senderName = intent.getStringExtra("senderName") ?: "SyncSwift Cihazı"
-        if (type == "clipboard_sync") {
-            val clipText = intent.getStringExtra("text") ?: ""
-            if (clipText.isNotBlank()) {
-                net.syncswift.transfer.TransferEngine.applyReceivedClipboard(clipText, currentAppCopy())
+        if (type == "clipboard_sync" || type == "clipboard_request") {
+            val transferId = intent.getStringExtra("transferId") ?: ""
+            val clipText = intent.getStringExtra("text") ?: intent.getStringExtra("content") ?: ""
+            val timestamp = intent.getLongExtra("timestamp", 0L)
+            val isExpired = timestamp > 0L && (System.currentTimeMillis() - timestamp > 180_000L)
+
+            if (isExpired || ConnectionManager.isRequestCancelled(transferId)) {
+                showNativeToast(currentAppCopy().clipboardCancelledBySender)
+                return
             }
+
+            val preview = clipText.take(35).replace("\n", " ")
+            ConnectionManager.dispatchIncomingTransferRequest(
+                IncomingTransferRequest(
+                    senderName = senderName,
+                    fileName = "${currentAppCopy().clipboard}: $preview",
+                    fileSize = clipText.toByteArray().size.toLong(),
+                    mimeType = "text/plain",
+                    senderHost = intent.getStringExtra("senderHost") ?: "",
+                    senderPort = intent.getIntExtra("senderPort", 52424),
+                    transferId = transferId,
+                    downloadUrl = clipText,
+                    isRemote = true,
+                    senderLanguage = intent.getStringExtra("senderLanguage") ?: "en"
+                )
+            )
         } else if (type == "pair_request") {
             val senderHost = intent.getStringExtra("senderHost") ?: ""
             val senderPort = intent.getIntExtra("senderPort", 52424)
             val senderId = intent.getStringExtra("senderId") ?: ""
             val senderOs = intent.getStringExtra("senderOs") ?: "Android"
             val senderLanguage = intent.getStringExtra("senderLanguage") ?: "en"
+            val senderPushToken = intent.getStringExtra("senderPushToken") ?: ""
             val timestamp = intent.getLongExtra("timestamp", 0L)
             val key = "$senderHost:$senderPort"
             val isExpired = timestamp > 0L && (System.currentTimeMillis() - timestamp > 120_000L)
@@ -98,7 +120,8 @@ class MainActivity : ComponentActivity() {
                     senderHost = senderHost,
                     senderPort = senderPort,
                     senderOsType = senderOs,
-                    senderLanguage = senderLanguage
+                    senderLanguage = senderLanguage,
+                    senderPushToken = senderPushToken
                 )
             )
         } else if (type == "file_request") {

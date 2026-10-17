@@ -128,17 +128,20 @@ actual object DeviceDiscoveryManager {
         val saved = SessionManager.getSavedManualDevicesJson() ?: return
         try {
             val regex = Regex("""\{"id":"([^"]*)","name":"([^"]*)","host":"([^"]*)","port":(\d+),"osType":"([^"]*)"""")
-            val restored = regex.findAll(saved).map { match ->
+            val restored = regex.findAll(saved).mapNotNull { match ->
                 val (id, name, host, port, osType) = match.destructured
-                DiscoveredDevice(
-                    id = id,
-                    name = name,
-                    host = host,
-                    port = port.toIntOrNull() ?: DEFAULT_PORT,
-                    osType = osType,
-                    isSelf = false,
-                    isOnline = false
-                )
+                if (id.startsWith("manual-") || id.startsWith("remote-")) {
+                    DiscoveredDevice(
+                        id = id,
+                        name = name,
+                        host = host,
+                        port = port.toIntOrNull() ?: DEFAULT_PORT,
+                        osType = osType,
+                        isSelf = false,
+                        isOnline = false,
+                        isRemote = id.startsWith("remote-")
+                    )
+                } else null
             }.toList()
             if (restored.isNotEmpty()) {
                 _devices.value = restored
@@ -148,7 +151,7 @@ actual object DeviceDiscoveryManager {
 
     private fun saveManualDevices() {
         try {
-            val list = _devices.value.filter { !it.isSelf }
+            val list = _devices.value.filter { !it.isSelf && (it.id.startsWith("manual-") || it.id.startsWith("remote-")) }
             val sb = StringBuilder("[")
             list.forEachIndexed { idx, dev ->
                 sb.append("""{"id":"${dev.id}","name":"${dev.name}","host":"${dev.host}","port":${dev.port},"osType":"${dev.osType}"}""")
@@ -203,10 +206,8 @@ actual object DeviceDiscoveryManager {
                     onLost = { lostService ->
                         resolvingServices.remove(lostService.name)
                         val lostName = cleanDeviceDisplayName(lostService.name)
-                        _devices.value = _devices.value.map { dev ->
-                            if (dev.name == lostName || dev.id == lostService.name) {
-                                dev.copy(isOnline = false)
-                            } else dev
+                        _devices.value = _devices.value.filterNot { dev ->
+                            !dev.isRemote && (dev.name == lostName || dev.id == lostService.name)
                         }
                     }
                 )
@@ -214,11 +215,6 @@ actual object DeviceDiscoveryManager {
                 b.delegate = bDelegate
                 b.scheduleInRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
                 b.searchForServicesOfType(SERVICE_TYPE, inDomain = "local.")
-
-                // 3. Fallback: Sync with Supabase on same subnet in background
-                withContext(Dispatchers.Default) {
-                    syncOfflineDevicesFromCloud()
-                }
             } catch (e: Exception) {
                 println("[SyncSwift iOS Discovery] startDiscovery error: ${e.message}")
             }
@@ -274,7 +270,8 @@ actual object DeviceDiscoveryManager {
             osType = "iOS",
             isSelf = true,
             isOnline = true,
-            pushToken = net.syncswift.getSavedIosPushToken()
+            pushToken = net.syncswift.getSavedIosPushToken(),
+            modelCode = UIDevice.currentDevice.model
         )
     }
 
@@ -341,63 +338,5 @@ actual object DeviceDiscoveryManager {
             null
         }
     }
-
-    private fun syncOfflineDevicesFromCloud() {
-        val ip = getLocalWifiIp() ?: return
-        val subnet = if (ip.contains(".")) ip.substringBeforeLast(".") else return
-        val supabaseUrl = PlatformConfig.supabaseUrl
-        val anonKey = PlatformConfig.supabaseAnonKey
-        val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices?local_ip=like.${subnet}.*&select=*") ?: return
-
-        val req = NSMutableURLRequest.requestWithURL(url)
-        req.setHTTPMethod("GET")
-        req.setValue(anonKey, forHTTPHeaderField = "apikey")
-        req.setValue("Bearer $anonKey", forHTTPHeaderField = "Authorization")
-
-        val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, error ->
-            if (error == null && data != null) {
-                val jsonString = NSString.create(data, NSUTF8StringEncoding)?.toString() ?: return@dataTaskWithRequest
-                try {
-                    val deviceRegex = Regex("""\{"id":"([^"]*)","device_name":"([^"]*)","local_ip":"([^"]*)","port":(\d+),"device_type":"([^"]*)"""")
-                    val matches = deviceRegex.findAll(jsonString)
-                    val current = _devices.value.toMutableList()
-                    val selfName = UIDevice.currentDevice.name
-
-                    for (m in matches) {
-                        val (devId, devName, devHost, devPort, devType) = m.destructured
-                        if (devHost == ip || devName == selfName) continue
-                        val clean = cleanDeviceDisplayName(devName)
-                        val portInt = devPort.toIntOrNull() ?: DEFAULT_PORT
-
-                        val pushRegex = Regex(""""id"\s*:\s*"${Regex.escape(devId)}"[^}]*"push_token"\s*:\s*"([^"]*)"""")
-                        val pToken = pushRegex.find(jsonString)?.groupValues?.get(1)?.ifBlank { null }
-
-                        val exists = current.indexOfFirst { it.host == devHost && it.port == portInt }
-                        if (exists < 0) {
-                            current.add(
-                                DiscoveredDevice(
-                                    id = devId,
-                                    name = clean,
-                                    host = devHost,
-                                    port = portInt,
-                                    osType = devType,
-                                    isSelf = false,
-                                    isOnline = false,
-                                    pushToken = pToken
-                                )
-                            )
-                        } else {
-                            val existing = current[exists]
-                            if (existing.pushToken.isNullOrBlank() && !pToken.isNullOrBlank()) {
-                                current[exists] = existing.copy(pushToken = pToken)
-                            }
-                        }
-                    }
-                    _devices.value = current
-                    saveManualDevices()
-                } catch (_: Exception) {}
-            }
-        }
-        task.resume()
-    }
 }
+

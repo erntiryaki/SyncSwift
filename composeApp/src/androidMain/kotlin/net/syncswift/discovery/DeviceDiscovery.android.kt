@@ -73,18 +73,23 @@ actual object DeviceDiscoveryManager {
                 val restored = mutableListOf<DiscoveredDevice>()
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
-                    restored.add(
-                        DiscoveredDevice(
-                            id = obj.optString("id", ""),
-                            name = obj.optString("name", "Device"),
-                            host = obj.optString("host", ""),
-                            port = obj.optInt("port", 52424),
-                            osType = obj.optString("osType", "Android"),
-                            isSelf = false,
-                            isOnline = false,
-                            pushToken = obj.optString("pushToken", "").ifBlank { null }
+                    val id = obj.optString("id", "")
+                    // Only restore manual / remote devices, never local ghosts
+                    if (id.startsWith("manual-") || id.startsWith("remote-")) {
+                        restored.add(
+                            DiscoveredDevice(
+                                id = id,
+                                name = obj.optString("name", "Device"),
+                                host = obj.optString("host", ""),
+                                port = obj.optInt("port", 52424),
+                                osType = obj.optString("osType", "Android"),
+                                isSelf = false,
+                                isOnline = false,
+                                isRemote = id.startsWith("remote-"),
+                                pushToken = obj.optString("pushToken", "").ifBlank { null }
+                            )
                         )
-                    )
+                    }
                 }
                 if (restored.isNotEmpty()) {
                     _devices.value = restored
@@ -98,6 +103,8 @@ actual object DeviceDiscoveryManager {
             val array = org.json.JSONArray()
             for (dev in _devices.value) {
                 if (dev.isSelf) continue
+                // Only save manually added or remote devices
+                if (!dev.id.startsWith("manual-") && !dev.id.startsWith("remote-")) continue
                 val obj = org.json.JSONObject().apply {
                     put("id", dev.id)
                     put("name", dev.name)
@@ -123,73 +130,7 @@ actual object DeviceDiscoveryManager {
 
             registerService()
             startBrowsing()
-            syncOfflineDevicesFromCloud()
             _isScanning.value = true
-        }
-    }
-
-    private fun syncOfflineDevicesFromCloud() {
-        scope.launch {
-            try {
-                val ip = getLocalIpAddress() ?: return@launch
-                val subnet = if (ip.contains(".")) ip.substringBeforeLast(".") else return@launch
-
-                val url = java.net.URL("${net.syncswift.SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?local_ip=like.${subnet}.*&select=*")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 6000
-                conn.readTimeout = 6000
-                conn.setRequestProperty("apikey", net.syncswift.SyncSwiftConfig.SUPABASE_ANON_KEY)
-                conn.setRequestProperty("Authorization", "Bearer ${net.syncswift.SyncSwiftConfig.SUPABASE_ANON_KEY}")
-
-                val responseCode = conn.responseCode
-                if (responseCode in 200..299) {
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    val array = org.json.JSONArray(body)
-                    val selfModel = Build.MODEL
-                    val current = _devices.value.toMutableList()
-
-                    for (i in 0 until array.length()) {
-                        val obj = array.getJSONObject(i)
-                        val devId = obj.optString("id", "")
-                        val devName = obj.optString("device_name", "SyncSwift Device")
-                        val devHost = obj.optString("local_ip", "")
-                        val devPort = obj.optInt("port", 52424)
-                        val devType = obj.optString("device_type", "Android")
-                        val pushToken = obj.optString("push_token", "")
-
-                        // Skip self
-                        if (devHost == ip || devId.contains(selfModel)) continue
-
-                        // If already in list, update push token and id; otherwise add as offline/sleeping
-                        val existsIdx = current.indexOfFirst { it.host == devHost && it.port == devPort }
-                        if (existsIdx >= 0) {
-                            val existing = current[existsIdx]
-                            current[existsIdx] = existing.copy(
-                                id = if (devId.isNotBlank()) devId else existing.id,
-                                pushToken = pushToken.ifBlank { existing.pushToken }
-                            )
-                        } else {
-                            current.add(
-                                DiscoveredDevice(
-                                    id = devId,
-                                    name = devName,
-                                    host = devHost,
-                                    port = devPort,
-                                    osType = devType,
-                                    isSelf = false,
-                                    isOnline = false,
-                                    pushToken = pushToken.ifBlank { null }
-                                )
-                            )
-                        }
-                    }
-                    _devices.value = current
-                    saveManualDevices()
-                }
-            } catch (e: Exception) {
-                Log.d(TAG, "Offline devices sync skipped: ${e.message}")
-            }
         }
     }
 
@@ -210,14 +151,30 @@ actual object DeviceDiscoveryManager {
 
     actual fun getSelfDevice(): DiscoveredDevice? {
         val ip = getLocalIpAddress() ?: "127.0.0.1"
+        val ctx = appContext
+        val customName = try {
+            if (ctx != null) {
+                android.provider.Settings.Global.getString(ctx.contentResolver, "device_name")
+                    ?: android.provider.Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
+            } else null
+        } catch (_: Exception) { null }
+
+        val mfg = Build.MANUFACTURER.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        val displayName = when {
+            !customName.isNullOrBlank() && customName != Build.MODEL -> customName
+            Build.MODEL.startsWith(mfg, ignoreCase = true) -> Build.MODEL
+            else -> "$mfg ${Build.MODEL}"
+        }
+
         return DiscoveredDevice(
             id = "self-$selfServiceName",
-            name = Build.MODEL,
+            name = displayName,
             host = ip,
             port = actualPort,
             osType = "Android",
             isSelf = true,
-            isOnline = true
+            isOnline = true,
+            modelCode = Build.MODEL
         )
     }
 
@@ -323,13 +280,9 @@ actual object DeviceDiscoveryManager {
                     Log.d(TAG, "Service lost: ${service.serviceName}")
                     val lostName = service.serviceName
                     val cleanLost = cleanDeviceDisplayName(lostName)
-                    _devices.value = _devices.value.map { dev ->
+                    _devices.value = _devices.value.filterNot { dev ->
                         val cleanDevName = cleanDeviceDisplayName(dev.name)
-                        if (dev.id == lostName || dev.name == lostName || cleanDevName == cleanLost || lostName.contains(cleanDevName)) {
-                            dev.copy(isOnline = false)
-                        } else {
-                            dev
-                        }
+                        !dev.isRemote && (dev.id == lostName || dev.name == lostName || cleanDevName == cleanLost || lostName.contains(cleanDevName))
                     }
                 }
 

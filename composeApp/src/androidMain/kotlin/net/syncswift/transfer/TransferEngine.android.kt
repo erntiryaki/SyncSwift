@@ -859,6 +859,28 @@ actual object TransferEngine {
             updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
             ConnectionManager.markRequestCancelled(transferId)
             OutgoingStatusManager.dismiss()
+
+            scope.launch(Dispatchers.IO) {
+                var pushToken = targetDev?.pushToken
+                if (pushToken.isNullOrBlank() && targetHost.isNotBlank()) {
+                    pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+                }
+                if (!pushToken.isNullOrBlank()) {
+                    val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
+                    val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                    ConnectionManager.sendFcmNotification(
+                        token = pushToken,
+                        title = targetCopy.requestCancelledBySender,
+                        body = targetCopy.transferCancelledBySender,
+                        data = mapOf(
+                            "type" to "file_cancelled",
+                            "transferId" to transferId,
+                            "senderName" to selfName
+                        )
+                    )
+                }
+            }
         }
 
         OutgoingStatusManager.show(
@@ -1150,6 +1172,13 @@ actual object TransferEngine {
             var isCancelled = false
             var job: Job? = null
 
+            val cleanTarget = net.syncswift.discovery.cleanDeviceDisplayName(targetDeviceName)
+            val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+                net.syncswift.discovery.cleanDeviceDisplayName(it.name) == cleanTarget
+            }
+            val isLocalDiscovered = targetDev != null && targetDev.isOnline && !targetDev.isRemote &&
+                    !targetHost.startsWith("remote-") && !ConnectionManager.isRemoteDevice(targetDev)
+
             val cancelClipboard: () -> Unit = {
                 isCancelled = true
                 job?.cancel()
@@ -1158,7 +1187,30 @@ actual object TransferEngine {
                 } catch (_: Exception) {}
                 activeSocket = null
                 updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+                ConnectionManager.markRequestCancelled(transferId)
                 OutgoingStatusManager.dismiss()
+
+                scope.launch(Dispatchers.IO) {
+                    var pushToken = targetDev?.pushToken
+                    if (pushToken.isNullOrBlank() && targetHost.isNotBlank()) {
+                        pushToken = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+                    }
+                    if (!pushToken.isNullOrBlank()) {
+                        val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
+                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                        val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                        ConnectionManager.sendFcmNotification(
+                            token = pushToken,
+                            title = targetCopy.requestCancelledBySender,
+                            body = targetCopy.clipboardCancelledBySender,
+                            data = mapOf(
+                                "type" to "clipboard_cancelled",
+                                "transferId" to transferId,
+                                "senderName" to selfName
+                            )
+                        )
+                    }
+                }
             }
 
             OutgoingStatusManager.show(
@@ -1173,13 +1225,6 @@ actual object TransferEngine {
 
             job = coroutineContext.job
 
-            val cleanTarget = net.syncswift.discovery.cleanDeviceDisplayName(targetDeviceName)
-            val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
-                net.syncswift.discovery.cleanDeviceDisplayName(it.name) == cleanTarget
-            }
-            val isLocalDiscovered = targetDev != null && targetDev.isOnline && !targetDev.isRemote &&
-                    !targetHost.startsWith("remote-") && !ConnectionManager.isRemoteDevice(targetDev)
-
             suspend fun sendViaFcmFallback(): Boolean {
                 if (isCancelled || !isActive) return false
                 var pushToken = targetDev?.pushToken
@@ -1189,29 +1234,41 @@ actual object TransferEngine {
                 if (isCancelled || !isActive) return false
                 if (!pushToken.isNullOrBlank()) {
                     val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
-                    val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: android.os.Build.MODEL)
+                    val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: Build.MODEL)
                     val preview = text.trim().replace("\n", " ").take(100)
                     val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
-                    val notificationBody = targetCopy.clipboardSynced.replace("%s", preview)
+                    val notificationBody = targetCopy.notificationFileRequestBody
+                        .replace("%s", selfName)
+                        .replace("%s", "${copy.clipboard}: $preview")
+                        .replace("(%s)", "")
                     val sent = ConnectionManager.sendFcmNotification(
                         token = pushToken,
-                        title = targetCopy.syncClipboardAction,
+                        title = targetCopy.notificationFileRequestTitle,
                         body = notificationBody,
                         data = mapOf(
-                            "type" to "clipboard_sync",
+                            "type" to "clipboard_request",
+                            "transferId" to transferId,
                             "text" to text,
                             "content" to text,
                             "body" to preview,
                             "senderName" to selfName,
-                            "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
+                            "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                            "timestamp" to "${System.currentTimeMillis()}"
                         )
                     )
                     if (isCancelled || !isActive) return false
                     if (sent) {
-                        updateTransferProgress(transferId, text.toByteArray().size.toLong(), TransferStatus.COMPLETED)
-                        OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", text.take(30)))
+                        OutgoingStatusManager.show(
+                            type = OutgoingStatusType.FILE,
+                            deviceName = targetDeviceName,
+                            fileName = "${copy.clipboard}: ${text.take(30).replace("\n", " ")}",
+                            totalBytes = text.toByteArray().size.toLong(),
+                            step = OutgoingStep.WAITING_APPROVAL,
+                            message = copy.transferNotificationSentWaiting,
+                            onCancel = cancelClipboard
+                        )
                         withContext(Dispatchers.Main) {
-                            showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
+                            showNativeToast(copy.transferNotificationSentWaiting)
                             onSuccess()
                         }
                         return true

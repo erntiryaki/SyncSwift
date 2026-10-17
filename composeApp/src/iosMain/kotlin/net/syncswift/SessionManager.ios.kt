@@ -23,6 +23,8 @@ actual object SessionManager {
         NSUserDefaults.standardUserDefaults.setObject(IdentityProvider.Local.name, "logged_provider")
         NSUserDefaults.standardUserDefaults.setObject("", "first_name")
         NSUserDefaults.standardUserDefaults.setObject("", "last_name")
+        NSUserDefaults.standardUserDefaults.setBool(false, "is_pro")
+        net.syncswift.subscription.SubscriptionManager.refreshProState()
     }
 
     actual fun clearSession() {
@@ -31,6 +33,8 @@ actual object SessionManager {
         NSUserDefaults.standardUserDefaults.removeObjectForKey("logged_provider")
         NSUserDefaults.standardUserDefaults.removeObjectForKey("first_name")
         NSUserDefaults.standardUserDefaults.removeObjectForKey("last_name")
+        NSUserDefaults.standardUserDefaults.setBool(false, "is_pro")
+        net.syncswift.subscription.SubscriptionManager.refreshProState()
     }
 
     actual fun isLoggedIn(): Boolean {

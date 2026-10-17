@@ -425,11 +425,54 @@ actual object TransferEngine {
                         TYPE_CLIPBOARD -> {
                             val str1 = readUTF(clientSock) ?: return@memScoped
                             val str2 = readUTF(clientSock)
+                            val senderName = if (str2 != null) str1 else "Peer"
                             val receivedText = str2 ?: str1
+
+                            val copy = currentAppCopy()
+                            val preview = receivedText.take(35).replace("\n", " ")
+                            val transferRequest = IncomingTransferRequest(
+                                senderName = senderName,
+                                fileName = "${copy.clipboard}: $preview",
+                                fileSize = receivedText.encodeToByteArray().size.toLong(),
+                                mimeType = "text/plain",
+                                downloadUrl = receivedText
+                            )
+
+                            ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
+
+                            val accepted = try {
+                                withTimeout(35000) {
+                                    transferRequest.deferredResponse.await()
+                                }
+                            } catch (e: Exception) {
+                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                false
+                            }
+
+                            if (!accepted) {
+                                val rejByte = byteArrayOf(RESP_REJECTED)
+                                rejByte.usePinned { pinned ->
+                                    send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                }
+                                return@memScoped
+                            }
 
                             applyIncomingClipboard(receivedText)
 
-                            val ackByte = byteArrayOf(ACK)
+                            val item = TransferItem(
+                                id = NSUUID().UUIDString,
+                                fileName = "${copy.clipboard}: $preview",
+                                fileSizeBytes = receivedText.encodeToByteArray().size.toLong(),
+                                mimeType = "text/plain",
+                                bytesTransferred = receivedText.encodeToByteArray().size.toLong(),
+                                isSent = false,
+                                peerName = senderName,
+                                status = TransferStatus.COMPLETED,
+                                timestamp = (NSDate().timeIntervalSince1970 * 1000).toLong()
+                            )
+                            recordTransfer(item)
+
+                            val ackByte = byteArrayOf(RESP_ACCEPTED)
                             ackByte.usePinned { pinned ->
                                 send(clientSock, pinned.addressOf(0), 1.convert(), 0)
                             }
@@ -557,6 +600,26 @@ actual object TransferEngine {
             }
             updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
             ConnectionManager.markRequestCancelled(transferId)
+
+            scope.launch(Dispatchers.Default) {
+                val token = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+                if (!token.isNullOrBlank()) {
+                    val targetDev = DeviceDiscoveryManager.devices.value.find { it.host == targetHost || it.name == targetDeviceName }
+                    val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
+                    val self = DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                    ConnectionManager.sendFcmNotification(
+                        token = token,
+                        title = targetCopy.requestCancelled,
+                        body = targetCopy.transferCancelledBySender,
+                        data = mapOf(
+                            "type" to "file_cancelled",
+                            "transferId" to transferId,
+                            "senderName" to selfName
+                        )
+                    )
+                }
+            }
         }
 
         OutgoingStatusManager.show(
@@ -888,7 +951,28 @@ actual object TransferEngine {
             isCancelled = true
             clipJob?.cancel()
             updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+            ConnectionManager.markRequestCancelled(transferId)
             OutgoingStatusManager.dismiss()
+
+            scope.launch(Dispatchers.Default) {
+                val token = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+                if (!token.isNullOrBlank()) {
+                    val targetDev = DeviceDiscoveryManager.devices.value.find { it.host == targetHost || it.name == targetDeviceName }
+                    val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
+                    val self = DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                    ConnectionManager.sendFcmNotification(
+                        token = token,
+                        title = targetCopy.requestCancelled,
+                        body = targetCopy.clipboardCancelledBySender,
+                        data = mapOf(
+                            "type" to "clipboard_cancelled",
+                            "transferId" to transferId,
+                            "senderName" to selfName
+                        )
+                    )
+                }
+            }
         }
 
         OutgoingStatusManager.show(
@@ -948,14 +1032,21 @@ actual object TransferEngine {
             if (isCancelled || !isActive) return@launch
 
             // Fallback or Direct: FCM Push Relay
-            val fcmSent = sendViaFcmRelay(targetDeviceName, targetHost, text)
+            val fcmSent = sendViaFcmRelay(targetDeviceName, targetHost, text, transferId)
             if (isCancelled || !isActive) return@launch
 
             if (fcmSent) {
-                updateTransferProgress(transferId, textBytes.size.toLong(), TransferStatus.COMPLETED)
-                OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", text.take(30)))
+                OutgoingStatusManager.show(
+                    type = OutgoingStatusType.FILE,
+                    deviceName = targetDeviceName,
+                    fileName = "${copy.clipboard}: ${text.take(30).replace("\n", " ")}",
+                    totalBytes = textBytes.size.toLong(),
+                    step = OutgoingStep.WAITING_APPROVAL,
+                    message = copy.transferNotificationSentWaiting,
+                    onCancel = cancelClipboard
+                )
                 withContext(Dispatchers.Main) {
-                    showNativeToast(copy.clipboardSentSuccess.replace("%s", text.take(30)))
+                    showNativeToast(copy.transferNotificationSentWaiting)
                     onSuccess()
                 }
             } else {
@@ -976,7 +1067,7 @@ actual object TransferEngine {
 
         return memScoped {
             val timeout = alloc<timeval>()
-            timeout.tv_sec = 4
+            timeout.tv_sec = 35
             timeout.tv_usec = 0
             setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
             setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
@@ -1020,7 +1111,7 @@ actual object TransferEngine {
         }
     }
 
-    private suspend fun sendViaFcmRelay(targetName: String, targetHost: String, text: String): Boolean {
+    private suspend fun sendViaFcmRelay(targetName: String, targetHost: String, text: String, transferId: String): Boolean {
         val cleanTarget = cleanDeviceDisplayName(targetName)
         val token = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
         if (token.isNullOrBlank()) return false
@@ -1030,18 +1121,23 @@ actual object TransferEngine {
         val targetDev = DeviceDiscoveryManager.devices.value.find { it.host == targetHost || it.name == targetName }
         val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
         val preview = text.trim().replace("\n", " ").take(100)
-        val notificationBody = targetCopy.clipboardSynced.replace("%s", preview)
+        val notificationBody = targetCopy.notificationFileRequestBody
+            .replace("%s", selfName)
+            .replace("%s", "${currentAppCopy().clipboard}: $preview")
+            .replace("(%s)", "")
         return ConnectionManager.sendFcmNotification(
             token = token,
-            title = targetCopy.syncClipboardAction,
+            title = targetCopy.notificationFileRequestTitle,
             body = notificationBody,
             data = mapOf(
-                "type" to "clipboard_sync",
+                "type" to "clipboard_request",
+                "transferId" to transferId,
                 "text" to text,
                 "content" to text,
                 "body" to preview,
                 "senderName" to selfName,
-                "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
+                "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                "timestamp" to "${(NSDate().timeIntervalSince1970 * 1000).toLong()}"
             )
         )
     }

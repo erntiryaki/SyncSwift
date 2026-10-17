@@ -493,11 +493,13 @@ actual object ConnectionManager {
             return
         }
         val key = deviceKey(request.senderHost, request.senderPort)
-        markDeviceConnected(key, isRemote = true)
-        markDeviceConnected(request.senderId, isRemote = true)
+        val isRemote = request.senderHost.startsWith("remote-") || request.senderPushToken.isNotBlank() || !request.senderHost.contains(".")
+        markDeviceConnected(key, isRemote = isRemote)
+        markDeviceConnected(request.senderId, isRemote = isRemote)
+        markDeviceConnected(request.senderHost, isRemote = isRemote)
 
         scope.launch(Dispatchers.Default) {
-            val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
+            val senderToken = if (request.senderPushToken.isNotBlank()) request.senderPushToken else queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
                 val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
                 val self = DeviceDiscoveryManager.getSelfDevice()
@@ -563,7 +565,31 @@ actual object ConnectionManager {
             showNativeToast(currentAppCopy().transferCancelledBySender)
             return
         }
-        if (request.isRemote && request.downloadUrl.isNotBlank()) {
+        if (request.mimeType == "text/plain") {
+            val clipText = request.downloadUrl
+            val copy = currentAppCopy()
+            net.syncswift.transfer.TransferEngine.applyIncomingClipboard(clipText)
+            showNativeToast(copy.clipboardCopiedSuccess)
+            scope.launch(Dispatchers.Default) {
+                val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
+                if (!senderToken.isNullOrBlank()) {
+                    val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
+                    val self = DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = cleanDeviceDisplayName(self?.name ?: platform.UIKit.UIDevice.currentDevice.name)
+                    sendFcmNotification(
+                        token = senderToken,
+                        title = targetCopy.syncClipboardAction,
+                        body = targetCopy.clipboardSentSuccess.replace("%s", clipText.take(30)),
+                        data = mapOf(
+                            "type" to "clipboard_accepted",
+                            "preview" to clipText.take(30),
+                            "transferId" to request.transferId,
+                            "senderName" to selfName
+                        )
+                    )
+                }
+            }
+        } else if (request.isRemote && request.downloadUrl.isNotBlank()) {
             net.syncswift.transfer.TransferEngine.downloadRemoteFile(
                 downloadUrl = request.downloadUrl,
                 fileName = request.fileName,
@@ -588,6 +614,28 @@ actual object ConnectionManager {
     actual fun rejectTransferRequest(request: IncomingTransferRequest) {
         _pendingTransferRequest.value = null
         request.deferredResponse.complete(false)
+        scope.launch(Dispatchers.Default) {
+            val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
+            if (!senderToken.isNullOrBlank()) {
+                val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
+                val self = DeviceDiscoveryManager.getSelfDevice()
+                val selfName = cleanDeviceDisplayName(self?.name ?: platform.UIKit.UIDevice.currentDevice.name)
+                val type = if (request.mimeType == "text/plain") "clipboard_rejected" else "file_rejected"
+                val title = if (request.mimeType == "text/plain") targetCopy.operationRejectedOrTimeout else targetCopy.transferRejectedByRecipient
+                val body = if (request.mimeType == "text/plain") targetCopy.operationRejectedOrTimeout else targetCopy.notificationFileRejectedStatus.replace("%s", selfName)
+                sendFcmNotification(
+                    token = senderToken,
+                    title = title,
+                    body = body,
+                    data = mapOf(
+                        "type" to type,
+                        "transferId" to request.transferId,
+                        "senderName" to selfName,
+                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
+                    )
+                )
+            }
+        }
     }
 
     actual fun cancelIncomingPairRequest() {
@@ -638,6 +686,12 @@ actual object ConnectionManager {
         }
     }
 
+    actual fun ensurePairingCodeActive() {
+        if (codeRotationJob == null || codeRotationJob?.isActive != true || _codeRemainingSeconds.value <= 0) {
+            generateOrRotatePairingCode()
+        }
+    }
+
     private fun publishPairingCodeToBackend(code: String) {
         scope.launch {
             try {
@@ -667,8 +721,7 @@ actual object ConnectionManager {
                         "device_type": "iOS",
                         "push_token": "$pushToken",
                         "host": "$selfHost",
-                        "port": $selfPort,
-                        "language": "$currentLang"
+                        "port": $selfPort
                     }
                 """.trimIndent()
                 val data = (jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding)
@@ -737,11 +790,14 @@ actual object ConnectionManager {
                                     val targetHost = devHost.ifBlank { "remote-$clean" }
                                     val targetDevKey = deviceKey(targetHost, devPort)
                                     DeviceDiscoveryManager.addManualDevice(targetHost, devPort, devName, devType)
+                                    markDeviceConnected(targetHost, isRemote = true)
+                                    markDeviceConnected(targetDevKey, isRemote = true)
 
                                     if (pToken.isNotBlank()) {
                                         val self = DeviceDiscoveryManager.getSelfDevice()
                                         val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
                                         val targetCopy = net.syncswift.copyForLanguageCode(targetLang)
+                                        val myPushToken = net.syncswift.getSavedIosPushToken() ?: ""
                                         scope.launch(Dispatchers.Default) {
                                             sendFcmNotification(
                                                 token = pToken,
@@ -754,6 +810,7 @@ actual object ConnectionManager {
                                                     "senderPort" to "${self?.port ?: 52424}",
                                                     "senderId" to (self?.id ?: UIDevice.currentDevice.identifierForVendor?.UUIDString ?: ""),
                                                     "senderOs" to "iOS",
+                                                    "senderPushToken" to myPushToken,
                                                     "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
                                                     "timestamp" to "${currentTimeMs()}"
                                                 )

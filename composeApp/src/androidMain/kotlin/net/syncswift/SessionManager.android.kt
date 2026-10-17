@@ -60,7 +60,9 @@ actual object SessionManager {
             ?.putString("logged_provider", IdentityProvider.Local.name)
             ?.putString("first_name", "")
             ?.putString("last_name", "")
+            ?.putBoolean("is_pro", false)
             ?.apply()
+        net.syncswift.subscription.SubscriptionManager.refreshProState()
     }
 
     actual fun clearSession() {
@@ -70,7 +72,9 @@ actual object SessionManager {
             ?.remove("logged_provider")
             ?.remove("first_name")
             ?.remove("last_name")
+            ?.putBoolean("is_pro", false)
             ?.apply()
+        net.syncswift.subscription.SubscriptionManager.refreshProState()
     }
 
     actual fun isLoggedIn(): Boolean {

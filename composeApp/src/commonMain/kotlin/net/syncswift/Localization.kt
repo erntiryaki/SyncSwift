@@ -428,6 +428,8 @@ class Copy {
     var requestCancelledBySender: String = "Connection request was cancelled by sender."
     var transferCancelledBySender: String = "File transfer was cancelled by sender."
     var clipboardCancelledBySender: String = "Clipboard transfer was cancelled by sender."
+    var yourDevice: String = "Your Device"
+    var clipboardCopiedSuccess: String = "Clipboard content copied."
     var requireLoginForProTitle: String = "Account Required"
     var requireLoginForProDesc: String = "Please sign in or create an account to purchase SyncSwift Pro."
     var signInOrRegister: String = "Sign In / Register"

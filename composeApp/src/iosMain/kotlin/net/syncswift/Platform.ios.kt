@@ -204,16 +204,53 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             net.syncswift.connection.ConnectionManager.cancelIncomingTransferRequest(transferId)
             showNativeToast(copy.transferCancelledBySender)
         }
-        "clipboard_sync" -> {
+        "clipboard_cancelled" -> {
+            val transferId = extractNotificationField(userInfo, "transferId")
+            net.syncswift.connection.ConnectionManager.cancelIncomingTransferRequest(transferId)
+            showNativeToast(copy.clipboardCancelledBySender)
+        }
+        "clipboard_accepted" -> {
+            val preview = extractNotificationField(userInfo, "preview") ?: ""
+            net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.clipboardSentSuccess.replace("%s", preview))
+        }
+        "clipboard_rejected" -> {
+            net.syncswift.connection.OutgoingStatusManager.fail(copy.operationRejectedOrTimeout)
+        }
+        "clipboard_request", "clipboard_sync" -> {
             val clipText = extractNotificationField(userInfo, "text")
                 ?: extractNotificationField(userInfo, "content")
                 ?: extractNotificationField(userInfo, "body") ?: ""
+            val transferId = extractNotificationField(userInfo, "transferId") ?: "clip-${currentTimeMs()}"
             val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: "en"
+            val timestamp = extractNotificationField(userInfo, "timestamp")?.toLongOrNull() ?: 0L
+            val isExpired = timestamp > 0L && (currentTimeMs() - timestamp > 180_000L)
+
+            if (isExpired || net.syncswift.connection.ConnectionManager.isRequestCancelled(transferId)) {
+                showNativeToast(copy.clipboardCancelledBySender)
+                return
+            }
+
             if (clipText.isNotBlank()) {
-                net.syncswift.transfer.TransferEngine.applyIncomingClipboard(clipText)
+                val preview = clipText.take(35).replace("\n", " ")
+                val request = net.syncswift.connection.IncomingTransferRequest(
+                    senderName = senderName,
+                    fileName = "${copy.clipboard}: $preview",
+                    fileSize = clipText.encodeToByteArray().size.toLong(),
+                    mimeType = "text/plain",
+                    senderHost = senderHost,
+                    senderPort = senderPort,
+                    transferId = transferId,
+                    downloadUrl = clipText,
+                    isRemote = true,
+                    senderLanguage = senderLanguage
+                )
+                net.syncswift.connection.ConnectionManager.dispatchIncomingTransferRequest(request)
                 net.syncswift.notification.NotificationHistoryManager.addNotification(
                     title = copy.syncClipboardAction,
-                    body = copy.clipboardSynced.replace("%s", clipText.take(50)),
+                    body = copy.clipboardSynced.replace("%s", preview),
                     type = "clipboard",
                     senderName = senderName
                 )
@@ -226,6 +263,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
             val senderOs = extractNotificationField(userInfo, "senderOs") ?: "iOS"
             val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: "en"
+            val senderPushToken = extractNotificationField(userInfo, "senderPushToken") ?: ""
             val timestamp = extractNotificationField(userInfo, "timestamp")?.toLongOrNull() ?: 0L
             val key = "$senderHost:$senderPort"
             val isExpired = timestamp > 0L && (currentTimeMs() - timestamp > 120_000L)
@@ -243,7 +281,8 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 senderHost = senderHost,
                 senderPort = senderPort,
                 senderOsType = senderOs,
-                senderLanguage = senderLanguage
+                senderLanguage = senderLanguage,
+                senderPushToken = senderPushToken
             )
             net.syncswift.connection.ConnectionManager.dispatchIncomingPairRequest(request)
             net.syncswift.notification.NotificationHistoryManager.addNotification(

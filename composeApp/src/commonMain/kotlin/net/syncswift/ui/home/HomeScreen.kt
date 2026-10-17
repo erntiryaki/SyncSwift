@@ -3,11 +3,13 @@ package net.syncswift.ui.home
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -171,6 +173,83 @@ fun HomeScreen(
             }
         }
 
+        Spacer(Modifier.height(14.dp))
+
+        // Current Device Banner (Across the width)
+        val selfDev = remember { DeviceDiscoveryManager.getSelfDevice() }
+        val selfDeviceName = selfDev?.name ?: "SyncSwift Device"
+        val modelCode = selfDev?.modelCode.orEmpty()
+        val nameWithModel = if (modelCode.isNotBlank() && !selfDeviceName.contains(modelCode, ignoreCase = true)) {
+            "$selfDeviceName ($modelCode)"
+        } else {
+            selfDeviceName
+        }
+        val osText = selfDev?.osType ?: (if (currentPlatform() == PlatformFlavor.Android) "Android" else "iOS")
+        val deviceSubtitle = "$osText (${copy.yourDevice})"
+        val isMobileDevice = osText.equals("Android", ignoreCase = true) || osText.equals("iOS", ignoreCase = true)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(CardSurface)
+                .border(1.dp, InputBorder, RoundedCornerShape(16.dp))
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Blue.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isMobileDevice) {
+                        PhoneVectorIcon(Modifier.size(20.dp), color = Blue)
+                    } else {
+                        LaptopVectorIcon(Modifier.size(20.dp), color = Blue)
+                    }
+                }
+
+                Spacer(Modifier.width(14.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = nameWithModel,
+                        color = Cloud,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = (-0.2).sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = deviceSubtitle,
+                        color = Mist,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(SuccessGreen)
+                )
+            }
+        }
+
         // Modern Pull-to-Refresh: circular indicator with text underneath, no dots, no box
         AnimatedVisibility(
             visible = isRefreshing,
@@ -205,10 +284,14 @@ fun HomeScreen(
             !dev.isSelf &&
             (selfDevice == null || (dev.host != selfDevice.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name)))
         }
-        val connectedList = otherDevices.filter { ConnectionManager.isDeviceConnected(it) }
-        val availableList = otherDevices.filter { !ConnectionManager.isDeviceConnected(it) }
+        // Home screen shows ONLY online local devices (no remote devices, no offline ghosts)
+        val connectedList = otherDevices.filter {
+            ConnectionManager.isDeviceConnected(it) && !ConnectionManager.isRemoteDevice(it) && it.isOnline
+        }
+        val availableList = otherDevices.filter {
+            !ConnectionManager.isDeviceConnected(it) && !ConnectionManager.isRemoteDevice(it) && it.isOnline
+        }
 
-        // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)
         // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)
         Row(
             modifier = Modifier
@@ -226,7 +309,7 @@ fun HomeScreen(
                 maxLines = 1,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            val connectedCount = connectedList.size + (if (selfDevice != null) 1 else 0)
+            val connectedCount = connectedList.size
             Spacer(Modifier.width(8.dp))
             Text(
                 text = copy.formatDeviceCount(connectedCount),
@@ -240,17 +323,6 @@ fun HomeScreen(
         Spacer(Modifier.height(10.dp))
 
         Column(modifier = Modifier.fillMaxWidth()) {
-            if (selfDevice != null) {
-                BoxlessDeviceRow(
-                    name = cleanDeviceDisplayName(selfDevice.name),
-                    details = copy.thisDeviceOnline,
-                    badge = selfDevice.osType,
-                    isOnline = true,
-                    isSelf = true
-                )
-                HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-            }
-
             if (connectedList.isNotEmpty()) {
                 connectedList.forEach { device ->
                     val statusText = if (device.isOnline) copy.connectedStatus else copy.offlineSleeping
@@ -266,6 +338,13 @@ fun HomeScreen(
                     )
                     HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
                 }
+            } else {
+                Text(
+                    text = copy.noDevicesOnNetwork,
+                    color = Mist,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
             }
         }
 
