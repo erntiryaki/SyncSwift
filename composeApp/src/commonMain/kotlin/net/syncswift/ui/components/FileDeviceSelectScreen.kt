@@ -139,7 +139,7 @@ fun FileDeviceSelectScreen(
             Spacer(Modifier.height(24.dp))
 
             Text(
-                text = copy.availableDevicesSection,
+                text = copy.devicesSectionTitle,
                 color = Cloud,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
@@ -169,6 +169,9 @@ fun FileDeviceSelectScreen(
                 ) {
                     items(targetDevices) { dev ->
                         val connected = isDeviceConnected(dev)
+                        val isRemote = dev.isRemote || net.syncswift.connection.ConnectionManager.isRemoteDevice(dev)
+                        val connectionBadgeText = if (isRemote) copy.remotelyConnected else copy.locallyConnected
+                        val badgeColor = if (isRemote) Blue else SuccessGreen
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -176,7 +179,7 @@ fun FileDeviceSelectScreen(
                                 .clickable { onSelectDevice(dev) },
                             shape = RoundedCornerShape(14.dp),
                             color = CardSurface,
-                            border = BorderStroke(1.dp, if (connected) SuccessGreen.copy(alpha = 0.4f) else InputBorder.copy(alpha = 0.3f))
+                            border = BorderStroke(1.dp, if (connected) badgeColor.copy(alpha = 0.4f) else InputBorder.copy(alpha = 0.3f))
                         ) {
                             Row(
                                 modifier = Modifier
@@ -188,7 +191,7 @@ fun FileDeviceSelectScreen(
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(CircleShape)
-                                        .background(if (connected) SuccessGreen.copy(alpha = 0.15f) else InputBg),
+                                        .background(if (connected) badgeColor.copy(alpha = 0.15f) else InputBg),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     val isMobile = dev.osType.equals("Android", ignoreCase = true) ||
@@ -201,28 +204,48 @@ fun FileDeviceSelectScreen(
                                                 n.contains("tablet")
                                             }
                                     if (isMobile) {
-                                        PhoneVectorIcon(Modifier.size(20.dp), color = if (connected) SuccessGreen else Mist)
+                                        PhoneVectorIcon(Modifier.size(20.dp), color = if (connected) badgeColor else Mist)
                                     } else {
-                                        LaptopVectorIcon(Modifier.size(20.dp), color = if (connected) SuccessGreen else Mist)
+                                        LaptopVectorIcon(Modifier.size(20.dp), color = if (connected) badgeColor else Mist)
                                     }
                                 }
 
                                 Spacer(Modifier.width(14.dp))
 
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = cleanDeviceDisplayName(dev.name),
-                                        color = Cloud,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(Modifier.height(2.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = cleanDeviceDisplayName(dev.name),
+                                            color = Cloud,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = badgeColor.copy(alpha = 0.15f),
+                                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
+                                        ) {
+                                            Text(
+                                                text = connectionBadgeText,
+                                                color = badgeColor,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(3.dp))
                                     val devStatus = if (dev.isOnline) copy.deviceOnline else copy.outsideLocalNetwork
                                     Text(
-                                        text = if (connected) copy.connectedStatus else "${dev.osType} · $devStatus",
-                                        color = if (connected) SuccessGreen else Mist,
+                                        text = if (connected) "$connectionBadgeText · ${if (dev.isOnline) copy.deviceOnline else copy.outsideLocalNetwork}" else "${dev.osType} · $devStatus",
+                                        color = if (connected) badgeColor else Mist,
                                         fontSize = 12.sp
                                     )
                                 }

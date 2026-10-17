@@ -1,6 +1,9 @@
 package net.syncswift.ui.notifications
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -19,6 +22,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -161,8 +165,9 @@ private fun SwipeableNotificationCard(
     copy: Copy,
     onDelete: () -> Unit
 ) {
-    var offsetX by remember { mutableStateOf(0f) }
-    val maxSwipeThreshold = -120f
+    val coroutineScope = rememberCoroutineScope()
+    val offsetXAnim = remember { Animatable(0f) }
+    var cardWidthPx by remember { mutableStateOf(1000f) }
     val pendingPair by net.syncswift.connection.ConnectionManager.pendingPairRequest.collectAsState()
     val pendingTransfer by net.syncswift.connection.ConnectionManager.pendingTransferRequest.collectAsState()
 
@@ -221,21 +226,42 @@ private fun SwipeableNotificationCard(
             border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f)),
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
-                .alpha(((200f + offsetX) / 200f).coerceIn(0.2f, 1f))
+                .onSizeChanged { cardWidthPx = it.width.toFloat().coerceAtLeast(100f) }
+                .offset { IntOffset(offsetXAnim.value.roundToInt(), 0) }
+                .alpha(((cardWidthPx + offsetXAnim.value) / cardWidthPx).coerceIn(0.2f, 1f))
                 .clickable { handleItemClick() }
                 .pointerInput(item.id) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            if (offsetX < maxSwipeThreshold) {
-                                onDelete()
+                            val threshold = -(cardWidthPx * 0.48f)
+                            coroutineScope.launch {
+                                if (offsetXAnim.value <= threshold) {
+                                    // Swiped halfway or more: animate off-screen and delete
+                                    offsetXAnim.animateTo(
+                                        targetValue = -cardWidthPx,
+                                        animationSpec = tween(durationMillis = 180)
+                                    )
+                                    onDelete()
+                                } else {
+                                    // Not reached halfway: smoothly bounce back
+                                    offsetXAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessLow
+                                        )
+                                    )
+                                }
                             }
-                            offsetX = 0f
                         },
                         onHorizontalDrag = { _, dragAmount ->
                             // Only allow dragging to the left (negative offset)
-                            if (dragAmount < 0 || offsetX < 0) {
-                                offsetX = (offsetX + dragAmount).coerceAtMost(0f)
+                            coroutineScope.launch {
+                                val current = offsetXAnim.value
+                                if (dragAmount < 0 || current < 0) {
+                                    val newOffset = (current + dragAmount).coerceIn(-cardWidthPx, 0f)
+                                    offsetXAnim.snapTo(newOffset)
+                                }
                             }
                         }
                     )

@@ -228,6 +228,9 @@ class Copy {
     var aboutWebsiteValue: String = "syncswift.net"
     var aboutEmailValue: String = "support@syncswift.net"
     // Connected Devices & QR
+    var devicesSectionTitle: String = "Devices"
+    var locallyConnected: String = "Locally Connected"
+    var remotelyConnected: String = "Remotely Connected"
     var connectedDevicesTitle: String = "Connected Devices"
     var thisDeviceSection: String = "This Device"
     var networkDevicesSection: String = "Network & Paired Devices"
