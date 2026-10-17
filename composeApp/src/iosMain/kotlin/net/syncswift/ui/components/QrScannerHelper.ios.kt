@@ -73,9 +73,11 @@ private class CustomScannerViewController(
 
     @kotlinx.cinterop.ObjCAction
     fun dismissScanner() {
-        try {
-            captureSession.stopRunning()
-        } catch (_: Exception) {}
+        dispatch_async(dispatch_get_global_queue(platform.darwin.DISPATCH_QUEUE_PRIORITY_DEFAULT.toLong(), 0u)) {
+            try {
+                captureSession.stopRunning()
+            } catch (_: Exception) {}
+        }
         activeCaptureDelegate = null
         captureDelegate = null
         dismissViewControllerAnimated(true, null)
@@ -163,9 +165,11 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         scannerVc.modalTransitionStyle = UIModalTransitionStyleCrossDissolve
 
         val captureDelegate = QrCaptureDelegate { qrText ->
-            try {
-                captureSession.stopRunning()
-            } catch (_: Exception) {}
+            dispatch_async(dispatch_get_global_queue(platform.darwin.DISPATCH_QUEUE_PRIORITY_DEFAULT.toLong(), 0u)) {
+                try {
+                    captureSession.stopRunning()
+                } catch (_: Exception) {}
+            }
             activeCaptureDelegate = null
             scannerVc.captureDelegate = null
             scannerVc.dismissViewControllerAnimated(true) {
@@ -272,7 +276,11 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
 
         val rootVc = findRootViewController()
         rootVc?.presentViewController(scannerVc, animated = true) {
-            captureSession.startRunning()
+            dispatch_async(dispatch_get_global_queue(platform.darwin.DISPATCH_QUEUE_PRIORITY_DEFAULT.toLong(), 0u)) {
+                try {
+                    captureSession.startRunning()
+                } catch (_: Exception) {}
+            }
         }
     } catch (e: Exception) {
         onError(e.message ?: "Kamera açılamadı")

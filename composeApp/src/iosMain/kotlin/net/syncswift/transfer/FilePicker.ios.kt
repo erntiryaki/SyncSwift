@@ -23,27 +23,35 @@ private class DocumentPickerDelegate(
         val canAccess = url.startAccessingSecurityScopedResource()
         try {
             val fileName = url.lastPathComponent ?: "file"
-            val fileData = NSData.dataWithContentsOfURL(url) ?: return
-            val length = fileData.length.toInt()
-            if (length <= 0) return
+            kotlinx.cinterop.autoreleasepool {
+                val fileData = NSData.dataWithContentsOfURL(url) ?: return@autoreleasepool
+                val length = fileData.length.toInt()
+                if (length <= 0) return@autoreleasepool
 
-            val bytes = ByteArray(length)
-            bytes.usePinned { pinned ->
-                memcpy(pinned.addressOf(0), fileData.bytes, fileData.length)
-            }
+                // Guard against gigantic single memory buffers that crash iOS Jetsam
+                if (fileData.length.toLong() > 400L * 1024 * 1024) {
+                    net.syncswift.showNativeToast("Dosya boyutu çok büyük (Maks 400 MB)")
+                    return@autoreleasepool
+                }
 
-            val ext = fileName.substringAfterLast('.', "").lowercase()
-            val mimeType = when (ext) {
-                "jpg", "jpeg" -> "image/jpeg"
-                "png" -> "image/png"
-                "gif" -> "image/gif"
-                "mp4" -> "video/mp4"
-                "pdf" -> "application/pdf"
-                "zip" -> "application/zip"
-                "txt" -> "text/plain"
-                else -> "application/octet-stream"
+                val bytes = ByteArray(length)
+                bytes.usePinned { pinned ->
+                    memcpy(pinned.addressOf(0), fileData.bytes, fileData.length)
+                }
+
+                val ext = fileName.substringAfterLast('.', "").lowercase()
+                val mimeType = when (ext) {
+                    "jpg", "jpeg" -> "image/jpeg"
+                    "png" -> "image/png"
+                    "gif" -> "image/gif"
+                    "mp4" -> "video/mp4"
+                    "pdf" -> "application/pdf"
+                    "zip" -> "application/zip"
+                    "txt" -> "text/plain"
+                    else -> "application/octet-stream"
+                }
+                onFileSelected(fileName, bytes, mimeType)
             }
-            onFileSelected(fileName, bytes, mimeType)
         } finally {
             if (canAccess) {
                 url.stopAccessingSecurityScopedResource()

@@ -68,7 +68,9 @@ fun EmailAuthScreen(
         },
         onError = { err ->
             isGoogleLoading = false
-            localWarning = err
+            if (err.isNotBlank() && !err.contains("cancel", ignoreCase = true) && !err.contains("vazgeç", ignoreCase = true)) {
+                localWarning = err
+            }
         }
     )
 
@@ -79,7 +81,9 @@ fun EmailAuthScreen(
         },
         onError = { err ->
             isAppleLoading = false
-            localWarning = err
+            if (err.isNotBlank() && !err.contains("cancel", ignoreCase = true) && !err.contains("vazgeç", ignoreCase = true)) {
+                localWarning = err
+            }
         }
     )
 

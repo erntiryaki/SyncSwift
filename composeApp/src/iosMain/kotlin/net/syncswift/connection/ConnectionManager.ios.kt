@@ -109,7 +109,10 @@ private suspend fun sendPairRequestViaFcm(target: DiscoveredDevice, selfName: St
 }
 
 actual object ConnectionManager {
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        println("[SyncSwift iOS ConnectionManager] Coroutine error caught: ${throwable.message}")
+    }
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob() + exceptionHandler)
 
     private val _connectedDeviceKeys = MutableStateFlow<Set<String>>(emptySet())
     actual val connectedDeviceKeys: StateFlow<Set<String>> = _connectedDeviceKeys.asStateFlow()
@@ -148,7 +151,6 @@ actual object ConnectionManager {
         val savedRemote = SessionManager.getSavedRemoteConnectedDeviceKeys()
         if (saved.isNotEmpty()) _connectedDeviceKeys.value = saved
         if (savedRemote.isNotEmpty()) _remoteConnectedDeviceKeys.value = savedRemote
-        generateOrRotatePairingCode()
     }
 
     private fun deviceKey(host: String, port: Int): String = "$host:$port"
@@ -595,6 +597,11 @@ actual object ConnectionManager {
         }
     }
 
+    fun stopPairingCodeRotation() {
+        codeRotationJob?.cancel()
+        codeRotationJob = null
+    }
+
     actual fun generateOrRotatePairingCode() {
         val part1 = Random.nextInt(100, 999)
         val part2 = Random.nextInt(100, 999)
@@ -605,17 +612,19 @@ actual object ConnectionManager {
 
         codeRotationJob?.cancel()
         codeRotationJob = scope.launch {
-            publishPairingCodeToBackend(rawCode)
-            while (isActive) {
-                delay(1000)
-                val remaining = _codeRemainingSeconds.value - 1
-                if (remaining <= 0) {
-                    generateOrRotatePairingCode()
-                    break
-                } else {
-                    _codeRemainingSeconds.value = remaining
+            try {
+                publishPairingCodeToBackend(rawCode)
+                while (isActive) {
+                    delay(1000)
+                    val remaining = _codeRemainingSeconds.value - 1
+                    if (remaining <= 0) {
+                        generateOrRotatePairingCode()
+                        break
+                    } else {
+                        _codeRemainingSeconds.value = remaining
+                    }
                 }
-            }
+            } catch (_: Throwable) {}
         }
     }
 

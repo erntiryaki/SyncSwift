@@ -84,6 +84,19 @@ actual object TransferEngine {
         }
     }
 
+    fun stopServer() {
+        isListening = false
+        val fd = serverSocketFd
+        serverSocketFd = -1
+        if (fd >= 0) {
+            try {
+                shutdown(fd, SHUT_RDWR)
+                close(fd)
+            } catch (_: Throwable) {}
+        }
+        println("[SyncSwift iOS] TransferEngine server stopped safely")
+    }
+
     fun startForegroundServer() {
         if (isListening && serverSocketFd >= 0) return
         scope.launch(Dispatchers.Default) {
@@ -100,6 +113,9 @@ actual object TransferEngine {
                     opt.value = 1
                     setsockopt(serverSocketFd, SOL_SOCKET, SO_REUSEADDR, opt.ptr, sizeOf<IntVar>().convert())
                     setsockopt(serverSocketFd, SOL_SOCKET, SO_REUSEPORT, opt.ptr, sizeOf<IntVar>().convert())
+                    val nosigpipe = alloc<IntVar>()
+                    nosigpipe.value = 1
+                    setsockopt(serverSocketFd, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
 
                     val serverAddr = alloc<sockaddr_in>()
                     serverAddr.sin_family = AF_INET.convert()
@@ -117,19 +133,22 @@ actual object TransferEngine {
                         serverSocketFd = -1
                         return@launch
                     }
+                }
 
-                    isListening = true
-                    println("[SyncSwift iOS] TransferEngine listening on port 52424")
+                isListening = true
+                println("[SyncSwift iOS] TransferEngine listening on port 52424")
 
-                    while (isListening && serverSocketFd >= 0) {
+                while (isListening && serverSocketFd >= 0) {
+                    var clientSock = -1
+                    memScoped {
                         val clientAddr = alloc<sockaddr_in>()
                         val clientLen = alloc<socklen_tVar>()
                         clientLen.value = sizeOf<sockaddr_in>().convert()
 
-                        val clientSock = accept(serverSocketFd, clientAddr.ptr.reinterpret(), clientLen.ptr)
-                        if (clientSock >= 0) {
-                            handleIncomingClient(clientSock)
-                        }
+                        clientSock = accept(serverSocketFd, clientAddr.ptr.reinterpret(), clientLen.ptr)
+                    }
+                    if (clientSock >= 0) {
+                        handleIncomingClient(clientSock)
                     }
                 }
             } catch (e: Throwable) {
@@ -205,6 +224,10 @@ actual object TransferEngine {
         scope.launch(Dispatchers.Default) {
             try {
                 memScoped {
+                    val nosigpipe = alloc<IntVar>()
+                    nosigpipe.value = 1
+                    setsockopt(clientSock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
+
                     val tv = alloc<timeval>()
                     tv.tv_sec = 40
                     tv.tv_usec = 0

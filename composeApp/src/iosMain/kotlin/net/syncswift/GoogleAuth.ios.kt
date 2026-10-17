@@ -42,7 +42,10 @@ private class WebAuthContextProvider : NSObject(), ASWebAuthenticationPresentati
 private var activeAuthSession: ASWebAuthenticationSession? = null
 private var activeContextProvider: WebAuthContextProvider? = null
 
-private val googleAuthScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+private val googleAuthExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+    println("[SyncSwift iOS GoogleAuth] Coroutine error caught: ${throwable.message}")
+}
+private val googleAuthScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + googleAuthExceptionHandler)
 
 @OptIn(ExperimentalForeignApi::class)
 private suspend fun httpPostUrlEncoded(
@@ -141,8 +144,10 @@ actual fun rememberGoogleAuthLauncher(
                     activeAuthSession = null
                     activeContextProvider = null
                     if (error != null) {
-                        if (error.code.toInt() != 1) { // 1 = canceled by user
-                            dispatch_async(dispatch_get_main_queue()) {
+                        dispatch_async(dispatch_get_main_queue()) {
+                            if (error.code.toInt() == 1) { // 1 = canceled by user
+                                onError("canceled")
+                            } else {
                                 onError(error.localizedDescription ?: "Google Sign-In failed")
                             }
                         }

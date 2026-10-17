@@ -72,15 +72,17 @@ fun getSavedIosPushToken(): String? {
 }
 
 fun onIosAppDidEnterBackground() {
-    println("[SyncSwift iOS] App entered background - safely stopping discovery")
+    println("[SyncSwift iOS] App entered background - safely stopping discovery & server")
     try {
         net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
+        net.syncswift.transfer.TransferEngine.stopServer()
     } catch (_: Throwable) {}
 }
 
 fun onIosAppWillEnterForeground() {
-    println("[SyncSwift iOS] App will enter foreground - resuming discovery")
+    println("[SyncSwift iOS] App will enter foreground - resuming discovery & server")
     try {
+        net.syncswift.transfer.TransferEngine.startForegroundServer()
         net.syncswift.discovery.DeviceDiscoveryManager.startDiscovery()
     } catch (_: Throwable) {}
 }

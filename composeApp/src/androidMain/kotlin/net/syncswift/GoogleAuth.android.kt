@@ -68,6 +68,7 @@ actual fun rememberGoogleAuthLauncher(
             }
         } else {
             Log.d("GoogleAuth", "Standard Google Sign-In cancelled or failed with resultCode=${result.resultCode}")
+            onError("canceled")
         }
     }
 
@@ -104,6 +105,7 @@ actual fun rememberGoogleAuthLauncher(
             }
         } else {
             Log.d("GoogleAuth", "Google One Tap dismissed by user (resultCode=${result.resultCode})")
+            onError("canceled")
         }
     }
 
