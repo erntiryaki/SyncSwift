@@ -56,13 +56,7 @@ fun requestIosPermissions() {
         val options = platform.UserNotifications.UNAuthorizationOptionAlert or
                 platform.UserNotifications.UNAuthorizationOptionBadge or
                 platform.UserNotifications.UNAuthorizationOptionSound
-        center.requestAuthorizationWithOptions(options) { granted, _ ->
-            if (granted) {
-                platform.darwin.dispatch_async(platform.darwin.dispatch_get_main_queue()) {
-                    platform.UIKit.UIApplication.sharedApplication.registerForRemoteNotifications()
-                }
-            }
-        }
+        center.requestAuthorizationWithOptions(options) { _, _ -> }
     } catch (_: Throwable) {}
 }
 

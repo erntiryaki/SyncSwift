@@ -2,7 +2,7 @@ package net.syncswift.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.*
 import platform.AVFoundation.*
 import platform.CoreGraphics.CGRectMake
 import platform.CoreImage.CIDetector
@@ -96,7 +96,7 @@ private class CustomScannerViewController(
     override fun viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         val container = cameraContainerView ?: return
-        previewLayer?.frame = container.bounds
+        previewLayer?.setFrame(container.bounds)
     }
 }
 
@@ -180,9 +180,9 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         scannerVc.view.backgroundColor = UIColor.colorWithRed(11.0 / 255.0, 16.0 / 255.0, 27.0 / 255.0, 0.85)
 
         // Native blur effect
-        val blurEffect = UIBlurEffect.effectWithStyle(UIBlurEffectStyleDark)
+        val blurEffect = UIBlurEffect.effectWithStyle(UIBlurEffectStyle.UIBlurEffectStyleDark)
         val blurView = UIVisualEffectView(effect = blurEffect)
-        blurView.frame = scannerVc.view.bounds
+        blurView.setFrame(scannerVc.view.bounds)
         blurView.autoresizingMask = UIViewAutoresizingFlexibleWidth or UIViewAutoresizingFlexibleHeight
         scannerVc.view.addSubview(blurView)
 
@@ -198,7 +198,7 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
 
         val previewLayer = AVCaptureVideoPreviewLayer(session = captureSession)
         previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill
-        previewLayer.frame = cameraContainer.bounds
+        previewLayer.setFrame(cameraContainer.bounds)
         cameraContainer.layer.addSublayer(previewLayer)
         scannerVc.view.addSubview(cameraContainer)
 

@@ -102,6 +102,16 @@ actual object ConnectionManager {
     private val _pendingTransferRequest = MutableStateFlow<IncomingTransferRequest?>(null)
     actual val pendingTransferRequest: StateFlow<IncomingTransferRequest?> = _pendingTransferRequest.asStateFlow()
 
+    fun dispatchIncomingTransferRequest(request: IncomingTransferRequest) {
+        _pendingTransferRequest.value = request
+    }
+
+    fun cancelIncomingTransferRequest(requestId: String) {
+        if (_pendingTransferRequest.value?.requestId == requestId) {
+            _pendingTransferRequest.value = null
+        }
+    }
+
     private val _activePairingCode = MutableStateFlow("834 291")
     actual val activePairingCode: StateFlow<String> = _activePairingCode.asStateFlow()
 
