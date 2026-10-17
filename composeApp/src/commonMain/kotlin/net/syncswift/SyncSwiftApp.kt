@@ -245,12 +245,14 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 if (l.isNotBlank()) lastName = l
                 SessionManager.updateUserProfile(firstName, lastName)
             }
+            val uid = SupabaseNetwork.getUserId(email) ?: SessionManager.getLoggedInUserId()
             SupabaseNetwork.registerDeviceInSupabase(
                 email = email,
                 deviceId = SessionManager.getPlatformDeviceId(),
                 deviceName = SessionManager.getMyDeviceName(),
                 deviceType = SessionManager.getMyPlatformName(),
-                pushToken = SessionManager.getMyPushToken()
+                pushToken = SessionManager.getMyPushToken(),
+                userId = uid
             )
         }
     }
@@ -316,29 +318,29 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 provider = provider,
                 password = password
             )
+            val uid = SupabaseNetwork.getUserId(userEmail) ?: SessionManager.getLoggedInUserId()
             SupabaseNetwork.registerDeviceInSupabase(
                 email = userEmail,
                 deviceId = SessionManager.getPlatformDeviceId(),
                 deviceName = SessionManager.getMyDeviceName(),
                 deviceType = SessionManager.getMyPlatformName(),
-                pushToken = SessionManager.getMyPushToken()
+                pushToken = SessionManager.getMyPushToken(),
+                userId = uid
             )
-            // If already purchased Pro on this device, sync it to the newly logged-in account
-            if (net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()) {
+            // Check if account has Pro purchased on another device or prior session
+            val prof = SupabaseNetwork.fetchUserProfile(userEmail)
+            if (prof != null && prof.isPro) {
+                net.syncswift.subscription.SubscriptionManager.setProState(true)
+                if (prof.proStartDate > 0L) SessionManager.saveProStartDateMillis(prof.proStartDate)
+                if (prof.proRenewalDate > 0L) SessionManager.saveProRenewalDateMillis(prof.proRenewalDate)
+            } else if (net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()) {
+                // If already purchased Pro on this device, sync it to the newly logged-in account
                 SupabaseNetwork.updateUserProStatus(
                     email = userEmail,
                     isPro = true,
                     startDate = SessionManager.getProStartDateMillis(),
                     renewalDate = SessionManager.getProRenewalDateMillis()
                 )
-            } else {
-                // Check if account has Pro purchased on another device
-                val prof = SupabaseNetwork.fetchUserProfile(userEmail)
-                if (prof != null && prof.isPro) {
-                    net.syncswift.subscription.SubscriptionManager.setProState(true)
-                    if (prof.proStartDate > 0L) SessionManager.saveProStartDateMillis(prof.proStartDate)
-                    if (prof.proRenewalDate > 0L) SessionManager.saveProRenewalDateMillis(prof.proRenewalDate)
-                }
             }
         }
     }

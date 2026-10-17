@@ -60,13 +60,16 @@ actual fun AdBannerView(modifier: Modifier) {
                                 val adUnit = net.syncswift.PlatformConfig.admobBannerId.ifBlank {
                                     "ca-app-pub-3940256099942544/2934735716"
                                 }
-                                bannerView.setValue(adUnit, forKey = "adUnitID")
+                                val bannerObj = bannerView as? platform.darwin.NSObject
+                                val setAdUnitSel = platform.Foundation.NSSelectorFromString("setAdUnitID:")
+                                bannerObj?.performSelector(setAdUnitSel, withObject = adUnit as? platform.darwin.NSObject)
 
                                 val window = UIApplication.sharedApplication.keyWindow
                                     ?: UIApplication.sharedApplication.windows.firstOrNull() as? platform.UIKit.UIWindow
                                 val rootVC = window?.rootViewController
                                 if (rootVC != null) {
-                                    bannerView.setValue(rootVC, forKey = "rootViewController")
+                                    val setRootVcSel = platform.Foundation.NSSelectorFromString("setRootViewController:")
+                                    bannerObj?.performSelector(setRootVcSel, withObject = rootVC as? platform.darwin.NSObject)
                                 }
 
                                 val reqCls = NSClassFromString("GADRequest")

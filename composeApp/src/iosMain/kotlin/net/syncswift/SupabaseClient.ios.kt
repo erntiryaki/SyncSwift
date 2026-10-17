@@ -111,10 +111,24 @@ actual object SupabaseNetwork {
                 body = payload
             )
 
+            var userId: String? = null
+            if (authResp.statusCode in 200..299) {
+                val idRegex = "\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                userId = idRegex.find(authResp.body)?.groupValues?.getOrNull(1)
+            }
+            if (userId.isNullOrBlank()) {
+                userId = getUserIdFromProfile(clean)
+            }
+            if (!userId.isNullOrBlank()) {
+                SessionManager.saveLoggedInUserId(userId)
+            }
+
             // 2. Upsert profile in public.profiles table
+            val idField = if (!userId.isNullOrBlank()) "\"id\": \"$userId\"," else ""
             val profPayload = if (hasNames) {
                 """
                     {
+                        $idField
                         "email": "$clean",
                         "first_name": "$firstName",
                         "last_name": "$lastName",
@@ -124,13 +138,26 @@ actual object SupabaseNetwork {
             } else {
                 """
                     {
+                        $idField
                         "email": "$clean",
                         "auth_provider": "$providerString"
                     }
                 """.trimIndent()
             }
 
-            val patchResp = executeRequest(
+            executeRequest(
+                urlString = "$supabaseUrl/rest/v1/profiles",
+                method = "POST",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "resolution=merge-duplicates"
+                ),
+                body = profPayload
+            )
+
+            executeRequest(
                 urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
                 method = "PATCH",
                 headers = mapOf(
@@ -141,19 +168,6 @@ actual object SupabaseNetwork {
                 ),
                 body = profPayload
             )
-
-            if (patchResp.body == "[]" || patchResp.body.isBlank()) {
-                executeRequest(
-                    urlString = "$supabaseUrl/rest/v1/profiles",
-                    method = "POST",
-                    headers = mapOf(
-                        "apikey" to serviceKey,
-                        "Authorization" to "Bearer $serviceKey",
-                        "Content-Type" to "application/json"
-                    ),
-                    body = profPayload
-                )
-            }
 
             return authResp.statusCode in 200..299 || authResp.statusCode == 422
         } catch (e: Exception) {
@@ -224,13 +238,29 @@ actual object SupabaseNetwork {
                 ),
                 body = """{"email":"$clean","password":"$password"}"""
             )
-            return resp.statusCode in 200..299 && resp.body.contains("access_token")
+            val isSuccess = resp.statusCode in 200..299 && resp.body.contains("access_token")
+            if (isSuccess) {
+                val idRegex = "\"user\"\\s*:\\s*\\{[^}]*\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                val id = idRegex.find(resp.body)?.groupValues?.getOrNull(1)
+                    ?: "\"id\"\\s*:\\s*\"([a-f0-9\\-]{36})\"".toRegex().find(resp.body)?.groupValues?.getOrNull(1)
+                if (!id.isNullOrBlank()) {
+                    SessionManager.saveLoggedInUserId(id)
+                }
+                val isPro = resp.body.contains("\"is_pro\":true") || resp.body.contains("\"is_pro\": true")
+                if (isPro) {
+                    net.syncswift.subscription.SubscriptionManager.setProState(true)
+                }
+            }
+            return isSuccess
         } catch (e: Exception) {
             return false
         }
     }
 
     private suspend fun getUserIdFromProfile(cleanEmail: String): String? {
+        val cachedId = SessionManager.getLoggedInUserId()
+        if (!cachedId.isNullOrBlank()) return cachedId
+
         val supabaseUrl = PlatformConfig.supabaseUrl
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
@@ -246,9 +276,40 @@ actual object SupabaseNetwork {
             )
             if (resp.statusCode in 200..299) {
                 val regex = "\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
-                return regex.find(resp.body)?.groupValues?.getOrNull(1)
+                val match = regex.find(resp.body)?.groupValues?.getOrNull(1)
+                if (!match.isNullOrBlank()) {
+                    SessionManager.saveLoggedInUserId(match)
+                    return match
+                }
             }
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
+
+        // Fallback: Query Supabase Auth Admin Users API
+        try {
+            val adminResp = executeRequest(
+                urlString = "$supabaseUrl/auth/v1/admin/users?per_page=1000",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (adminResp.statusCode in 200..299 && adminResp.body.contains(cleanEmail)) {
+                val blockRegex = """\{[^{}]*"id"\s*:\s*"([a-f0-9\-]+)"[^{}]*"email"\s*:\s*"$cleanEmail"[^{}]*\}""".toRegex(RegexOption.IGNORE_CASE)
+                val blockMatch = blockRegex.find(adminResp.body)?.groupValues?.getOrNull(1)
+                if (!blockMatch.isNullOrBlank()) {
+                    SessionManager.saveLoggedInUserId(blockMatch)
+                    return blockMatch
+                }
+                val altRegex = """\{[^{}]*"email"\s*:\s*"$cleanEmail"[^{}]*"id"\s*:\s*"([a-f0-9\-]+)"[^{}]*\}""".toRegex(RegexOption.IGNORE_CASE)
+                val altMatch = altRegex.find(adminResp.body)?.groupValues?.getOrNull(1)
+                if (!altMatch.isNullOrBlank()) {
+                    SessionManager.saveLoggedInUserId(altMatch)
+                    return altMatch
+                }
+            }
+        } catch (_: Exception) {}
         return null
     }
 
@@ -347,6 +408,45 @@ actual object SupabaseNetwork {
                 }
                 return UserProfileData(clean, fn, ln, provider, isPro, proStartDate, proRenewalDate)
             }
+
+            // Direct Auth Admin fallback if profiles table didn't have this user row
+            try {
+                val uid = getUserIdFromProfile(clean)
+                if (!uid.isNullOrBlank()) {
+                    val userResp = executeRequest(
+                        urlString = "$supabaseUrl/auth/v1/admin/users/$uid",
+                        method = "GET",
+                        headers = mapOf(
+                            "apikey" to serviceKey,
+                            "Authorization" to "Bearer $serviceKey",
+                            "Accept" to "application/json"
+                        )
+                    )
+                    if (userResp.statusCode in 200..299) {
+                        fun extractField(json: String, key: String): String {
+                            val regex = "\"$key\"\\s*:\\s*\"([^\"]*)\"".toRegex()
+                            return regex.find(json)?.groupValues?.getOrNull(1) ?: ""
+                        }
+                        fun extractLong(json: String, key: String): Long {
+                            val regex = "\"$key\"\\s*:\\s*(\\d+)".toRegex()
+                            return regex.find(json)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
+                        }
+                        var fn = extractField(userResp.body, "first_name")
+                        var ln = extractField(userResp.body, "last_name")
+                        val isPro = userResp.body.contains("\"is_pro\":true") || userResp.body.contains("\"is_pro\": true")
+                        val proStart = extractLong(userResp.body, "pro_start_date")
+                        val proRenew = extractLong(userResp.body, "pro_renewal_date")
+                        val provStr = extractField(userResp.body, "provider")
+                        val prov = when (provStr.lowercase()) {
+                            "google" -> IdentityProvider.Google
+                            "apple" -> IdentityProvider.Apple
+                            else -> IdentityProvider.EmailPassword
+                        }
+                        return UserProfileData(clean, fn, ln, prov, isPro, proStart, proRenew)
+                    }
+                }
+            } catch (_: Exception) {}
+            return null
         } catch (e: Exception) {}
         return null
     }
@@ -445,8 +545,33 @@ actual object SupabaseNetwork {
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
             val clean = cleanEmail(email)
-            val patchBody = """{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}"""
-            val patchResp = executeRequest(
+            val userId = SessionManager.getLoggedInUserId() ?: getUserIdFromProfile(clean)
+
+            // 1. Upsert / update profiles table
+            val idField = if (!userId.isNullOrBlank()) "\"id\": \"$userId\"," else ""
+            val profPayload = """
+                {
+                    $idField
+                    "email": "$clean",
+                    "is_pro": $isPro,
+                    "pro_start_date": $startDate,
+                    "pro_renewal_date": $renewalDate
+                }
+            """.trimIndent()
+
+            executeRequest(
+                urlString = "$supabaseUrl/rest/v1/profiles",
+                method = "POST",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "resolution=merge-duplicates"
+                ),
+                body = profPayload
+            )
+
+            executeRequest(
                 urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
                 method = "PATCH",
                 headers = mapOf(
@@ -455,25 +580,10 @@ actual object SupabaseNetwork {
                     "Content-Type" to "application/json",
                     "Prefer" to "return=minimal"
                 ),
-                body = patchBody
+                body = profPayload
             )
-            // Fallback: If 3-column update fails (e.g. pro_start_date not present in schema), update just is_pro
-            if (patchResp.statusCode !in 200..299) {
-                executeRequest(
-                    urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
-                    method = "PATCH",
-                    headers = mapOf(
-                        "apikey" to serviceKey,
-                        "Authorization" to "Bearer $serviceKey",
-                        "Content-Type" to "application/json",
-                        "Prefer" to "return=minimal"
-                    ),
-                    body = """{"is_pro":$isPro}"""
-                )
-            }
 
-            // Also update auth.users metadata
-            val userId = getUserIdFromProfile(clean)
+            // 2. ALWAYS update auth.users metadata
             if (!userId.isNullOrBlank()) {
                 val authPayload = """{"user_metadata":{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}}"""
                 executeRequest(
@@ -626,9 +736,12 @@ actual object SupabaseNetwork {
         try {
             val clean = cleanEmail(email)
             val cleanName = cleanDeviceDisplayName(deviceName)
-            val resolvedUserId = userId?.trim()?.ifBlank { null }
+            var resolvedUserId = userId?.trim()?.ifBlank { null }
                 ?: SessionManager.getLoggedInUserId()
-                ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
+
+            if (resolvedUserId.isNullOrBlank() && clean.isNotBlank()) {
+                resolvedUserId = getUserIdFromProfile(clean)
+            }
 
             if (!resolvedUserId.isNullOrBlank()) {
                 SessionManager.saveLoggedInUserId(resolvedUserId)
@@ -662,9 +775,8 @@ actual object SupabaseNetwork {
                 ),
                 body = body
             )
-            if (resp.statusCode in 200..299) return true
 
-            // Fallback: PATCH on existing device row
+            // Also execute PATCH on existing device row to ensure user_id is updated
             val patchResp = executeRequest(
                 urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId",
                 method = "PATCH",
@@ -675,7 +787,7 @@ actual object SupabaseNetwork {
                 ),
                 body = body
             )
-            return patchResp.statusCode in 200..299
+            return resp.statusCode in 200..299 || patchResp.statusCode in 200..299
         } catch (_: Exception) {
             return false
         }

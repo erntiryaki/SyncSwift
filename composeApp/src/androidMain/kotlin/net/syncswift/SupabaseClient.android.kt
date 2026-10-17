@@ -74,63 +74,60 @@ actual object SupabaseNetwork {
             val responseText = if (responseCode in 200..299) conn.inputStream.bufferedReader().readText() else conn.errorStream?.bufferedReader()?.readText() ?: ""
             Log.d("SupabaseNetwork", "Supabase Admin Auth User Code: $responseCode, Body: $responseText")
 
-            // 2. Update existing profile or insert new profile with first_name and last_name
+            var userId: String? = null
+            if (responseCode in 200..299) {
+                val idRegex = "\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                userId = idRegex.find(responseText)?.groupValues?.getOrNull(1)
+            }
+            if (userId.isNullOrBlank()) {
+                userId = getUserIdFromProfile(cleanEmail)
+            }
+            if (!userId.isNullOrBlank()) {
+                SessionManager.saveLoggedInUserId(userId)
+            }
+
+            // 2. Upsert profile with id, email, first_name, last_name, auth_provider
             try {
-                // Try PATCH first for existing profile
+                val profPayload = org.json.JSONObject().apply {
+                    if (!userId.isNullOrBlank()) put("id", userId)
+                    put("email", cleanEmail)
+                    if (firstName.isNotBlank()) put("first_name", firstName)
+                    if (lastName.isNotBlank()) put("last_name", lastName)
+                    put("auth_provider", providerString)
+                }
+
+                // POST with resolution=merge-duplicates (upsert)
+                val postUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles")
+                val postConn = postUrl.openConnection() as HttpURLConnection
+                postConn.requestMethod = "POST"
+                postConn.connectTimeout = 8000
+                postConn.readTimeout = 8000
+                postConn.setRequestProperty("apikey", effectiveKey)
+                postConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+                postConn.setRequestProperty("Content-Type", "application/json")
+                postConn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+                postConn.doOutput = true
+                postConn.outputStream.use { os ->
+                    os.write(profPayload.toString().toByteArray(Charsets.UTF_8))
+                }
+                val postCode = postConn.responseCode
+                Log.d("SupabaseNetwork", "Profiles Upsert POST Code: $postCode")
+
+                // Also try PATCH in case row already exists with email constraint
                 val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail")
                 val patchConn = patchUrl.openConnection() as HttpURLConnection
                 patchConn.requestMethod = "PATCH"
                 patchConn.connectTimeout = 8000
                 patchConn.readTimeout = 8000
                 patchConn.setRequestProperty("apikey", effectiveKey)
-                patchConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+                patchConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
                 patchConn.setRequestProperty("Content-Type", "application/json")
                 patchConn.setRequestProperty("Prefer", "return=representation")
                 patchConn.doOutput = true
-
-                val profPayload = if (hasNames) {
-                    """
-                        {
-                            "email": "$cleanEmail",
-                            "first_name": "$firstName",
-                            "last_name": "$lastName",
-                            "auth_provider": "$providerString"
-                        }
-                    """.trimIndent()
-                } else {
-                    """
-                        {
-                            "email": "$cleanEmail",
-                            "auth_provider": "$providerString"
-                        }
-                    """.trimIndent()
-                }
-
                 patchConn.outputStream.use { os ->
-                    os.write(profPayload.toByteArray(Charsets.UTF_8))
+                    os.write(profPayload.toString().toByteArray(Charsets.UTF_8))
                 }
-
-                val patchCode = patchConn.responseCode
-                val patchBody = if (patchCode in 200..299) patchConn.inputStream.bufferedReader().readText() else ""
-                Log.d("SupabaseNetwork", "Profiles PATCH Code: $patchCode, Body: $patchBody")
-
-                // If PATCH didn't update any row (empty array "[]"), do POST
-                if (patchBody == "[]" || patchBody.isBlank()) {
-                    val postUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles")
-                    val postConn = postUrl.openConnection() as HttpURLConnection
-                    postConn.requestMethod = "POST"
-                    postConn.connectTimeout = 8000
-                    postConn.readTimeout = 8000
-                    postConn.setRequestProperty("apikey", effectiveKey)
-                    postConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
-                    postConn.setRequestProperty("Content-Type", "application/json")
-                    postConn.doOutput = true
-                    postConn.outputStream.use { os ->
-                        os.write(profPayload.toByteArray(Charsets.UTF_8))
-                    }
-                    val postCode = postConn.responseCode
-                    Log.d("SupabaseNetwork", "Profiles POST Code: $postCode")
-                }
+                Log.d("SupabaseNetwork", "Profiles PATCH Code: ${patchConn.responseCode}")
             } catch (ex: Exception) {
                 Log.w("SupabaseNetwork", "Profile upsert error: ${ex.message}")
             }
@@ -218,7 +215,20 @@ actual object SupabaseNetwork {
             else
                 conn.errorStream?.bufferedReader()?.readText() ?: ""
             Log.d("SupabaseNetwork", "signInWithPassword code=$responseCode body=$body")
-            return@withContext responseCode in 200..299 && body.contains("access_token")
+            val isSuccess = responseCode in 200..299 && body.contains("access_token")
+            if (isSuccess) {
+                val idRegex = "\"user\"\\s*:\\s*\\{[^}]*\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                val id = idRegex.find(body)?.groupValues?.getOrNull(1)
+                    ?: "\"id\"\\s*:\\s*\"([a-f0-9\\-]{36})\"".toRegex().find(body)?.groupValues?.getOrNull(1)
+                if (!id.isNullOrBlank()) {
+                    SessionManager.saveLoggedInUserId(id)
+                }
+                val isPro = body.contains("\"is_pro\":true") || body.contains("\"is_pro\": true")
+                if (isPro) {
+                    net.syncswift.subscription.SubscriptionManager.setProState(true)
+                }
+            }
+            return@withContext isSuccess
         } catch (e: Exception) {
             Log.e("SupabaseNetwork", "signInWithPassword failed: ${e.message}")
             return@withContext false
@@ -226,6 +236,10 @@ actual object SupabaseNetwork {
     }
 
     private fun getUserIdFromProfile(cleanEmail: String): String? {
+        val cachedId = SessionManager.getLoggedInUserId()
+        if (!cachedId.isNullOrBlank()) return cachedId
+
+        // 1. Check public.profiles table
         try {
             val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=id")
             val conn = url.openConnection() as HttpURLConnection
@@ -233,16 +247,50 @@ actual object SupabaseNetwork {
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
             conn.setRequestProperty("apikey", effectiveKey)
-            conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code in 200..299) {
                 val body = conn.inputStream.bufferedReader().readText()
                 val regex = "\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
-                return regex.find(body)?.groupValues?.getOrNull(1)
+                val match = regex.find(body)?.groupValues?.getOrNull(1)
+                if (!match.isNullOrBlank()) {
+                    SessionManager.saveLoggedInUserId(match)
+                    return match
+                }
             }
         } catch (e: Exception) {
             Log.e("SupabaseNetwork", "getUserIdFromProfile error: ${e.message}")
+        }
+
+        // 2. Fallback: Query Supabase Auth Admin Users API
+        try {
+            val adminUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/auth/v1/admin/users?per_page=1000")
+            val adminConn = adminUrl.openConnection() as HttpURLConnection
+            adminConn.requestMethod = "GET"
+            adminConn.connectTimeout = 8000
+            adminConn.readTimeout = 8000
+            adminConn.setRequestProperty("apikey", effectiveKey)
+            adminConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            adminConn.setRequestProperty("Accept", "application/json")
+            if (adminConn.responseCode in 200..299) {
+                val adminBody = adminConn.inputStream.bufferedReader().readText()
+                val usersArr = org.json.JSONObject(adminBody).optJSONArray("users")
+                if (usersArr != null) {
+                    for (i in 0 until usersArr.length()) {
+                        val u = usersArr.getJSONObject(i)
+                        if (u.optString("email").equals(cleanEmail, ignoreCase = true)) {
+                            val uid = u.optString("id").ifBlank { null }
+                            if (uid != null) {
+                                SessionManager.saveLoggedInUserId(uid)
+                                return uid
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (ae: Exception) {
+            Log.w("SupabaseNetwork", "getUserIdFromProfile admin users fallback: ${ae.message}")
         }
         return null
     }
@@ -368,6 +416,46 @@ actual object SupabaseNetwork {
                     else -> IdentityProvider.EmailPassword
                 }
                 return@withContext UserProfileData(cleanEmail, fn, ln, provider, isPro, proStartDate, proRenewalDate)
+            }
+
+            // Direct Auth Admin fallback if profiles table didn't have this user row
+            try {
+                val uid = getUserIdFromProfile(cleanEmail)
+                if (!uid.isNullOrBlank()) {
+                    val userUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/auth/v1/admin/users/$uid")
+                    val userConn = userUrl.openConnection() as HttpURLConnection
+                    userConn.requestMethod = "GET"
+                    userConn.connectTimeout = 8000
+                    userConn.readTimeout = 8000
+                    userConn.setRequestProperty("apikey", effectiveKey)
+                    userConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+                    userConn.setRequestProperty("Accept", "application/json")
+                    if (userConn.responseCode in 200..299) {
+                        val userBody = userConn.inputStream.bufferedReader().readText()
+                        fun extractField(json: String, key: String): String {
+                            val regex = "\"$key\"\\s*:\\s*\"([^\"]*)\"".toRegex()
+                            return regex.find(json)?.groupValues?.getOrNull(1) ?: ""
+                        }
+                        fun extractLong(json: String, key: String): Long {
+                            val regex = "\"$key\"\\s*:\\s*(\\d+)".toRegex()
+                            return regex.find(json)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
+                        }
+                        var fn = extractField(userBody, "first_name")
+                        var ln = extractField(userBody, "last_name")
+                        val isPro = userBody.contains("\"is_pro\":true") || userBody.contains("\"is_pro\": true")
+                        val proStart = extractLong(userBody, "pro_start_date")
+                        val proRenew = extractLong(userBody, "pro_renewal_date")
+                        val provStr = extractField(userBody, "provider")
+                        val prov = when (provStr.lowercase()) {
+                            "google" -> IdentityProvider.Google
+                            "apple" -> IdentityProvider.Apple
+                            else -> IdentityProvider.EmailPassword
+                        }
+                        return@withContext UserProfileData(cleanEmail, fn, ln, prov, isPro, proStart, proRenew)
+                    }
+                }
+            } catch (ex: Exception) {
+                Log.w("SupabaseNetwork", "fetchUserProfile direct auth fallback: ${ex.message}")
             }
             return@withContext null
 
@@ -524,47 +612,52 @@ actual object SupabaseNetwork {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
             val cleanEmail = email.lowercase().trim()
-            val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail")
-            val patchConn = patchUrl.openConnection() as HttpURLConnection
-            patchConn.requestMethod = "PATCH"
-            patchConn.connectTimeout = 8000
-            patchConn.readTimeout = 8000
-            patchConn.setRequestProperty("apikey", effectiveKey)
-            patchConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
-            patchConn.setRequestProperty("Content-Type", "application/json")
-            patchConn.setRequestProperty("Prefer", "return=minimal")
-            patchConn.doOutput = true
+            val userId = SessionManager.getLoggedInUserId() ?: getUserIdFromProfile(cleanEmail)
 
-            val patchBody = """{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}"""
+            // 1. Upsert / update profiles table
             try {
-                patchConn.outputStream.use { it.write(patchBody.toByteArray(Charsets.UTF_8)) }
-            } catch (_: Exception) {}
-            var patchCode = patchConn.responseCode
-            Log.d("SupabaseNetwork", "updateUserProStatus profiles code=$patchCode")
-
-            if (patchCode !in 200..299) {
-                try {
-                    val fallbackUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail")
-                    val fallbackConn = fallbackUrl.openConnection() as HttpURLConnection
-                    fallbackConn.requestMethod = "PATCH"
-                    fallbackConn.connectTimeout = 8000
-                    fallbackConn.readTimeout = 8000
-                    fallbackConn.setRequestProperty("apikey", effectiveKey)
-                    fallbackConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
-                    fallbackConn.setRequestProperty("Content-Type", "application/json")
-                    fallbackConn.setRequestProperty("Prefer", "return=minimal")
-                    fallbackConn.doOutput = true
-                    val fallbackBody = """{"is_pro":$isPro}"""
-                    fallbackConn.outputStream.use { it.write(fallbackBody.toByteArray(Charsets.UTF_8)) }
-                    patchCode = fallbackConn.responseCode
-                    Log.d("SupabaseNetwork", "updateUserProStatus fallback code=$patchCode")
-                } catch (fe: Exception) {
-                    Log.w("SupabaseNetwork", "updateUserProStatus fallback error: ${fe.message}")
+                val profPayload = org.json.JSONObject().apply {
+                    if (!userId.isNullOrBlank()) put("id", userId)
+                    put("email", cleanEmail)
+                    put("is_pro", isPro)
+                    if (startDate > 0L) put("pro_start_date", startDate)
+                    if (renewalDate > 0L) put("pro_renewal_date", renewalDate)
                 }
+
+                // POST upsert (merge-duplicates)
+                val postUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles")
+                val postConn = postUrl.openConnection() as HttpURLConnection
+                postConn.requestMethod = "POST"
+                postConn.connectTimeout = 8000
+                postConn.readTimeout = 8000
+                postConn.setRequestProperty("apikey", effectiveKey)
+                postConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+                postConn.setRequestProperty("Content-Type", "application/json")
+                postConn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+                postConn.doOutput = true
+                postConn.outputStream.use { it.write(profPayload.toString().toByteArray(Charsets.UTF_8)) }
+                val postCode = postConn.responseCode
+                Log.d("SupabaseNetwork", "updateUserProStatus profiles POST code=$postCode")
+
+                // Also try PATCH by email
+                val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail")
+                val patchConn = patchUrl.openConnection() as HttpURLConnection
+                patchConn.requestMethod = "PATCH"
+                patchConn.connectTimeout = 8000
+                patchConn.readTimeout = 8000
+                patchConn.setRequestProperty("apikey", effectiveKey)
+                patchConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+                patchConn.setRequestProperty("Content-Type", "application/json")
+                patchConn.setRequestProperty("Prefer", "return=minimal")
+                patchConn.doOutput = true
+                patchConn.outputStream.use { it.write(profPayload.toString().toByteArray(Charsets.UTF_8)) }
+                val patchCode = patchConn.responseCode
+                Log.d("SupabaseNetwork", "updateUserProStatus profiles PATCH code=$patchCode")
+            } catch (pe: Exception) {
+                Log.w("SupabaseNetwork", "updateUserProStatus profiles error: ${pe.message}")
             }
 
-            // Also update Supabase auth.users user_metadata so status syncs even if custom columns don't exist in profiles
-            val userId = getUserIdFromProfile(cleanEmail)
+            // 2. ALWAYS update Supabase auth.users user_metadata so status syncs even if custom columns don't exist in profiles
             if (!userId.isNullOrBlank()) {
                 try {
                     val authUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/auth/v1/admin/users/$userId")
@@ -573,7 +666,7 @@ actual object SupabaseNetwork {
                     authConn.connectTimeout = 8000
                     authConn.readTimeout = 8000
                     authConn.setRequestProperty("apikey", effectiveKey)
-                    authConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+                    authConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
                     authConn.setRequestProperty("Content-Type", "application/json")
                     authConn.doOutput = true
 
@@ -706,24 +799,16 @@ actual object SupabaseNetwork {
         try {
             val cleanEmail = email.lowercase().trim()
             val cleanName = cleanDeviceDisplayName(deviceName)
-            val resolvedUserId = userId?.trim()?.ifBlank { null }
+            var resolvedUserId = userId?.trim()?.ifBlank { null }
                 ?: SessionManager.getLoggedInUserId()
-                ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
+
+            if (resolvedUserId.isNullOrBlank() && cleanEmail.isNotBlank()) {
+                resolvedUserId = getUserIdFromProfile(cleanEmail)
+            }
 
             if (!resolvedUserId.isNullOrBlank()) {
                 SessionManager.saveLoggedInUserId(resolvedUserId)
             }
-
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 8000
-            conn.readTimeout = 8000
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("apikey", effectiveKey)
-            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
-            conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
 
             val payload = org.json.JSONObject().apply {
                 val currentLang = SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()
@@ -738,13 +823,23 @@ actual object SupabaseNetwork {
                 put("port", port)
                 put("is_online", true)
             }
-            conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-            val code = conn.responseCode
-            if (code in 200..299) {
-                return@withContext true
-            }
 
-            // Fallback: If merge-duplicates didn't succeed, try PATCH on the existing device row
+            // 1. Try POST with resolution=merge-duplicates (upsert)
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+            conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+            val postCode = conn.responseCode
+            Log.d("SupabaseNetwork", "registerDeviceInSupabase POST code=$postCode")
+
+            // 2. Also execute PATCH on the specific device row to ensure user_id is set if row already existed
             try {
                 val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId")
                 val patchConn = patchUrl.openConnection() as HttpURLConnection
@@ -756,11 +851,13 @@ actual object SupabaseNetwork {
                 patchConn.setRequestProperty("apikey", effectiveKey)
                 patchConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
                 patchConn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-                return@withContext patchConn.responseCode in 200..299
+                val patchCode = patchConn.responseCode
+                Log.d("SupabaseNetwork", "registerDeviceInSupabase PATCH code=$patchCode")
+                if (patchCode in 200..299) return@withContext true
             } catch (ex: Exception) {
-                Log.e("SupabaseNetwork", "PATCH device fallback failed: ${ex.message}")
+                Log.w("SupabaseNetwork", "PATCH device fallback error: ${ex.message}")
             }
-            return@withContext false
+            return@withContext postCode in 200..299
         } catch (e: Exception) {
             Log.e("SupabaseNetwork", "registerDeviceInSupabase failed: ${e.message}")
             return@withContext false

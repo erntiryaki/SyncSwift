@@ -74,12 +74,12 @@ object SubscriptionManager {
     }
 
     fun isProActive(): Boolean {
-        return _isPro.value && hasActiveAccount()
+        return _isPro.value || SessionManager.getSavedProStatus()
     }
 
     fun refreshProState() {
         val cachedPro = SessionManager.getSavedProStatus()
-        _isPro.value = cachedPro && hasActiveAccount()
+        _isPro.value = cachedPro
     }
 
     fun init() {
@@ -89,7 +89,7 @@ object SubscriptionManager {
 
     fun setProState(pro: Boolean) {
         SessionManager.saveProStatus(pro)
-        _isPro.value = pro && hasActiveAccount()
+        _isPro.value = pro
         if (pro) {
             if (SessionManager.getProStartDateMillis() <= 0L) {
                 SessionManager.saveProStartDateMillis(net.syncswift.currentTimeMs())
@@ -99,7 +99,7 @@ object SubscriptionManager {
             }
         }
         val email = SessionManager.getLoggedInEmail()
-        if (hasActiveAccount() && !email.isNullOrBlank()) {
+        if (!email.isNullOrBlank()) {
             val start = SessionManager.getProStartDateMillis()
             val renew = SessionManager.getProRenewalDateMillis()
             CoroutineScope(Dispatchers.Default).launch {

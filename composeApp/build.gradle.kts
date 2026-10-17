@@ -18,6 +18,7 @@ if (envFile.exists()) {
 
 val envSupabaseUrl = System.getenv("SUPABASE_URL") ?: envProps.getProperty("SUPABASE_URL", "")
 val envSupabaseAnonKey = System.getenv("SUPABASE_ANON_KEY") ?: envProps.getProperty("SUPABASE_ANON_KEY", "")
+val envSupabaseServiceRoleKey = System.getenv("SUPABASE_SERVICE_ROLE_KEY") ?: envProps.getProperty("SUPABASE_SERVICE_ROLE_KEY", "")
 val envGoogleWebClientId = System.getenv("GOOGLE_WEB_CLIENT_ID") ?: envProps.getProperty("GOOGLE_WEB_CLIENT_ID", "")
 val envBrevoApiKey = System.getenv("BREVO_API_KEY") ?: envProps.getProperty("BREVO_API_KEY", "")
 val envBrevoSenderEmail = System.getenv("BREVO_SENDER_EMAIL") ?: envProps.getProperty("BREVO_SENDER_EMAIL", "noreply@syncswift.net")
@@ -80,7 +81,7 @@ android {
 
         buildConfigField("String", "SUPABASE_URL", "\"$envSupabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$envSupabaseAnonKey\"")
-        buildConfigField("String", "SUPABASE_SERVICE_ROLE_KEY", "\"\"")
+        buildConfigField("String", "SUPABASE_SERVICE_ROLE_KEY", "\"$envSupabaseServiceRoleKey\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$envGoogleWebClientId\"")
         buildConfigField("String", "BREVO_API_KEY", "\"$envBrevoApiKey\"")
         buildConfigField("String", "BREVO_SENDER_EMAIL", "\"$envBrevoSenderEmail\"")

@@ -22,6 +22,7 @@ import net.syncswift.*
 import net.syncswift.connection.ConnectionManager
 import net.syncswift.connection.PairResult
 import net.syncswift.ui.components.LanguageControl
+import kotlinx.coroutines.launch
 import net.syncswift.ui.components.rememberQrScanner
 import net.syncswift.ui.theme.*
 
@@ -41,6 +42,7 @@ fun AccountScreen(
     onOpenConnectDesktop: () -> Unit = {},
     onOpenNotifications: () -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showProModal by remember { mutableStateOf(false) }
     var showAboutModal by remember { mutableStateOf(false) }
@@ -528,7 +530,12 @@ fun AccountScreen(
             confirmTextColor = Color.White,
             onConfirm = {
                 showLogoutDialog = false
+                val devId = SessionManager.getPlatformDeviceId()
+                scope.launch {
+                    net.syncswift.SupabaseNetwork.clearDeviceUser(devId)
+                }
                 SessionManager.clearSession()
+                net.syncswift.subscription.SubscriptionManager.setProState(false)
                 showNativeToast(copy.logoutSuccess)
                 onLogout()
             },
@@ -744,6 +751,17 @@ fun AccountScreen(
                                     val currentPro = net.syncswift.subscription.SubscriptionManager.isPro.value
                                     val newPro = !currentPro
                                     net.syncswift.subscription.SubscriptionManager.setProState(newPro)
+                                    val loggedEmail = SessionManager.getLoggedInEmail()
+                                    if (!loggedEmail.isNullOrBlank()) {
+                                        scope.launch {
+                                            net.syncswift.SupabaseNetwork.updateUserProStatus(
+                                                email = loggedEmail,
+                                                isPro = newPro,
+                                                startDate = SessionManager.getProStartDateMillis(),
+                                                renewalDate = SessionManager.getProRenewalDateMillis()
+                                            )
+                                        }
+                                    }
                                     showNativeToast(if (newPro) copy.devModeProActivated else copy.devModeProDeactivated)
                                 }
                             }
