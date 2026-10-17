@@ -16,18 +16,18 @@ if (envFile.exists()) {
     envProps.load(FileInputStream(envFile))
 }
 
-val envSupabaseUrl = envProps.getProperty("SUPABASE_URL", "")
-val envSupabaseAnonKey = envProps.getProperty("SUPABASE_ANON_KEY", "")
-val envSupabaseServiceRoleKey = envProps.getProperty("SUPABASE_SERVICE_ROLE_KEY", "")
-val envGoogleWebClientId = envProps.getProperty("GOOGLE_WEB_CLIENT_ID", "")
-val envBrevoApiKey = envProps.getProperty("BREVO_API_KEY", "")
-val envBrevoSenderEmail = envProps.getProperty("BREVO_SENDER_EMAIL", "noreply@syncswift.net")
-val envAwsSesAccessKeyId = envProps.getProperty("AWS_SES_ACCESS_KEY_ID", "")
-val envAwsSesSecretAccessKey = envProps.getProperty("AWS_SES_SECRET_ACCESS_KEY", "")
-val envAwsSesRegion = envProps.getProperty("AWS_SES_REGION", "eu-central-1")
-val envAwsSesSenderEmail = envProps.getProperty("AWS_SES_SENDER_EMAIL", "noreply@syncswift.net")
-val envRevenueCatApiKey = envProps.getProperty("REVENUECAT_API_KEY", "")
-val envAdmobBannerId = envProps.getProperty("ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111")
+val envSupabaseUrl = System.getenv("SUPABASE_URL") ?: envProps.getProperty("SUPABASE_URL", "")
+val envSupabaseAnonKey = System.getenv("SUPABASE_ANON_KEY") ?: envProps.getProperty("SUPABASE_ANON_KEY", "")
+val envSupabaseServiceRoleKey = System.getenv("SUPABASE_SERVICE_ROLE_KEY") ?: envProps.getProperty("SUPABASE_SERVICE_ROLE_KEY", "")
+val envGoogleWebClientId = System.getenv("GOOGLE_WEB_CLIENT_ID") ?: envProps.getProperty("GOOGLE_WEB_CLIENT_ID", "")
+val envBrevoApiKey = System.getenv("BREVO_API_KEY") ?: envProps.getProperty("BREVO_API_KEY", "")
+val envBrevoSenderEmail = System.getenv("BREVO_SENDER_EMAIL") ?: envProps.getProperty("BREVO_SENDER_EMAIL", "noreply@syncswift.net")
+val envAwsSesAccessKeyId = System.getenv("AWS_SES_ACCESS_KEY_ID") ?: envProps.getProperty("AWS_SES_ACCESS_KEY_ID", "")
+val envAwsSesSecretAccessKey = System.getenv("AWS_SES_SECRET_ACCESS_KEY") ?: envProps.getProperty("AWS_SES_SECRET_ACCESS_KEY", "")
+val envAwsSesRegion = System.getenv("AWS_SES_REGION") ?: envProps.getProperty("AWS_SES_REGION", "eu-central-1")
+val envAwsSesSenderEmail = System.getenv("AWS_SES_SENDER_EMAIL") ?: envProps.getProperty("AWS_SES_SENDER_EMAIL", "noreply@syncswift.net")
+val envRevenueCatApiKey = System.getenv("REVENUECAT_API_KEY") ?: envProps.getProperty("REVENUECAT_API_KEY", "")
+val envAdmobBannerId = System.getenv("ADMOB_BANNER_ID") ?: envProps.getProperty("ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111")
 
 kotlin {
     androidTarget { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
