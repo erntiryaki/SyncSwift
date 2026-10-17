@@ -35,12 +35,30 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("[SyncSwift iOS] Failed to register for remote notifications: \(error.localizedDescription)")
     }
 
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+    ) -> Bool {
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable : Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        Platform_iosKt.onIosRemoteNotificationReceived(userInfo: userInfo)
+        completionHandler(.newData)
+    }
+
     // Show banners even when app is active in foreground
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        Platform_iosKt.onIosRemoteNotificationReceived(userInfo: notification.request.content.userInfo)
         completionHandler([.banner, .sound, .badge])
     }
 
@@ -50,6 +68,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        Platform_iosKt.onIosRemoteNotificationReceived(userInfo: response.notification.request.content.userInfo)
         completionHandler()
     }
 }

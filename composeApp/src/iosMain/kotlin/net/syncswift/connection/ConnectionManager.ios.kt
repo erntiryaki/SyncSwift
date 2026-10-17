@@ -303,8 +303,30 @@ actual object ConnectionManager {
         var activeSocket: Int = -1
         val cancelPairing: () -> Unit = {
             if (activeSocket >= 0) {
+                val cancelByte = byteArrayOf(10)
+                cancelByte.usePinned { pinned ->
+                    send(activeSocket, pinned.addressOf(0), 1.convert(), 0)
+                }
                 close(activeSocket)
                 activeSocket = -1
+            }
+            scope.launch {
+                var tok = target.pushToken
+                if (tok.isNullOrBlank() && target.host.isNotBlank()) {
+                    tok = queryPushTokenFromSupabase(target.host, target.name)
+                }
+                if (!tok.isNullOrBlank()) {
+                    sendFcmNotification(
+                        token = tok,
+                        title = "SyncSwift",
+                        body = "",
+                        data = mapOf(
+                            "type" to "pair_cancelled",
+                            "senderName" to selfName,
+                            "senderHost" to selfHost
+                        )
+                    )
+                }
             }
         }
 
@@ -400,11 +422,19 @@ actual object ConnectionManager {
     }
 
     actual fun acceptPairRequest(request: IncomingPairRequest) {
+        if (_pendingPairRequest.value?.requestId != request.requestId) {
+            showNativeToast(currentAppCopy().requestCancelledBySender)
+            return
+        }
         _pendingPairRequest.value = null
+        val completed = request.deferredResponse.complete(true)
+        if (!completed) {
+            showNativeToast(currentAppCopy().requestCancelledBySender)
+            return
+        }
         val key = deviceKey(request.senderHost, request.senderPort)
         markDeviceConnected(key)
         markDeviceConnected(request.senderId)
-        request.deferredResponse.complete(true)
     }
 
     actual fun rejectPairRequest(request: IncomingPairRequest) {
@@ -413,8 +443,36 @@ actual object ConnectionManager {
     }
 
     actual fun acceptTransferRequest(request: IncomingTransferRequest) {
+        if (_pendingTransferRequest.value?.requestId != request.requestId) {
+            showNativeToast(currentAppCopy().transferCancelledBySender)
+            return
+        }
         _pendingTransferRequest.value = null
-        request.deferredResponse.complete(true)
+        val completed = request.deferredResponse.complete(true)
+        if (!completed) {
+            showNativeToast(currentAppCopy().transferCancelledBySender)
+            return
+        }
+        if (request.isRemote && request.downloadUrl.isNotBlank()) {
+            net.syncswift.transfer.TransferEngine.downloadRemoteFile(
+                downloadUrl = request.downloadUrl,
+                fileName = request.fileName,
+                fileSize = request.fileSize,
+                mimeType = request.mimeType,
+                transferId = request.transferId,
+                senderName = request.senderName
+            )
+        } else if (request.senderHost.isNotBlank() && request.transferId.isNotBlank()) {
+            net.syncswift.transfer.TransferEngine.downloadStagedFile(
+                senderHost = request.senderHost,
+                senderPort = request.senderPort,
+                senderName = request.senderName,
+                transferId = request.transferId,
+                fileName = request.fileName,
+                fileSize = request.fileSize,
+                mimeType = request.mimeType
+            )
+        }
     }
 
     actual fun rejectTransferRequest(request: IncomingTransferRequest) {

@@ -2,17 +2,21 @@ package net.syncswift
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import platform.AuthenticationServices.ASWebAuthenticationPresentationContextProvidingProtocol
 import platform.AuthenticationServices.ASWebAuthenticationSession
 import platform.Foundation.*
 import platform.UIKit.UIApplication
 import platform.UIKit.UIWindow
-import platform.darwin.*
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
+import kotlin.coroutines.resume
 
 @OptIn(ExperimentalForeignApi::class)
 private class WebAuthContextProvider : NSObject(), ASWebAuthenticationPresentationContextProvidingProtocol {
@@ -37,13 +41,81 @@ private class WebAuthContextProvider : NSObject(), ASWebAuthenticationPresentati
 private var activeAuthSession: ASWebAuthenticationSession? = null
 private var activeContextProvider: WebAuthContextProvider? = null
 
+private val googleAuthScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+@OptIn(ExperimentalForeignApi::class)
+private suspend fun httpPostUrlEncoded(
+    urlStr: String,
+    params: Map<String, String>
+): Pair<Int, String> = suspendCancellableCoroutine { cont ->
+    val url = NSURL.URLWithString(urlStr)
+    if (url == null) {
+        cont.resume(Pair(-1, ""))
+        return@suspendCancellableCoroutine
+    }
+    val req = NSMutableURLRequest.requestWithURL(url)
+    req.setHTTPMethod("POST")
+    req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField = "Content-Type")
+    req.setTimeoutInterval(15.0)
+
+    val allowedChars = NSCharacterSet.alphanumericCharacterSet
+    val bodyStr = params.entries.joinToString("&") { (k, v) ->
+        val encK = (k as NSString).stringByAddingPercentEncodingWithAllowedCharacters(allowedChars) ?: k
+        val encV = (v as NSString).stringByAddingPercentEncodingWithAllowedCharacters(allowedChars) ?: v
+        "$encK=$encV"
+    }
+    val data = (bodyStr as NSString).dataUsingEncoding(NSUTF8StringEncoding)
+    req.setHTTPBody(data)
+
+    val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { resData, response, error ->
+        val httpResp = response as? NSHTTPURLResponse
+        val code = httpResp?.statusCode?.toInt() ?: if (error != null) -1 else 200
+        val resStr = if (resData != null) {
+            NSString.create(resData, NSUTF8StringEncoding)?.toString() ?: ""
+        } else ""
+        if (cont.isActive) {
+            cont.resume(Pair(code, resStr))
+        }
+    }
+    task.resume()
+    cont.invokeOnCancellation { task.cancel() }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private suspend fun httpGetJson(
+    urlStr: String,
+    bearerToken: String
+): Pair<Int, String> = suspendCancellableCoroutine { cont ->
+    val url = NSURL.URLWithString(urlStr)
+    if (url == null) {
+        cont.resume(Pair(-1, ""))
+        return@suspendCancellableCoroutine
+    }
+    val req = NSMutableURLRequest.requestWithURL(url)
+    req.setHTTPMethod("GET")
+    req.setValue("Bearer $bearerToken", forHTTPHeaderField = "Authorization")
+    req.setTimeoutInterval(15.0)
+
+    val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { resData, response, error ->
+        val httpResp = response as? NSHTTPURLResponse
+        val code = httpResp?.statusCode?.toInt() ?: if (error != null) -1 else 200
+        val resStr = if (resData != null) {
+            NSString.create(resData, NSUTF8StringEncoding)?.toString() ?: ""
+        } else ""
+        if (cont.isActive) {
+            cont.resume(Pair(code, resStr))
+        }
+    }
+    task.resume()
+    cont.invokeOnCancellation { task.cancel() }
+}
+
 @Composable
 actual fun rememberGoogleAuthLauncher(
     webClientId: String,
     onSuccess: (userData: GoogleUserData) -> Unit,
     onError: (message: String) -> Unit
 ): () -> Unit {
-    val scope = rememberCoroutineScope()
     val contextProvider = remember { WebAuthContextProvider() }
 
     return {
@@ -69,61 +141,53 @@ actual fun rememberGoogleAuthLauncher(
                     activeContextProvider = null
                     if (error != null) {
                         if (error.code.toInt() != 1) { // 1 = canceled by user
-                            onError(error.localizedDescription ?: "Google Sign-In failed")
+                            dispatch_async(dispatch_get_main_queue()) {
+                                onError(error.localizedDescription ?: "Google Sign-In failed")
+                            }
                         }
                         return@ASWebAuthenticationSession
                     }
 
                     if (callbackUrl != null) {
-                        val urlStr = callbackUrl.absoluteString ?: ""
-                        val code = Regex("""code=([^&]+)""").find(urlStr)?.groupValues?.get(1)?.substringBefore("#")
+                        var code: String? = null
+                        try {
+                            val components = NSURLComponents.componentsWithURL(callbackUrl, resolvingAgainstBaseURL = false)
+                            val items = components?.queryItems as? List<*>
+                            val item = items?.mapNotNull { it as? NSURLQueryItem }?.firstOrNull { it.name == "code" }
+                            code = item?.value
+                        } catch (_: Throwable) {}
+
+                        if (code.isNullOrBlank()) {
+                            val urlStr = callbackUrl.absoluteString ?: ""
+                            code = Regex("""code=([^&]+)""").find(urlStr)?.groupValues?.get(1)?.substringBefore("#")
+                        }
+
                         if (!code.isNullOrBlank()) {
-                            scope.launch(Dispatchers.Default) {
+                            googleAuthScope.launch {
                                 try {
-                                    val tokenUrl = NSURL.URLWithString("https://oauth2.googleapis.com/token") ?: return@launch
-                                    val tokenReq = NSMutableURLRequest.requestWithURL(tokenUrl)
-                                    tokenReq.setHTTPMethod("POST")
-                                    tokenReq.setValue("application/x-www-form-urlencoded", forHTTPHeaderField = "Content-Type")
-                                    val postBody = "code=$code&client_id=$iosClientId&grant_type=authorization_code&redirect_uri=$redirectUri"
-                                    tokenReq.setHTTPBody((postBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
+                                    val (tokenStatus, tokenJson) = httpPostUrlEncoded(
+                                        urlStr = "https://oauth2.googleapis.com/token",
+                                        params = mapOf(
+                                            "code" to code,
+                                            "client_id" to iosClientId,
+                                            "grant_type" to "authorization_code",
+                                            "redirect_uri" to redirectUri
+                                        )
+                                    )
 
-                                    val sem = platform.darwin.dispatch_semaphore_create(0)
-                                    var accessToken = ""
-                                    var idToken = ""
-
-                                    NSURLSession.sharedSession.dataTaskWithRequest(tokenReq) { data, _, reqErr ->
-                                        if (reqErr == null && data != null) {
-                                            val json = NSString.create(data, NSUTF8StringEncoding).toString()
-                                            accessToken = Regex(""""access_token"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.get(1) ?: ""
-                                            idToken = Regex(""""id_token"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.get(1) ?: ""
-                                        }
-                                        platform.darwin.dispatch_semaphore_signal(sem)
-                                    }.resume()
-                                    platform.darwin.dispatch_semaphore_wait(sem, platform.darwin.dispatch_time(platform.darwin.DISPATCH_TIME_NOW, 8_000_000_000L))
+                                    val accessToken = Regex(""""access_token"\s*:\s*"([^"]+)"""").find(tokenJson)?.groupValues?.get(1) ?: ""
+                                    val idToken = Regex(""""id_token"\s*:\s*"([^"]+)"""").find(tokenJson)?.groupValues?.get(1) ?: ""
 
                                     if (accessToken.isNotBlank()) {
-                                        val userinfoUrl = NSURL.URLWithString("https://www.googleapis.com/oauth2/v3/userinfo") ?: return@launch
-                                        val userReq = NSMutableURLRequest.requestWithURL(userinfoUrl)
-                                        userReq.setHTTPMethod("GET")
-                                        userReq.setValue("Bearer $accessToken", forHTTPHeaderField = "Authorization")
+                                        val (userStatus, uJson) = httpGetJson(
+                                            urlStr = "https://www.googleapis.com/oauth2/v3/userinfo",
+                                            bearerToken = accessToken
+                                        )
 
-                                        val sem2 = platform.darwin.dispatch_semaphore_create(0)
-                                        var userEmail = ""
-                                        var userName = ""
-                                        var userGivenName = ""
-                                        var userFamilyName = ""
-
-                                        NSURLSession.sharedSession.dataTaskWithRequest(userReq) { uData, _, uErr ->
-                                            if (uErr == null && uData != null) {
-                                                val uJson = NSString.create(uData, NSUTF8StringEncoding).toString()
-                                                userEmail = Regex(""""email"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
-                                                userName = Regex(""""name"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
-                                                userGivenName = Regex(""""given_name"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
-                                                userFamilyName = Regex(""""family_name"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
-                                            }
-                                            platform.darwin.dispatch_semaphore_signal(sem2)
-                                        }.resume()
-                                        platform.darwin.dispatch_semaphore_wait(sem2, platform.darwin.dispatch_time(platform.darwin.DISPATCH_TIME_NOW, 8_000_000_000L))
+                                        val userEmail = Regex(""""email"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
+                                        val userName = Regex(""""name"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
+                                        val userGivenName = Regex(""""given_name"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
+                                        val userFamilyName = Regex(""""family_name"\s*:\s*"([^"]+)"""").find(uJson)?.groupValues?.get(1) ?: ""
 
                                         if (userEmail.isNotBlank()) {
                                             withContext(Dispatchers.Main) {
@@ -148,7 +212,9 @@ actual fun rememberGoogleAuthLauncher(
                                 }
                             }
                         } else {
-                            onError("Google yetkilendirme kodu alınamadı.")
+                            dispatch_async(dispatch_get_main_queue()) {
+                                onError("Google yetkilendirme kodu alınamadı.")
+                            }
                         }
                     }
                 }

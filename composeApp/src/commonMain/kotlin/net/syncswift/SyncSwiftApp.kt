@@ -332,17 +332,6 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                 if (existingProfile.lastName.isNotBlank()) aLastName = existingProfile.lastName
                                             }
                                         }
-                                        if (aFirstName.isBlank() && aLastName.isBlank()) {
-                                            val cleanName = targetEmail.substringBefore("@").replace(".", " ").replace("_", " ").trim()
-                                            val words = cleanName.split(" ").filter { it.isNotBlank() }
-                                            if (words.size >= 2) {
-                                                aFirstName = words[0].replaceFirstChar { it.uppercase() }
-                                                aLastName = words[1].replaceFirstChar { it.uppercase() }
-                                            } else if (words.isNotEmpty()) {
-                                                aFirstName = words[0].replaceFirstChar { it.uppercase() }
-                                                aLastName = "Apple User"
-                                            }
-                                        }
                                         val existingProvider = SupabaseNetwork.getUserProvider(targetEmail) ?: authPolicy.getRegisteredProvider(targetEmail)
                                         if (existingProvider == IdentityProvider.EmailPassword) {
                                             authAlert = AuthAlertState.CrossProviderEmailToGoogle

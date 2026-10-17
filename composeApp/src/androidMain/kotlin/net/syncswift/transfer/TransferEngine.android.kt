@@ -243,9 +243,16 @@ actual object TransferEngine {
                         }
 
                         if (accepted) {
-                            output.writeByte(RESP_ACCEPTED.toInt())
-                            output.flush()
-                            ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
+                            try {
+                                output.writeByte(RESP_ACCEPTED.toInt())
+                                output.flush()
+                                ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
+                                ConnectionManager.markDeviceConnected(request.senderId)
+                            } catch (e: Exception) {
+                                ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+                                ConnectionManager.markDeviceDisconnected(request.senderId)
+                                showNativeToast(currentAppCopy().requestCancelledBySender)
+                            }
                         } else {
                             try {
                                 output.writeByte(RESP_REJECTED.toInt())
@@ -378,8 +385,13 @@ actual object TransferEngine {
                         }
 
                         // Send acceptance to sender so sender starts streaming bytes
-                        output.writeByte(RESP_ACCEPTED.toInt())
-                        output.flush()
+                        try {
+                            output.writeByte(RESP_ACCEPTED.toInt())
+                            output.flush()
+                        } catch (e: Exception) {
+                            showNativeToast(currentAppCopy().transferCancelledBySender)
+                            return
+                        }
 
                         // Receive and save file stream
                         val transferId = UUID.randomUUID().toString()
@@ -673,7 +685,14 @@ actual object TransferEngine {
             var activeSocket: Socket? = null
             val cancelTransfer: () -> Unit = {
                 try {
-                    activeSocket?.close()
+                    activeSocket?.let { s ->
+                        try {
+                            val out = s.getOutputStream()
+                            out.write(10) // TYPE_CANCEL
+                            out.flush()
+                        } catch (_: Exception) {}
+                        s.close()
+                    }
                 } catch (_: Exception) {}
                 updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
                 val cleanTarget = net.syncswift.discovery.cleanDeviceDisplayName(targetDeviceName)

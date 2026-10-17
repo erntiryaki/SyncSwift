@@ -70,3 +70,60 @@ fun onIosPushTokenReceived(token: String) {
 fun getSavedIosPushToken(): String? {
     return platform.Foundation.NSUserDefaults.standardUserDefaults.stringForKey("syncswift_push_token")
 }
+
+fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
+    val type = userInfo["type"] as? String ?: return
+    val copy = currentAppCopy()
+    println("[SyncSwift iOS] Remote notification received: type=$type")
+    when (type) {
+        "pair_cancelled" -> {
+            net.syncswift.connection.ConnectionManager.cancelIncomingPairRequest()
+            showNativeToast(copy.requestCancelledBySender)
+        }
+        "file_cancelled" -> {
+            val transferId = userInfo["transferId"] as? String
+            net.syncswift.connection.ConnectionManager.cancelIncomingTransferRequest(transferId)
+            showNativeToast(copy.transferCancelledBySender)
+        }
+        "pair_request" -> {
+            val senderId = userInfo["senderId"] as? String ?: ""
+            val senderName = userInfo["senderName"] as? String ?: copy.deviceSingle
+            val senderHost = userInfo["senderHost"] as? String ?: ""
+            val senderPort = (userInfo["senderPort"] as? String)?.toIntOrNull() ?: 52424
+            val senderOs = userInfo["senderOs"] as? String ?: "iOS"
+
+            val request = net.syncswift.connection.IncomingPairRequest(
+                senderId = senderId,
+                senderName = senderName,
+                senderHost = senderHost,
+                senderPort = senderPort,
+                senderOsType = senderOs
+            )
+            net.syncswift.connection.ConnectionManager.dispatchIncomingPairRequest(request)
+        }
+        "file_request" -> {
+            val transferId = userInfo["transferId"] as? String ?: ""
+            val senderName = userInfo["senderName"] as? String ?: copy.deviceSingle
+            val senderHost = userInfo["senderHost"] as? String ?: ""
+            val senderPort = (userInfo["senderPort"] as? String)?.toIntOrNull() ?: 52424
+            val fileName = userInfo["fileName"] as? String ?: "File"
+            val fileSize = (userInfo["fileSize"] as? String)?.toLongOrNull() ?: 0L
+            val mimeType = userInfo["mimeType"] as? String ?: "application/octet-stream"
+            val downloadUrl = userInfo["downloadUrl"] as? String ?: ""
+            val isRemote = userInfo["isRemote"] == "true"
+
+            val request = net.syncswift.connection.IncomingTransferRequest(
+                senderName = senderName,
+                fileName = fileName,
+                fileSize = fileSize,
+                mimeType = mimeType,
+                senderHost = senderHost,
+                senderPort = senderPort,
+                transferId = transferId,
+                downloadUrl = downloadUrl,
+                isRemote = isRemote
+            )
+            net.syncswift.connection.ConnectionManager.dispatchIncomingTransferRequest(request)
+        }
+    }
+}

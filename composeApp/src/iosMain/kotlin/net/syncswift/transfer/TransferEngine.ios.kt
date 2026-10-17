@@ -224,6 +224,16 @@ actual object TransferEngine {
 
                             ConnectionManager.dispatchIncomingPairRequest(request)
 
+                            val watchJob = scope.launch(Dispatchers.Default) {
+                                val buf = ByteArray(1)
+                                val r = buf.usePinned { pinned ->
+                                    recv(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                }
+                                if (r <= 0 || buf[0] == 10.toByte()) {
+                                    ConnectionManager.cancelIncomingPairRequest()
+                                }
+                            }
+
                             val accepted = try {
                                 withTimeout(30000) {
                                     request.deferredResponse.await()
@@ -231,15 +241,26 @@ actual object TransferEngine {
                             } catch (e: Exception) {
                                 ConnectionManager.cancelIncomingPairRequest()
                                 false
+                            } finally {
+                                watchJob.cancel()
                             }
 
                             val respByte = byteArrayOf(if (accepted) RESP_ACCEPTED else RESP_REJECTED)
-                            respByte.usePinned { pinned ->
+                            val sent = respByte.usePinned { pinned ->
                                 send(clientSock, pinned.addressOf(0), 1.convert(), 0)
                             }
 
                             if (accepted) {
-                                ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
+                                if (sent > 0) {
+                                    ConnectionManager.markDeviceConnected("$senderHost:$senderPort")
+                                    ConnectionManager.markDeviceConnected(request.senderId)
+                                } else {
+                                    ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+                                    ConnectionManager.markDeviceDisconnected(request.senderId)
+                                    dispatch_async(dispatch_get_main_queue()) {
+                                        showNativeToast(currentAppCopy().requestCancelledBySender)
+                                    }
+                                }
                             }
                         }
 
@@ -260,6 +281,16 @@ actual object TransferEngine {
 
                             ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
+                            val watchJob = scope.launch(Dispatchers.Default) {
+                                val buf = ByteArray(1)
+                                val r = buf.usePinned { pinned ->
+                                    recv(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                }
+                                if (r <= 0 || buf[0] == 10.toByte()) {
+                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                }
+                            }
+
                             val accepted = try {
                                 withTimeout(35000) {
                                     transferRequest.deferredResponse.await()
@@ -267,6 +298,8 @@ actual object TransferEngine {
                             } catch (e: Exception) {
                                 ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                                 false
+                            } finally {
+                                watchJob.cancel()
                             }
 
                             if (!accepted) {
@@ -279,8 +312,14 @@ actual object TransferEngine {
 
                             // Receiver accepted -> send acceptance to start streaming
                             val respAcc = byteArrayOf(RESP_ACCEPTED)
-                            respAcc.usePinned { pinned ->
+                            val sentAcc = respAcc.usePinned { pinned ->
                                 send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                            }
+                            if (sentAcc <= 0) {
+                                dispatch_async(dispatch_get_main_queue()) {
+                                    showNativeToast(currentAppCopy().transferCancelledBySender)
+                                }
+                                return@memScoped
                             }
 
                             val transferId = NSUUID().UUIDString
@@ -462,10 +501,35 @@ actual object TransferEngine {
         var activeSocket: Int = -1
         val cancelTransfer: () -> Unit = {
             if (activeSocket >= 0) {
+                val cancelByte = byteArrayOf(10)
+                cancelByte.usePinned { pinned ->
+                    send(activeSocket, pinned.addressOf(0), 1.convert(), 0)
+                }
                 close(activeSocket)
                 activeSocket = -1
             }
             updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+            scope.launch {
+                val targetDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+                    net.syncswift.discovery.cleanDeviceDisplayName(it.name) == targetDeviceName
+                }
+                var tok = targetDev?.pushToken
+                if (tok.isNullOrBlank() && targetHost.isNotBlank()) {
+                    tok = ConnectionManager.queryPushTokenFromSupabase(targetHost, targetDeviceName)
+                }
+                if (!tok.isNullOrBlank()) {
+                    ConnectionManager.sendFcmNotification(
+                        token = tok,
+                        title = "SyncSwift",
+                        body = "",
+                        data = mapOf(
+                            "type" to "file_cancelled",
+                            "transferId" to transferId,
+                            "senderName" to (net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()?.name ?: "iOS")
+                        )
+                    )
+                }
+            }
         }
 
         OutgoingStatusManager.show(

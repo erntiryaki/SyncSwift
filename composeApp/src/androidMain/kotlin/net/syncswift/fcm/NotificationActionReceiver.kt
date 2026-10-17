@@ -4,7 +4,6 @@ import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import net.syncswift.connection.ConnectionManager
 import kotlinx.coroutines.launch
 
@@ -45,9 +44,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val copy = net.syncswift.currentAppCopy()
 
         fun showToast(msg: String) {
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                Toast.makeText(appCtx, msg, Toast.LENGTH_SHORT).show()
-            }
+            net.syncswift.ToastNotifier.show(msg)
         }
 
         when (intent.action) {

@@ -119,10 +119,14 @@ actual object ConnectionManager {
             return
         }
         _pendingPairRequest.value = null
+        val completed = request.deferredResponse.complete(true)
+        if (!completed) {
+            showNativeToast(currentAppCopy().requestCancelledBySender)
+            return
+        }
         val key = deviceKey(request.senderHost, request.senderPort)
         markDeviceConnected(key)
         markDeviceConnected(request.senderId)
-        request.deferredResponse.complete(true)
 
         // Notify sender via FCM that their connection request was accepted
         scope.launch {
@@ -208,7 +212,11 @@ actual object ConnectionManager {
             return
         }
         _pendingTransferRequest.value = null
-        request.deferredResponse.complete(true)
+        val completed = request.deferredResponse.complete(true)
+        if (!completed) {
+            showNativeToast(currentAppCopy().transferCancelledBySender)
+            return
+        }
         if (request.isRemote && request.downloadUrl.isNotBlank()) {
             net.syncswift.transfer.TransferEngine.downloadRemoteFile(
                 downloadUrl = request.downloadUrl,
@@ -445,7 +453,14 @@ actual object ConnectionManager {
 
         val cancelPairing: () -> Unit = {
             try {
-                activeSocket?.close()
+                activeSocket?.let { s ->
+                    try {
+                        val out = s.getOutputStream()
+                        out.write(10) // TYPE_CANCEL
+                        out.flush()
+                    } catch (_: Exception) {}
+                    s.close()
+                }
             } catch (_: Exception) {}
             pairJob?.cancel()
 
@@ -553,9 +568,6 @@ actual object ConnectionManager {
                         onCancel = cancelPairing
                     )
                     withContext(Dispatchers.Main) {
-                        SessionManager.getAppContext()?.let { ctx ->
-                            android.widget.Toast.makeText(ctx, currentCopy.transferNotificationSentWaiting, android.widget.Toast.LENGTH_SHORT).show()
-                        }
                         onResult(PairResult.PENDING_APPROVAL)
                     }
                     return@launch

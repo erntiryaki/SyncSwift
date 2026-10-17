@@ -1,7 +1,6 @@
 package net.syncswift
 
 import android.app.Activity
-import android.widget.Toast
 import androidx.activity.compose.BackHandler as AndroidBackHandler
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
@@ -17,7 +16,7 @@ actual fun DoubleBackToExitHandler(exitMessage: String) {
             (context as? Activity)?.finish()
         } else {
             backPressedTime = currentTime
-            Toast.makeText(context, exitMessage, Toast.LENGTH_SHORT).show()
+            ToastNotifier.show(exitMessage)
         }
     }
 }
