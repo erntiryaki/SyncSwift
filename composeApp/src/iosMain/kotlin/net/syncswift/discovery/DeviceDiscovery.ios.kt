@@ -335,8 +335,17 @@ actual object DeviceDiscoveryManager {
     }
 
     actual fun removeManualDevice(host: String) {
+        if (host.isBlank()) return
+        val clean = cleanDeviceDisplayName(host)
         val current = _devices.value.toMutableList()
-        current.removeAll { it.host == host || it.id.contains(host) }
+        current.removeAll {
+            it.host == host ||
+            it.id == host ||
+            it.id == "manual-$host" ||
+            it.id.contains(host) ||
+            it.name == host ||
+            (clean.isNotBlank() && cleanDeviceDisplayName(it.name) == clean)
+        }
         _devices.value = current
         saveManualDevices()
     }

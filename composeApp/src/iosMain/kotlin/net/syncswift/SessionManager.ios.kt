@@ -191,4 +191,18 @@ actual object SessionManager {
     actual fun getLastShownPaywallSlot(): String? {
         return NSUserDefaults.standardUserDefaults.stringForKey("last_shown_paywall_slot")
     }
+
+    actual fun getPlatformDeviceId(): String {
+        return platform.UIKit.UIDevice.currentDevice.identifierForVendor?.UUIDString ?: "ios-${platform.UIKit.UIDevice.currentDevice.name}"
+    }
+
+    actual fun getMyDeviceName(): String {
+        return platform.UIKit.UIDevice.currentDevice.name
+    }
+
+    actual fun getMyPlatformName(): String = "iOS"
+
+    actual fun getMyPushToken(): String {
+        return NSUserDefaults.standardUserDefaults.stringForKey("apns_or_fcm_token") ?: ""
+    }
 }

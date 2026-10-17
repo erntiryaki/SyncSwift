@@ -5,6 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import net.syncswift.discovery.DiscoveredDevice
+import net.syncswift.discovery.cleanDeviceDisplayName
+import net.syncswift.connection.ConnectionManager
 
 actual object SupabaseNetwork {
     private val effectiveKey: String get() = SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.ifBlank { SyncSwiftConfig.SUPABASE_ANON_KEY }
@@ -248,21 +251,39 @@ actual object SupabaseNetwork {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext null
         try {
             val cleanEmail = email.lowercase().trim()
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=email,first_name,last_name,auth_provider")
-            val conn = url.openConnection() as HttpURLConnection
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=email,first_name,last_name,auth_provider,is_pro,pro_start_date,pro_renewal_date")
+            var conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
             conn.setRequestProperty("apikey", effectiveKey)
             conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             conn.setRequestProperty("Accept", "application/json")
-            val code = conn.responseCode
-            if (code in 200..299) {
-                val body = conn.inputStream.bufferedReader().readText()
-                if (body == "[]" || body.isBlank()) return@withContext null
+            var code = conn.responseCode
+            var body = if (code in 200..299) conn.inputStream.bufferedReader().readText() else ""
+            
+            // If the query failed (e.g. is_pro column not yet added to profiles table), fall back to base fields
+            if (code !in 200..299) {
+                val fallbackUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=email,first_name,last_name,auth_provider")
+                conn = fallbackUrl.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                conn.setRequestProperty("apikey", effectiveKey)
+                conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+                conn.setRequestProperty("Accept", "application/json")
+                code = conn.responseCode
+                body = if (code in 200..299) conn.inputStream.bufferedReader().readText() else ""
+            }
+
+            if (code in 200..299 && body.isNotBlank() && body != "[]") {
                 fun extractField(json: String, key: String): String {
                     val regex = "\"$key\"\\s*:\\s*\"([^\"]*)\"".toRegex()
                     return regex.find(json)?.groupValues?.getOrNull(1) ?: ""
+                }
+                fun extractLong(json: String, key: String): Long {
+                    val regex = "\"$key\"\\s*:\\s*(\\d+)".toRegex()
+                    return regex.find(json)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
                 }
                 var fn = extractField(body, "first_name")
                 var ln = extractField(body, "last_name")
@@ -274,21 +295,25 @@ actual object SupabaseNetwork {
                     }
                 }
 
-                // If still blank, check Supabase auth.users user_metadata via admin
-                if (fn.isBlank() && ln.isBlank()) {
-                    val userId = getUserIdFromProfile(cleanEmail)
-                    if (!userId.isNullOrBlank()) {
-                        try {
-                            val userUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/auth/v1/admin/users/$userId")
-                            val userConn = userUrl.openConnection() as HttpURLConnection
-                            userConn.requestMethod = "GET"
-                            userConn.connectTimeout = 8000
-                            userConn.readTimeout = 8000
-                            userConn.setRequestProperty("apikey", effectiveKey)
-                            userConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
-                            userConn.setRequestProperty("Accept", "application/json")
-                            if (userConn.responseCode in 200..299) {
-                                val userBody = userConn.inputStream.bufferedReader().readText()
+                var isPro = body.contains("\"is_pro\":true") || body.contains("\"is_pro\": true")
+                var proStartDate = extractLong(body, "pro_start_date")
+                var proRenewalDate = extractLong(body, "pro_renewal_date")
+
+                // Check Supabase auth.users user_metadata via admin
+                val userId = getUserIdFromProfile(cleanEmail)
+                if (!userId.isNullOrBlank()) {
+                    try {
+                        val userUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/auth/v1/admin/users/$userId")
+                        val userConn = userUrl.openConnection() as HttpURLConnection
+                        userConn.requestMethod = "GET"
+                        userConn.connectTimeout = 8000
+                        userConn.readTimeout = 8000
+                        userConn.setRequestProperty("apikey", effectiveKey)
+                        userConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+                        userConn.setRequestProperty("Accept", "application/json")
+                        if (userConn.responseCode in 200..299) {
+                            val userBody = userConn.inputStream.bufferedReader().readText()
+                            if (fn.isBlank() && ln.isBlank()) {
                                 fn = extractField(userBody, "first_name")
                                 ln = extractField(userBody, "last_name")
                                 if (fn.isBlank() && ln.isBlank()) {
@@ -299,9 +324,18 @@ actual object SupabaseNetwork {
                                     }
                                 }
                             }
-                        } catch (e: Exception) {
-                            Log.w("SupabaseNetwork", "auth.users fallback check: ${e.message}")
+                            if (!isPro) {
+                                isPro = userBody.contains("\"is_pro\":true") || userBody.contains("\"is_pro\": true")
+                            }
+                            if (proStartDate <= 0L) {
+                                proStartDate = extractLong(userBody, "pro_start_date")
+                            }
+                            if (proRenewalDate <= 0L) {
+                                proRenewalDate = extractLong(userBody, "pro_renewal_date")
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.w("SupabaseNetwork", "auth.users fallback check: ${e.message}")
                     }
                 }
 
@@ -311,7 +345,7 @@ actual object SupabaseNetwork {
                     "apple" -> IdentityProvider.Apple
                     else -> IdentityProvider.EmailPassword
                 }
-                return@withContext UserProfileData(cleanEmail, fn, ln, provider)
+                return@withContext UserProfileData(cleanEmail, fn, ln, provider, isPro, proStartDate, proRenewalDate)
             }
             return@withContext null
 
@@ -457,6 +491,271 @@ actual object SupabaseNetwork {
             Log.e("SupabaseNetwork", "updateUserProfileData failed: ${e.message}")
             return@withContext false
         }
+    }
+
+    actual suspend fun updateUserProStatus(
+        email: String,
+        isPro: Boolean,
+        startDate: Long,
+        renewalDate: Long
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
+        try {
+            val cleanEmail = email.lowercase().trim()
+            val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail")
+            val patchConn = patchUrl.openConnection() as HttpURLConnection
+            patchConn.requestMethod = "PATCH"
+            patchConn.connectTimeout = 8000
+            patchConn.readTimeout = 8000
+            patchConn.setRequestProperty("apikey", effectiveKey)
+            patchConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+            patchConn.setRequestProperty("Content-Type", "application/json")
+            patchConn.setRequestProperty("Prefer", "return=minimal")
+            patchConn.doOutput = true
+
+            val patchBody = """{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}"""
+            try {
+                patchConn.outputStream.use { it.write(patchBody.toByteArray(Charsets.UTF_8)) }
+            } catch (_: Exception) {}
+            val patchCode = patchConn.responseCode
+            Log.d("SupabaseNetwork", "updateUserProStatus profiles code=$patchCode")
+
+            // Also update Supabase auth.users user_metadata so status syncs even if custom columns don't exist in profiles
+            val userId = getUserIdFromProfile(cleanEmail)
+            if (!userId.isNullOrBlank()) {
+                try {
+                    val authUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/auth/v1/admin/users/$userId")
+                    val authConn = authUrl.openConnection() as HttpURLConnection
+                    authConn.requestMethod = "PUT"
+                    authConn.connectTimeout = 8000
+                    authConn.readTimeout = 8000
+                    authConn.setRequestProperty("apikey", effectiveKey)
+                    authConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
+                    authConn.setRequestProperty("Content-Type", "application/json")
+                    authConn.doOutput = true
+
+                    val authPayload = """{"user_metadata":{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}}"""
+                    authConn.outputStream.use { it.write(authPayload.toByteArray(Charsets.UTF_8)) }
+                    val authCode = authConn.responseCode
+                    Log.d("SupabaseNetwork", "updateUserProStatus auth.users code=$authCode")
+                } catch (ae: Exception) {
+                    Log.e("SupabaseNetwork", "updateUserProStatus auth.users error: ${ae.message}")
+                }
+            }
+            return@withContext true
+        } catch (e: Exception) {
+            Log.e("SupabaseNetwork", "updateUserProStatus failed: ${e.message}")
+            return@withContext false
+        }
+    }
+
+    actual suspend fun getActiveMobileDevices(email: String): List<DiscoveredDevice> = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
+        try {
+            val cleanEmail = email.lowercase().trim()
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_email=eq.$cleanEmail&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Accept", "application/json")
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().readText()
+                if (body.isBlank() || body == "[]") return@withContext emptyList()
+                val jsonArr = org.json.JSONArray(body)
+                val list = mutableListOf<DiscoveredDevice>()
+                for (i in 0 until jsonArr.length()) {
+                    val obj = jsonArr.getJSONObject(i)
+                    list.add(
+                        DiscoveredDevice(
+                            id = obj.optString("id"),
+                            name = obj.optString("device_name", "Mobile Device"),
+                            host = obj.optString("local_ip", ""),
+                            port = obj.optInt("port", 52424),
+                            osType = obj.optString("device_type", "Mobile"),
+                            pushToken = obj.optString("push_token", null),
+                            isRemote = true
+                        )
+                    )
+                }
+                return@withContext list
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseNetwork", "getActiveMobileDevices failed: ${e.message}")
+        }
+        return@withContext emptyList()
+    }
+
+    actual suspend fun removeUserDevice(email: String, deviceId: String): Boolean = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
+        try {
+            // 1. First get device token to send remote logout notification
+            val queryUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId&select=push_token,device_name")
+            val queryConn = queryUrl.openConnection() as HttpURLConnection
+            queryConn.requestMethod = "GET"
+            queryConn.connectTimeout = 6000
+            queryConn.readTimeout = 6000
+            queryConn.setRequestProperty("apikey", effectiveKey)
+            queryConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            var pushToken: String? = null
+            if (queryConn.responseCode in 200..299) {
+                val body = queryConn.inputStream.bufferedReader().readText()
+                if (body.isNotBlank() && body != "[]") {
+                    val arr = org.json.JSONArray(body)
+                    if (arr.length() > 0) {
+                        pushToken = arr.getJSONObject(0).optString("push_token", null)
+                    }
+                }
+            }
+
+            if (!pushToken.isNullOrBlank()) {
+                ConnectionManager.sendFcmNotification(
+                    token = pushToken,
+                    title = "",
+                    body = "",
+                    data = mapOf(
+                        "type" to "remote_logout",
+                        "deviceId" to deviceId
+                    )
+                )
+            }
+
+            // 2. Delete device from Supabase devices table
+            val delUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId")
+            val delConn = delUrl.openConnection() as HttpURLConnection
+            delConn.requestMethod = "DELETE"
+            delConn.connectTimeout = 8000
+            delConn.readTimeout = 8000
+            delConn.setRequestProperty("apikey", effectiveKey)
+            delConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            return@withContext delConn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.e("SupabaseNetwork", "removeUserDevice failed: ${e.message}")
+            return@withContext false
+        }
+    }
+
+    actual suspend fun registerDeviceInSupabase(
+        email: String,
+        deviceId: String,
+        deviceName: String,
+        deviceType: String,
+        pushToken: String,
+        localIp: String,
+        port: Int
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
+        try {
+            val cleanEmail = email.lowercase().trim()
+            val cleanName = cleanDeviceDisplayName(deviceName)
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+
+            val payload = org.json.JSONObject().apply {
+                put("id", deviceId)
+                put("device_name", cleanName)
+                put("device_type", deviceType)
+                if (cleanEmail.isNotBlank()) put("user_email", cleanEmail)
+                if (pushToken.isNotBlank()) put("push_token", pushToken)
+                if (localIp.isNotBlank()) put("local_ip", localIp)
+                put("port", port)
+                put("is_online", true)
+            }
+            conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+            return@withContext conn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.e("SupabaseNetwork", "registerDeviceInSupabase failed: ${e.message}")
+            return@withContext false
+        }
+    }
+
+    actual suspend fun fetchLinkedDesktopDevices(email: String): List<DiscoveredDevice> = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
+        try {
+            val cleanEmail = email.lowercase().trim()
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_email=eq.$cleanEmail&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Accept", "application/json")
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().readText()
+                if (body.isBlank() || body == "[]") return@withContext emptyList()
+                val jsonArr = org.json.JSONArray(body)
+                val list = mutableListOf<DiscoveredDevice>()
+                for (i in 0 until jsonArr.length()) {
+                    val obj = jsonArr.getJSONObject(i)
+                    list.add(
+                        DiscoveredDevice(
+                            id = obj.optString("id"),
+                            name = obj.optString("device_name", "Desktop"),
+                            host = obj.optString("local_ip", ""),
+                            port = obj.optInt("port", 52424),
+                            osType = obj.optString("device_type", "Desktop"),
+                            pushToken = if (obj.isNull("push_token")) null else obj.optString("push_token").ifBlank { null },
+                            isRemote = true
+                        )
+                    )
+                }
+                return@withContext list
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseNetwork", "fetchLinkedDesktopDevices failed: ${e.message}")
+        }
+        return@withContext emptyList()
+    }
+
+    actual suspend fun fetchAllUserDevices(email: String): List<DiscoveredDevice> = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
+        try {
+            val cleanEmail = email.lowercase().trim()
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_email=eq.$cleanEmail&select=id,device_name,device_type,push_token,local_ip,port,is_online")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Accept", "application/json")
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().readText()
+                if (body.isBlank() || body == "[]") return@withContext emptyList()
+                val jsonArr = org.json.JSONArray(body)
+                val list = mutableListOf<DiscoveredDevice>()
+                for (i in 0 until jsonArr.length()) {
+                    val obj = jsonArr.getJSONObject(i)
+                    list.add(
+                        DiscoveredDevice(
+                            id = obj.optString("id"),
+                            name = obj.optString("device_name", "Device"),
+                            host = obj.optString("local_ip", ""),
+                            port = obj.optInt("port", 52424),
+                            osType = obj.optString("device_type", "Unknown"),
+                            pushToken = if (obj.isNull("push_token")) null else obj.optString("push_token").ifBlank { null },
+                            isOnline = obj.optBoolean("is_online", true),
+                            isRemote = true
+                        )
+                    )
+                }
+                return@withContext list
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseNetwork", "fetchAllUserDevices failed: ${e.message}")
+        }
+        return@withContext emptyList()
     }
 
     actual suspend fun deleteUserAccount(email: String): Boolean = withContext(Dispatchers.IO) {

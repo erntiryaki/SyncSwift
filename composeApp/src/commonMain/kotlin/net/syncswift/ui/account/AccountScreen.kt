@@ -344,10 +344,10 @@ fun AccountScreen(
             )
             HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
 
-            // Connect to Desktop App (Masaüstü Uygulamasına Bağlan)
+            // My Devices (Kendi Cihazlarım)
             BoxlessMenuItem(
-                title = copy.connectToDesktop,
-                subtitle = copy.connectToDesktopDesc,
+                title = copy.myDevicesMenu,
+                subtitle = copy.myDevicesMenuDesc,
                 icon = { DesktopVectorIcon(Modifier.size(20.dp), color = Blue) },
                 onClick = onOpenConnectDesktop
             )

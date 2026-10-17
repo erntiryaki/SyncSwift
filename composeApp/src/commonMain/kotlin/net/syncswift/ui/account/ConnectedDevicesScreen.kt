@@ -434,51 +434,22 @@ fun ConnectedDevicesScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            // SECTION 2: Uzaktan Bağlı Cihazlar (Farklı Ağ - PRO)
+            // SECTION 2: Uzaktan Bağlı Cihazlar
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (!isPro) {
-                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
-                            )
-                        }
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = copy.remoteConnectedDevices,
-                        color = Cloud,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.3).sp
-                    )
-                    if (!isPro) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Blue.copy(alpha = 0.2f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = copy.proBadge,
-                                color = Blue,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.8.sp
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = copy.remoteConnectedDevices,
+                    color = Cloud,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.3).sp
+                )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = if (isPro) copy.formatDeviceCount(remoteConnected.size) else "",
+                    text = copy.formatDeviceCount(remoteConnected.size),
                     color = Mist,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -486,146 +457,65 @@ fun ConnectedDevicesScreen(
             }
             Spacer(Modifier.height(10.dp))
 
-            if (!isPro) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
-                            )
-                        },
-                    shape = RoundedCornerShape(12.dp),
-                    color = CardSurface,
-                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Blue.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LockIcon(Modifier.size(18.dp), color = Blue)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = copy.remoteConnectionLockedDesc,
-                                color = Mist,
-                                fontSize = 12.5.sp,
-                                lineHeight = 16.sp
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = copy.unlockWithPro,
-                            color = Blue,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (remoteConnected.isNotEmpty()) {
+                    remoteConnected.forEach { dev ->
+                        val status = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
+                        DeviceItemRow(
+                            name = cleanDeviceDisplayName(dev.name),
+                            details = status,
+                            badge = dev.osType,
+                            isOnline = dev.isOnline,
+                            isConnected = true,
+                            isSelf = false,
+                            onClick = { deviceForAction = dev }
                         )
+                        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
                     }
-                }
-            } else {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    if (remoteConnected.isNotEmpty()) {
-                        remoteConnected.forEach { dev ->
-                            val status = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
-                            DeviceItemRow(
-                                name = cleanDeviceDisplayName(dev.name),
-                                details = status,
-                                badge = dev.osType,
-                                isOnline = dev.isOnline,
-                                isConnected = true,
-                                isSelf = false,
-                                onClick = { deviceForAction = dev }
-                            )
-                            HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-                        }
-                    } else {
-                        Text(
-                            text = copy.noRemoteConnectedDevices,
-                            color = Mist,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
+                } else {
+                    Text(
+                        text = copy.noRemoteConnectedDevices,
+                        color = Mist,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
                 }
             }
 
             Spacer(Modifier.height(32.dp))
 
-            // SECTION 4: Uzaktan Bağlama (PRO Özellik) Card
+            // SECTION 4: Uzaktan Bağlama Card
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (!isPro) {
-                            Modifier.clickable {
-                                net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                    net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
-                                )
-                            }
-                        } else Modifier
-                    ),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 color = CardSurface,
-                border = BorderStroke(1.2.dp, if (isPro) Blue.copy(alpha = 0.45f) else InputBorder.copy(alpha = 0.35f))
+                border = BorderStroke(1.2.dp, InputBorder.copy(alpha = 0.35f))
             ) {
                 Box(Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(18.dp)
-                            .then(if (!isPro) Modifier.alpha(0.42f) else Modifier)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = copy.remotePairingTitle,
-                                    color = Cloud,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                if (!isPro) {
-                                    Spacer(Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Blue.copy(alpha = 0.25f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = copy.proBadge,
-                                            color = Blue,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            letterSpacing = 0.8.sp
-                                        )
-                                    }
-                                }
-                            }
+                            Text(
+                                text = copy.remotePairingTitle,
+                                color = Cloud,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
 
-                            if (isPro) {
-                                // Live countdown timer badge without icon, enlarged
-                                Text(
-                                    text = "${codeRemainingSeconds}s",
-                                    color = Blue,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
+                            Text(
+                                text = "${codeRemainingSeconds}s",
+                                color = Blue,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.5.sp
+                            )
                         }
 
                         Text(
@@ -654,7 +544,7 @@ fun ConnectedDevicesScreen(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = if (isPro) activePairingCode else "••• •••",
+                                    text = activePairingCode,
                                     color = Cloud,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -662,32 +552,30 @@ fun ConnectedDevicesScreen(
                                 )
                             }
 
-                            if (isPro) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "${codeRemainingSeconds}s",
+                                    color = Mist,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .clickable { ConnectionManager.generateOrRotatePairingCode() },
+                                    shape = CircleShape,
+                                    color = InputBg,
+                                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
                                 ) {
-                                    Text(
-                                        text = "${codeRemainingSeconds}s",
-                                        color = Mist,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Surface(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .clickable { ConnectionManager.generateOrRotatePairingCode() },
-                                        shape = CircleShape,
-                                        color = InputBg,
-                                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            RefreshIcon(Modifier.size(16.dp), color = Cloud)
-                                        }
+                                        RefreshIcon(Modifier.size(16.dp), color = Cloud)
                                     }
                                 }
                             }
@@ -705,15 +593,7 @@ fun ConnectedDevicesScreen(
                                     .weight(1f)
                                     .height(46.dp)
                                     .clip(RoundedCornerShape(23.dp))
-                                    .clickable {
-                                        if (isPro) {
-                                            showQrModal = true
-                                        } else {
-                                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
-                                            )
-                                        }
-                                    },
+                                    .clickable { showQrModal = true },
                                 shape = RoundedCornerShape(23.dp),
                                 color = PillButtonBg
                             ) {
@@ -738,15 +618,7 @@ fun ConnectedDevicesScreen(
                                     .weight(1f)
                                     .height(46.dp)
                                     .clip(RoundedCornerShape(23.dp))
-                                    .clickable {
-                                        if (isPro) {
-                                            showScanModal = true
-                                        } else {
-                                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                                net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
-                                            )
-                                        }
-                                    },
+                                    .clickable { showScanModal = true },
                                 shape = RoundedCornerShape(23.dp),
                                 color = InputBg
                             ) {
@@ -869,41 +741,6 @@ fun ConnectedDevicesScreen(
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
-                                }
-                            }
-                        }
-                    }
-
-                    if (!isPro) {
-                        // Sleek Lock Overlay Pill
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .background(Night.copy(alpha = 0.45f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(22.dp),
-                                color = PillButtonBg,
-                                border = BorderStroke(1.dp, Blue.copy(alpha = 0.45f)),
-                                modifier = Modifier.clickable {
-                                    net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                        net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
-                                    )
-                                }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    LockIcon(Modifier.size(16.dp), color = Blue)
-                                    Text(
-                                        text = copy.unlockWithPro,
-                                        color = PillButtonText,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
                                 }
                             }
                         }

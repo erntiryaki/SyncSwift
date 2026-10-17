@@ -61,6 +61,16 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
         val senderName = data["senderName"]?.ifBlank { null } ?: copy.deviceSingle
 
         when (type) {
+            "remote_logout" -> {
+                Log.d(TAG, "Received remote_logout command from account device management")
+                net.syncswift.SessionManager.clearSession()
+                net.syncswift.showNativeToast(copy.remoteSignedOut)
+                val intent = Intent(applicationContext, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+                startActivity(intent)
+                return
+            }
             "pair_cancelled" -> {
                 val senderId = data["senderId"] ?: ""
                 val senderHost = data["senderHost"] ?: ""
@@ -277,7 +287,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     osType = data["senderOs"] ?: "Mobile",
                     isRemote = true
                 )
-                ConnectionManager.disconnectDevice(peerDev)
+                ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
                 net.syncswift.showNativeToast("${cleanDeviceDisplayName(senderName)}: ${copy.disconnected}")
                 return
             }

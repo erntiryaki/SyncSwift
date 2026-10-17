@@ -367,6 +367,16 @@ fun DevicesIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(mod
 }
 
 @Composable
+fun MobileDeviceIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val s = Stroke(size.minDimension * 0.06f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    // Phone outline
+    drawRoundRect(color, Offset(w * 0.24f, h * 0.12f), Size(w * 0.52f, h * 0.76f), CornerRadius(w * 0.08f), style = s)
+    // Home indicator
+    drawLine(color, Offset(w * 0.44f, h * 0.80f), Offset(w * 0.56f, h * 0.80f), strokeWidth = s.width, cap = s.cap)
+}
+
+@Composable
 fun BellIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
     val w = size.width; val h = size.height
     val s = Stroke(size.minDimension * 0.06f, cap = StrokeCap.Round, join = StrokeJoin.Round)

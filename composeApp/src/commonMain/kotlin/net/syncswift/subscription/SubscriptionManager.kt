@@ -1,5 +1,8 @@
 package net.syncswift.subscription
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,7 +54,7 @@ fun PaywallReason.getDescription(copy: net.syncswift.Copy): String = when (this)
 }
 
 object SubscriptionManager {
-    const val FREE_MAX_DEVICES = 3
+    const val FREE_MAX_DEVICES = 1 // 1 mobile + 1 desktop for free tier
     const val FREE_MAX_FILE_BYTES = 5L * 1024 * 1024 * 1024 // 5 GB
 
     private val _isPro = MutableStateFlow(false)
@@ -93,6 +96,14 @@ object SubscriptionManager {
             }
             if (SessionManager.getProRenewalDateMillis() <= 0L) {
                 SessionManager.saveProRenewalDateMillis(net.syncswift.currentTimeMs() + 365L * 24 * 60 * 60 * 1000L)
+            }
+        }
+        val email = SessionManager.getLoggedInEmail()
+        if (hasActiveAccount() && !email.isNullOrBlank()) {
+            val start = SessionManager.getProStartDateMillis()
+            val renew = SessionManager.getProRenewalDateMillis()
+            CoroutineScope(Dispatchers.Default).launch {
+                net.syncswift.SupabaseNetwork.updateUserProStatus(email, pro, start, renew)
             }
         }
     }
@@ -156,7 +167,7 @@ object SubscriptionManager {
     }
 
     fun canRemoteTransfer(): Boolean {
-        return isProActive()
+        return true
     }
 
     fun canBackgroundWake(): Boolean {
@@ -164,7 +175,7 @@ object SubscriptionManager {
     }
 
     fun canSyncClipboard(): Boolean {
-        return isProActive()
+        return true
     }
 
     fun shouldShowAds(): Boolean {

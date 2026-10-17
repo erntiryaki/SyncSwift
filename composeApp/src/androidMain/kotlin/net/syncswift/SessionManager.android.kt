@@ -143,7 +143,7 @@ actual object SessionManager {
     }
 
     actual fun saveConnectedDeviceKeys(keys: Set<String>) {
-        getPrefs()?.edit()?.putStringSet("connected_devices_keys", keys)?.apply()
+        getPrefs()?.edit()?.remove("connected_devices_keys")?.putStringSet("connected_devices_keys", HashSet(keys))?.apply()
     }
 
     actual fun getSavedConnectedDeviceKeys(): Set<String> {
@@ -151,7 +151,7 @@ actual object SessionManager {
     }
 
     actual fun saveRemoteConnectedDeviceKeys(keys: Set<String>) {
-        getPrefs()?.edit()?.putStringSet("remote_connected_devices_keys", keys)?.apply()
+        getPrefs()?.edit()?.remove("remote_connected_devices_keys")?.putStringSet("remote_connected_devices_keys", HashSet(keys))?.apply()
     }
 
     actual fun getSavedRemoteConnectedDeviceKeys(): Set<String> {
@@ -228,5 +228,22 @@ actual object SessionManager {
 
     actual fun getLastShownPaywallSlot(): String? {
         return getPrefs()?.getString("last_shown_paywall_slot", null)
+    }
+
+    actual fun getPlatformDeviceId(): String {
+        return java.util.UUID.nameUUIDFromBytes("${android.os.Build.MANUFACTURER}_${android.os.Build.MODEL}_${android.os.Build.ID}".toByteArray()).toString()
+    }
+
+    actual fun getMyDeviceName(): String {
+        val model = android.os.Build.MODEL ?: "Android"
+        val manufacturer = android.os.Build.MANUFACTURER ?: ""
+        return if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
+    }
+
+    actual fun getMyPlatformName(): String = "Android"
+
+    actual fun getMyPushToken(): String {
+        val ctx = appContext
+        return if (ctx != null) net.syncswift.fcm.SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
     }
 }

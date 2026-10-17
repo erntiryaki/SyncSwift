@@ -547,98 +547,118 @@ actual object ConnectionManager {
     }
 
     @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-    actual fun disconnectDevice(target: DiscoveredDevice) {
+    actual fun disconnectDevice(target: DiscoveredDevice, notifyPeer: Boolean) {
         val key = deviceKey(target.host, target.port)
         val clean = cleanDeviceDisplayName(target.name)
         val targetHost = target.host
         val targetName = target.name
         val targetId = target.id
 
-        val keysToRemove = setOf(key, targetId, targetHost, targetName, clean).filter { it.isNotBlank() }.toSet()
+        // Collect all matching devices from discovery list to ensure every identifier is purged
+        val matchingDevices = DeviceDiscoveryManager.devices.value.filter { dev ->
+            dev.id == targetId ||
+            (targetHost.isNotBlank() && dev.host.isNotBlank() && dev.host == targetHost) ||
+            (clean.isNotBlank() && cleanDeviceDisplayName(dev.name) == clean) ||
+            (targetName.isNotBlank() && dev.name == targetName)
+        }
 
-        val newConnected = _connectedDeviceKeys.value.filter { existingKey ->
+        val allHosts = (listOf(targetHost) + matchingDevices.map { it.host }).filter { it.isNotBlank() }.toSet()
+        val allNames = (listOf(targetName, clean) + matchingDevices.flatMap { listOf(it.name, cleanDeviceDisplayName(it.name)) }).filter { it.isNotBlank() }.toSet()
+        val allIds = (listOf(targetId, key, "manual-$targetHost", "remote-$clean") + matchingDevices.flatMap { listOf(it.id, deviceKey(it.host, it.port), "manual-${it.host}") }).filter { it.isNotBlank() }.toSet()
+
+        fun isKeyMatchingTarget(existingKey: String): Boolean {
+            if (allIds.contains(existingKey)) return true
+            if (allNames.contains(existingKey)) return true
             val existingClean = cleanDeviceDisplayName(existingKey)
-            !keysToRemove.contains(existingKey) &&
-            (targetHost.isBlank() || !existingKey.contains(targetHost)) &&
-            (clean.isBlank() || existingClean != clean) &&
-            (targetName.isBlank() || existingKey != targetName)
-        }.toSet()
+            if (allNames.contains(existingClean)) return true
+            if (allHosts.any { host -> host.isNotBlank() && existingKey.contains(host) }) return true
+            return false
+        }
+
+        val newConnected = _connectedDeviceKeys.value.filterNot { isKeyMatchingTarget(it) }.toSet()
         _connectedDeviceKeys.value = newConnected
         SessionManager.saveConnectedDeviceKeys(newConnected)
 
-        val newRemote = _remoteConnectedDeviceKeys.value.filter { existingKey ->
-            val existingClean = cleanDeviceDisplayName(existingKey)
-            !keysToRemove.contains(existingKey) &&
-            (targetHost.isBlank() || !existingKey.contains(targetHost)) &&
-            (clean.isBlank() || existingClean != clean) &&
-            (targetName.isBlank() || existingKey != targetName)
-        }.toSet()
+        val newRemote = _remoteConnectedDeviceKeys.value.filterNot { isKeyMatchingTarget(it) }.toSet()
         _remoteConnectedDeviceKeys.value = newRemote
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
 
-        scope.launch(Dispatchers.Default) {
-            val self = DeviceDiscoveryManager.getSelfDevice()
-            val selfHost = self?.host ?: ""
-            val selfPort = self?.port ?: 52424
-            val selfId = self?.id ?: ""
-            val selfName = self?.name ?: ""
+        // Purge manual devices and remote devices from DeviceDiscoveryManager
+        allHosts.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+        allIds.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+        allNames.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+        matchingDevices.forEach { dev ->
+            if (dev.isRemote || dev.id.startsWith("manual-") || dev.host.startsWith("remote-")) {
+                DeviceDiscoveryManager.removeManualDevice(dev.host)
+                DeviceDiscoveryManager.removeManualDevice(dev.id)
+            }
+        }
 
-            // 1. Try local TCP unpair packet
-            if (target.host.isNotBlank() && !target.host.startsWith("remote-") && target.port > 0) {
-                val sock = socket(AF_INET, SOCK_STREAM, 0)
-                if (sock >= 0) {
-                    try {
-                        memScoped {
-                            val timeout = alloc<timeval>()
-                            timeout.tv_sec = 2
-                            timeout.tv_usec = 0
-                            setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
-                            val nosigpipe = alloc<IntVar>()
-                            nosigpipe.value = 1
-                            setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
+        if (notifyPeer) {
+            scope.launch(Dispatchers.Default) {
+                val self = DeviceDiscoveryManager.getSelfDevice()
+                val selfHost = self?.host ?: ""
+                val selfPort = self?.port ?: 52424
+                val selfId = self?.id ?: ""
+                val selfName = self?.name ?: ""
 
-                            val serverAddr = alloc<sockaddr_in>()
-                            serverAddr.sin_family = AF_INET.convert()
-                            serverAddr.sin_port = htons(target.port.toUShort())
-                            val parsedIp = parseIpv4(target.host)
-                            if (parsedIp != null) {
-                                serverAddr.sin_addr.s_addr = parsedIp.convert()
-                                if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) == 0) {
-                                    val packet = buildUnpairPacket(selfHost, selfPort, selfId, selfName)
-                                    packet.usePinned { pinned ->
-                                        send(sock, pinned.addressOf(0), packet.size.convert(), 0)
+                // 1. Try local TCP unpair packet
+                if (target.host.isNotBlank() && !target.host.startsWith("remote-") && target.port > 0) {
+                    val sock = socket(AF_INET, SOCK_STREAM, 0)
+                    if (sock >= 0) {
+                        try {
+                            memScoped {
+                                val timeout = alloc<timeval>()
+                                timeout.tv_sec = 2
+                                timeout.tv_usec = 0
+                                setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                                val nosigpipe = alloc<IntVar>()
+                                nosigpipe.value = 1
+                                setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
+
+                                val serverAddr = alloc<sockaddr_in>()
+                                serverAddr.sin_family = AF_INET.convert()
+                                serverAddr.sin_port = htons(target.port.toUShort())
+                                val parsedIp = parseIpv4(target.host)
+                                if (parsedIp != null) {
+                                    serverAddr.sin_addr.s_addr = parsedIp.convert()
+                                    if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) == 0) {
+                                        val packet = buildUnpairPacket(selfHost, selfPort, selfId, selfName)
+                                        packet.usePinned { pinned ->
+                                            send(sock, pinned.addressOf(0), packet.size.convert(), 0)
+                                        }
                                     }
                                 }
                             }
+                        } catch (_: Exception) {
+                        } finally {
+                            close(sock)
                         }
-                    } catch (_: Exception) {
-                    } finally {
-                        close(sock)
                     }
                 }
-            }
 
-            // 2. Try remote FCM unpair push notification
-            try {
-                val targetPushToken = (target.pushToken ?: "").ifBlank {
-                    queryPushTokenFromSupabase(target.host, target.name) ?: ""
-                }
-                if (targetPushToken.isNotBlank()) {
-                    sendFcmNotification(
-                        token = targetPushToken,
-                        title = "",
-                        body = "",
-                        data = mapOf(
-                            "type" to "unpair",
-                            "senderHost" to selfHost,
-                            "senderPort" to "$selfPort",
-                            "senderId" to selfId,
-                            "senderName" to selfName
+                // 2. Try remote FCM unpair push notification
+                try {
+                    val targetPushToken = (target.pushToken ?: "").ifBlank {
+                        queryPushTokenFromSupabase(target.host, target.name) ?: ""
+                    }
+                    if (targetPushToken.isNotBlank()) {
+                        sendFcmNotification(
+                            token = targetPushToken,
+                            title = "",
+                            body = "",
+                            data = mapOf(
+                                "type" to "unpair",
+                                "senderHost" to selfHost,
+                                "senderPort" to "$selfPort",
+                                "senderId" to selfId,
+                                "senderName" to selfName
+                            )
                         )
-                    )
+                    }
+                } catch (e: Exception) {
+                    println("[SyncSwift iOS] Unpair push error: ${e.message}")
                 }
-            } catch (e: Exception) {
-                println("[SyncSwift iOS] Unpair push error: ${e.message}")
             }
         }
     }

@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -191,13 +193,18 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         net.syncswift.subscription.SubscriptionManager.init()
     }
 
-    // Fetch profile data from Supabase if not yet cached locally or if name needs cleaning
+    // Fetch profile data from Supabase to sync names and Pro subscription status across devices
     LaunchedEffect(email, screen, authProvider) {
         if (screen == AuthStep.Home && authProvider != IdentityProvider.Local && email.isNotBlank()) {
-            val needsRefresh = firstName.isBlank() || lastName.isBlank() || firstName.any { it.isDigit() } || firstName.contains("@")
-            if (needsRefresh) {
-                val prof = SupabaseNetwork.fetchUserProfile(email)
-                if (prof != null) {
+            val prof = SupabaseNetwork.fetchUserProfile(email)
+            if (prof != null) {
+                if (prof.isPro) {
+                    net.syncswift.subscription.SubscriptionManager.setProState(true)
+                    if (prof.proStartDate > 0L) SessionManager.saveProStartDateMillis(prof.proStartDate)
+                    if (prof.proRenewalDate > 0L) SessionManager.saveProRenewalDateMillis(prof.proRenewalDate)
+                }
+                val needsNameRefresh = firstName.isBlank() || lastName.isBlank() || firstName.any { it.isDigit() } || firstName.contains("@")
+                if (needsNameRefresh) {
                     val (f, l) = SmartNameExtractor.extract(email, prof.firstName, prof.lastName)
                     if (f.isNotBlank()) firstName = f
                     if (l.isNotBlank()) lastName = l
@@ -210,13 +217,20 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                             provider = authProvider
                         )
                     }
-                } else {
-                    val (f, l) = SmartNameExtractor.extract(email, firstName, lastName)
-                    if (f.isNotBlank()) firstName = f
-                    if (l.isNotBlank()) lastName = l
-                    SessionManager.updateUserProfile(firstName, lastName)
                 }
+            } else {
+                val (f, l) = SmartNameExtractor.extract(email, firstName, lastName)
+                if (f.isNotBlank()) firstName = f
+                if (l.isNotBlank()) lastName = l
+                SessionManager.updateUserProfile(firstName, lastName)
             }
+            SupabaseNetwork.registerDeviceInSupabase(
+                email = email,
+                deviceId = SessionManager.getPlatformDeviceId(),
+                deviceName = SessionManager.getMyDeviceName(),
+                deviceType = SessionManager.getMyPlatformName(),
+                pushToken = SessionManager.getMyPushToken()
+            )
         }
     }
 
@@ -251,6 +265,20 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         BackHandler { screen = AuthStep.Otp }
     }
 
+    data class BlockedDeviceLimitData(
+        val email: String,
+        val provider: IdentityProvider,
+        val firstName: String,
+        val lastName: String,
+        val password: String = "",
+        val devices: List<net.syncswift.discovery.DiscoveredDevice>
+    )
+
+    var blockedDeviceLimitData by remember { mutableStateOf<BlockedDeviceLimitData?>(null) }
+    var showOldDevicesModal by remember { mutableStateOf(false) }
+    var oldDeviceToConfirmRemove by remember { mutableStateOf<net.syncswift.discovery.DiscoveredDevice?>(null) }
+    var isRemovingOldDevice by remember { mutableStateOf(false) }
+
     // Commit User to AuthPolicy, SharedPreferences & Database ONLY when reaching Home Screen!
     fun commitUserRegistration(userEmail: String, provider: IdentityProvider, fName: String = "", lName: String = "", password: String = "") {
         authPolicy.registerAccount(userEmail, provider)
@@ -267,6 +295,62 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 provider = provider,
                 password = password
             )
+            SupabaseNetwork.registerDeviceInSupabase(
+                email = userEmail,
+                deviceId = SessionManager.getPlatformDeviceId(),
+                deviceName = SessionManager.getMyDeviceName(),
+                deviceType = SessionManager.getMyPlatformName(),
+                pushToken = SessionManager.getMyPushToken()
+            )
+            // If already purchased Pro on this device, sync it to the newly logged-in account
+            if (net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()) {
+                SupabaseNetwork.updateUserProStatus(
+                    email = userEmail,
+                    isPro = true,
+                    startDate = SessionManager.getProStartDateMillis(),
+                    renewalDate = SessionManager.getProRenewalDateMillis()
+                )
+            } else {
+                // Check if account has Pro purchased on another device
+                val prof = SupabaseNetwork.fetchUserProfile(userEmail)
+                if (prof != null && prof.isPro) {
+                    net.syncswift.subscription.SubscriptionManager.setProState(true)
+                    if (prof.proStartDate > 0L) SessionManager.saveProStartDateMillis(prof.proStartDate)
+                    if (prof.proRenewalDate > 0L) SessionManager.saveProRenewalDateMillis(prof.proRenewalDate)
+                }
+            }
+        }
+    }
+
+    fun verifyDeviceLimitAndLogin(
+        targetEmail: String,
+        provider: IdentityProvider,
+        fName: String = "",
+        lName: String = "",
+        pwd: String = ""
+    ) {
+        scope.launch {
+            val prof = SupabaseNetwork.fetchUserProfile(targetEmail)
+            val isProUser = (prof?.isPro == true) || net.syncswift.subscription.SubscriptionManager.isProActive() || net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()
+            val currentDeviceId = SessionManager.getPlatformDeviceId()
+            if (!isProUser) {
+                val activeMobiles = SupabaseNetwork.getActiveMobileDevices(targetEmail)
+                val otherMobiles = activeMobiles.filter { it.id != currentDeviceId }
+                if (otherMobiles.isNotEmpty()) {
+                    blockedDeviceLimitData = BlockedDeviceLimitData(
+                        email = targetEmail,
+                        provider = provider,
+                        firstName = fName,
+                        lastName = lName,
+                        password = pwd,
+                        devices = otherMobiles
+                    )
+                    return@launch
+                }
+            }
+            commitUserRegistration(targetEmail, provider, fName, lName, pwd)
+            authDraftEmail = ""
+            screen = AuthStep.Home
         }
     }
 
@@ -329,9 +413,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             val prof = SupabaseNetwork.fetchUserProfile(userEmail)
                                             val f = prof?.firstName ?: ""
                                             val l = prof?.lastName ?: ""
-                                            commitUserRegistration(userEmail, IdentityProvider.EmailPassword, f, l)
-                                            authDraftEmail = ""
-                                            screen = AuthStep.Home
+                                            verifyDeviceLimitAndLogin(userEmail, IdentityProvider.EmailPassword, f, l, userPassword)
                                         } else {
                                             authAlert = AuthAlertState.WrongPassword
                                         }
@@ -355,8 +437,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                         } else {
                                             authDraftEmail = ""
                                             authPolicy.registerAccount(targetEmail, IdentityProvider.Google)
-                                            commitUserRegistration(targetEmail, IdentityProvider.Google, gFirstName, gLastName)
-                                            screen = AuthStep.Home
+                                            verifyDeviceLimitAndLogin(targetEmail, IdentityProvider.Google, gFirstName, gLastName)
                                         }
                                     }
                                 },
@@ -402,8 +483,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                         } else {
                                             authDraftEmail = ""
                                             authPolicy.registerAccount(targetEmail, IdentityProvider.Apple)
-                                            commitUserRegistration(targetEmail, IdentityProvider.Apple, aFirstName, aLastName)
-                                            screen = AuthStep.Home
+                                            verifyDeviceLimitAndLogin(targetEmail, IdentityProvider.Apple, aFirstName, aLastName)
                                         }
                                     }
                                 },
@@ -432,9 +512,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                         val prof = SupabaseNetwork.fetchUserProfile(authDraftEmail)
                                         val f = prof?.firstName ?: ""
                                         val l = prof?.lastName ?: ""
-                                        commitUserRegistration(authDraftEmail, IdentityProvider.EmailPassword, f, l)
-                                        authDraftEmail = ""
-                                        screen = AuthStep.Home
+                                        verifyDeviceLimitAndLogin(authDraftEmail, IdentityProvider.EmailPassword, f, l)
                                     }
                                 },
                                 language = language,
@@ -463,9 +541,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 onBack = { screen = AuthStep.Otp },
                                 finished = { pFirstName, pLastName, password ->
                                     // User completed profile -> Commit account with firstName, lastName & password
-                                    commitUserRegistration(authDraftEmail, IdentityProvider.EmailPassword, pFirstName, pLastName, password)
-                                    authDraftEmail = ""
-                                    screen = AuthStep.Home
+                                    verifyDeviceLimitAndLogin(authDraftEmail, IdentityProvider.EmailPassword, pFirstName, pLastName, password)
                                 },
                                 language = language,
                                 setLanguage = ::updateLanguage
@@ -976,6 +1052,188 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                             inHelpSupport = false
                             screen = AuthStep.Email
                         }
+                    )
+                }
+            }
+
+            // MODAL: Maksimum Cihaz Sınırı Uyarısı & Eski Cihazımı Kaldır
+            if (blockedDeviceLimitData != null) {
+                val limitData = blockedDeviceLimitData!!
+                net.syncswift.ui.components.SyncSwiftModal(
+                    onDismissRequest = {
+                        if (!isRemovingOldDevice) blockedDeviceLimitData = null
+                    },
+                    title = copy.maxDeviceLimitReached,
+                    titleIcon = { WarningTriangleIcon(Modifier.size(20.dp), color = Blue) },
+                    confirmText = copy.unlockWithPro,
+                    confirmColor = Blue,
+                    confirmTextColor = Color.White,
+                    onConfirm = {
+                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                            net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
+                        )
+                    },
+                    dismissText = copy.cancelAction,
+                    onDismiss = {
+                        if (!isRemovingOldDevice) blockedDeviceLimitData = null
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = copy.maxDeviceLimitReached,
+                            color = Mist,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        )
+
+                        Button(
+                            onClick = { showOldDevicesModal = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = RoundedCornerShape(23.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = InputBg,
+                                contentColor = Cloud
+                            ),
+                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = copy.removeOldDeviceAction,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // MODAL: Eski Cihaz Listesi
+            if (showOldDevicesModal && blockedDeviceLimitData != null) {
+                val limitData = blockedDeviceLimitData!!
+                net.syncswift.ui.components.SyncSwiftModal(
+                    onDismissRequest = {
+                        if (!isRemovingOldDevice) showOldDevicesModal = false
+                    },
+                    title = copy.registeredDevicesTitle,
+                    titleIcon = { DevicesIcon(Modifier.size(20.dp), color = Blue) },
+                    confirmText = copy.closeAction,
+                    confirmColor = InputBg,
+                    confirmTextColor = Cloud,
+                    onConfirm = { showOldDevicesModal = false },
+                    onDismiss = { showOldDevicesModal = false }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        limitData.devices.forEach { oldDev ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = CardSurface,
+                                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    MobileDeviceIcon(Modifier.size(20.dp), color = Blue)
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            text = net.syncswift.discovery.cleanDeviceDisplayName(oldDev.name),
+                                            color = Cloud,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = oldDev.osType,
+                                            color = Mist,
+                                            fontSize = 11.5.sp
+                                        )
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = ErrorRed.copy(alpha = 0.12f),
+                                        border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.32f)),
+                                        modifier = Modifier.clickable {
+                                            oldDeviceToConfirmRemove = oldDev
+                                        }
+                                    ) {
+                                        Text(
+                                            text = copy.removeDeviceConfirmTitle,
+                                            color = ErrorRed,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // MODAL: Eski Cihazı Kaldır Onay
+            if (oldDeviceToConfirmRemove != null && blockedDeviceLimitData != null) {
+                val targetDev = oldDeviceToConfirmRemove!!
+                val limitData = blockedDeviceLimitData!!
+                net.syncswift.ui.components.SyncSwiftModal(
+                    onDismissRequest = {
+                        if (!isRemovingOldDevice) oldDeviceToConfirmRemove = null
+                    },
+                    title = copy.removeDeviceConfirmTitle,
+                    titleIcon = { WarningTriangleIcon(Modifier.size(20.dp), color = ErrorRed) },
+                    confirmText = copy.removeDeviceConfirmTitle,
+                    confirmColor = ErrorRed,
+                    confirmTextColor = Color.White,
+                    confirmLoading = isRemovingOldDevice,
+                    onConfirm = {
+                        scope.launch {
+                            isRemovingOldDevice = true
+                            try {
+                                SupabaseNetwork.removeUserDevice(limitData.email, targetDev.id)
+                                showNativeToast(copy.deviceRemovedSuccess)
+                                oldDeviceToConfirmRemove = null
+                                showOldDevicesModal = false
+                                val updatedDevices = limitData.devices.filter { it.id != targetDev.id }
+                                if (updatedDevices.isEmpty()) {
+                                    blockedDeviceLimitData = null
+                                    commitUserRegistration(
+                                        limitData.email,
+                                        limitData.provider,
+                                        limitData.firstName,
+                                        limitData.lastName,
+                                        limitData.password
+                                    )
+                                    authDraftEmail = ""
+                                    screen = AuthStep.Home
+                                } else {
+                                    blockedDeviceLimitData = limitData.copy(devices = updatedDevices)
+                                }
+                            } finally {
+                                isRemovingOldDevice = false
+                            }
+                        }
+                    },
+                    dismissText = copy.cancelAction,
+                    onDismiss = {
+                        if (!isRemovingOldDevice) oldDeviceToConfirmRemove = null
+                    }
+                ) {
+                    Text(
+                        text = copy.removeDeviceConfirmDesc,
+                        color = Mist,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
                     )
                 }
             }

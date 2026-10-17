@@ -460,6 +460,21 @@ class Copy {
     var signInOrRegister: String = "Sign In / Register"
     var remoteConnectionLockedDesc: String = "Remote connection and 6-digit code pairing are exclusive to SyncSwift Pro."
     var unlockWithPro: String = "Unlock with Pro"
+    var myDevicesMenu: String = "My Devices"
+    var myDevicesMenuDesc: String = "Active mobile and desktop devices on your account"
+    var myDevicesTitle: String = "My Devices"
+    var currentDeviceBadge: String = "This Device"
+    var linkedDesktopDevices: String = "Linked Desktop Devices"
+    var noLinkedDesktop: String = "No desktop devices linked yet."
+    var connectDesktopSectionTitle: String = "Connect to Desktop"
+    var connectDesktopSectionDesc: String = "Scan the QR code or enter the 6-digit code from the Windows or macOS app."
+    var maxDeviceLimitReached: String = "You have reached the maximum device limit. Upgrade to Pro to add more devices."
+    var removeOldDeviceAction: String = "Remove Old Device"
+    var registeredDevicesTitle: String = "Registered Devices"
+    var removeDeviceConfirmTitle: String = "Remove Device"
+    var removeDeviceConfirmDesc: String = "Are you sure you want to remove this device? You will be signed out on that device."
+    var deviceRemovedSuccess: String = "Device removed. You can now sign in."
+    var remoteSignedOut: String = "You were signed out because this device was removed from your account."
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {

@@ -152,6 +152,11 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
     val copy = currentAppCopy()
     println("[SyncSwift iOS] Remote notification received: type=$type, raw=$userInfo")
     when (type.lowercase()) {
+        "remote_logout" -> {
+            println("[SyncSwift iOS] Received remote_logout command")
+            SessionManager.clearSession()
+            showNativeToast(copy.remoteSignedOut)
+        }
         "pair_cancelled" -> {
             val senderId = extractNotificationField(userInfo, "senderId") ?: ""
             val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
@@ -303,7 +308,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 osType = extractNotificationField(userInfo, "senderOs") ?: "Mobile",
                 isRemote = true
             )
-            net.syncswift.connection.ConnectionManager.disconnectDevice(peerDev)
+            net.syncswift.connection.ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
             showNativeToast("${net.syncswift.discovery.cleanDeviceDisplayName(senderName)}: ${copy.disconnected}")
             return
         }

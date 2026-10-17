@@ -6,6 +6,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import platform.Foundation.*
 import kotlin.coroutines.resume
+import net.syncswift.discovery.DiscoveredDevice
+import net.syncswift.discovery.cleanDeviceDisplayName
+import net.syncswift.connection.ConnectionManager
 
 private data class HttpResponse(val statusCode: Int, val body: String)
 
@@ -255,8 +258,8 @@ actual object SupabaseNetwork {
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
         try {
             val clean = cleanEmail(email)
-            val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean&select=email,first_name,last_name,auth_provider",
+            var resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean&select=email,first_name,last_name,auth_provider,is_pro,pro_start_date,pro_renewal_date",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -264,10 +267,26 @@ actual object SupabaseNetwork {
                     "Accept" to "application/json"
                 )
             )
+            // Fallback if is_pro column not yet in profiles table
+            if (resp.statusCode !in 200..299) {
+                resp = executeRequest(
+                    urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean&select=email,first_name,last_name,auth_provider",
+                    method = "GET",
+                    headers = mapOf(
+                        "apikey" to serviceKey,
+                        "Authorization" to "Bearer $serviceKey",
+                        "Accept" to "application/json"
+                    )
+                )
+            }
             if (resp.statusCode in 200..299 && resp.body != "[]" && resp.body.isNotBlank()) {
                 fun extractField(json: String, key: String): String {
                     val regex = "\"$key\"\\s*:\\s*\"([^\"]*)\"".toRegex()
                     return regex.find(json)?.groupValues?.getOrNull(1) ?: ""
+                }
+                fun extractLong(json: String, key: String): Long {
+                    val regex = "\"$key\"\\s*:\\s*(\\d+)".toRegex()
+                    return regex.find(json)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
                 }
                 var fn = extractField(resp.body, "first_name")
                 var ln = extractField(resp.body, "last_name")
@@ -278,13 +297,55 @@ actual object SupabaseNetwork {
                         ln = full.split(" ").drop(1).joinToString(" ")
                     }
                 }
+                var isPro = resp.body.contains("\"is_pro\":true") || resp.body.contains("\"is_pro\": true")
+                var proStartDate = extractLong(resp.body, "pro_start_date")
+                var proRenewalDate = extractLong(resp.body, "pro_renewal_date")
+
+                // Check Supabase auth.users user_metadata fallback
+                val userId = getUserIdFromProfile(clean)
+                if (!userId.isNullOrBlank()) {
+                    try {
+                        val userResp = executeRequest(
+                            urlString = "$supabaseUrl/auth/v1/admin/users/$userId",
+                            method = "GET",
+                            headers = mapOf(
+                                "apikey" to serviceKey,
+                                "Authorization" to "Bearer $serviceKey",
+                                "Accept" to "application/json"
+                            )
+                        )
+                        if (userResp.statusCode in 200..299) {
+                            if (fn.isBlank() && ln.isBlank()) {
+                                fn = extractField(userResp.body, "first_name")
+                                ln = extractField(userResp.body, "last_name")
+                                if (fn.isBlank() && ln.isBlank()) {
+                                    val full = extractField(userResp.body, "full_name").ifBlank { extractField(userResp.body, "name") }
+                                    if (full.isNotBlank()) {
+                                        fn = full.split(" ").firstOrNull() ?: ""
+                                        ln = full.split(" ").drop(1).joinToString(" ")
+                                    }
+                                }
+                            }
+                            if (!isPro) {
+                                isPro = userResp.body.contains("\"is_pro\":true") || userResp.body.contains("\"is_pro\": true")
+                            }
+                            if (proStartDate <= 0L) {
+                                proStartDate = extractLong(userResp.body, "pro_start_date")
+                            }
+                            if (proRenewalDate <= 0L) {
+                                proRenewalDate = extractLong(userResp.body, "pro_renewal_date")
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+
                 val provStr = extractField(resp.body, "auth_provider")
                 val provider = when (provStr.lowercase()) {
                     "google" -> IdentityProvider.Google
                     "apple" -> IdentityProvider.Apple
                     else -> IdentityProvider.EmailPassword
                 }
-                return UserProfileData(clean, fn, ln, provider)
+                return UserProfileData(clean, fn, ln, provider, isPro, proStartDate, proRenewalDate)
             }
         } catch (e: Exception) {}
         return null
@@ -371,6 +432,244 @@ actual object SupabaseNetwork {
         } catch (e: Exception) {
             return false
         }
+    }
+
+    actual suspend fun updateUserProStatus(
+        email: String,
+        isPro: Boolean,
+        startDate: Long,
+        renewalDate: Long
+    ): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        try {
+            val clean = cleanEmail(email)
+            val patchBody = """{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}"""
+            executeRequest(
+                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
+                method = "PATCH",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "return=minimal"
+                ),
+                body = patchBody
+            )
+
+            // Also update auth.users metadata
+            val userId = getUserIdFromProfile(clean)
+            if (!userId.isNullOrBlank()) {
+                val authPayload = """{"user_metadata":{"is_pro":$isPro,"pro_start_date":$startDate,"pro_renewal_date":$renewalDate}}"""
+                executeRequest(
+                    urlString = "$supabaseUrl/auth/v1/admin/users/$userId",
+                    method = "PUT",
+                    headers = mapOf(
+                        "apikey" to serviceKey,
+                        "Authorization" to "Bearer $serviceKey",
+                        "Content-Type" to "application/json"
+                    ),
+                    body = authPayload
+                )
+            }
+            return true
+        } catch (e: Exception) {
+            return false
+        }
+    }
+
+    private fun parseDeviceJsonArray(json: String): List<DiscoveredDevice> {
+        if (json.isBlank() || json == "[]") return emptyList()
+        val list = mutableListOf<DiscoveredDevice>()
+        val clean = json.trim().removePrefix("[").removeSuffix("]").trim()
+        if (clean.isBlank()) return emptyList()
+        val regex = """\{([^{}]*)\}""".toRegex()
+        regex.findAll(clean).forEach { match ->
+            val block = match.groupValues[1]
+            fun extract(key: String): String {
+                val r = "\"$key\"\\s*:\\s*\"([^\"]*)\"".toRegex()
+                return r.find(block)?.groupValues?.getOrNull(1) ?: ""
+            }
+            fun extractInt(key: String): Int {
+                val r = "\"$key\"\\s*:\\s*(\\d+)".toRegex()
+                return r.find(block)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 52424
+            }
+            val id = extract("id")
+            val name = extract("device_name").ifBlank { "Device" }
+            val type = extract("device_type").ifBlank { "Mobile" }
+            val host = extract("local_ip")
+            val port = extractInt("port")
+            val token = extract("push_token").ifBlank { null }
+            if (id.isNotBlank()) {
+                list.add(
+                    DiscoveredDevice(
+                        id = id,
+                        name = name,
+                        host = host,
+                        port = port,
+                        osType = type,
+                        pushToken = token,
+                        isRemote = true
+                    )
+                )
+            }
+        }
+        return list
+    }
+
+    actual suspend fun getActiveMobileDevices(email: String): List<DiscoveredDevice> {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
+        try {
+            val clean = cleanEmail(email)
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?user_email=eq.$clean&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (resp.statusCode in 200..299) {
+                return parseDeviceJsonArray(resp.body)
+            }
+        } catch (_: Exception) {}
+        return emptyList()
+    }
+
+    actual suspend fun removeUserDevice(email: String, deviceId: String): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        try {
+            // 1. Get token to notify remote logout
+            val queryResp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId&select=push_token",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            val devices = parseDeviceJsonArray(queryResp.body)
+            val token = devices.firstOrNull()?.pushToken
+            if (!token.isNullOrBlank()) {
+                ConnectionManager.sendFcmNotification(
+                    token = token,
+                    title = "",
+                    body = "",
+                    data = mapOf(
+                        "type" to "remote_logout",
+                        "deviceId" to deviceId
+                    )
+                )
+            }
+
+            // 2. Delete device
+            val delResp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId",
+                method = "DELETE",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey"
+                )
+            )
+            return delResp.statusCode in 200..299
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    actual suspend fun registerDeviceInSupabase(
+        email: String,
+        deviceId: String,
+        deviceName: String,
+        deviceType: String,
+        pushToken: String,
+        localIp: String,
+        port: Int
+    ): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        try {
+            val clean = cleanEmail(email)
+            val cleanName = cleanDeviceDisplayName(deviceName)
+            val body = """
+                {
+                    "id": "$deviceId",
+                    "device_name": "$cleanName",
+                    "device_type": "$deviceType",
+                    "user_email": "$clean",
+                    "push_token": "$pushToken",
+                    "local_ip": "$localIp",
+                    "port": $port,
+                    "is_online": true
+                }
+            """.trimIndent()
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices",
+                method = "POST",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "resolution=merge-duplicates"
+                ),
+                body = body
+            )
+            return resp.statusCode in 200..299
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    actual suspend fun fetchLinkedDesktopDevices(email: String): List<DiscoveredDevice> {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
+        try {
+            val clean = cleanEmail(email)
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?user_email=eq.$clean&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (resp.statusCode in 200..299) {
+                return parseDeviceJsonArray(resp.body)
+            }
+        } catch (_: Exception) {}
+        return emptyList()
+    }
+
+    actual suspend fun fetchAllUserDevices(email: String): List<DiscoveredDevice> {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
+        try {
+            val clean = cleanEmail(email)
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?user_email=eq.$clean&select=id,device_name,device_type,push_token,local_ip,port,is_online",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (resp.statusCode in 200..299) {
+                return parseDeviceJsonArray(resp.body)
+            }
+        } catch (_: Exception) {}
+        return emptyList()
     }
 
     actual suspend fun deleteUserAccount(email: String): Boolean {

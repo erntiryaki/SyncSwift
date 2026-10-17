@@ -66,7 +66,7 @@ expect object ConnectionManager {
     fun isDeviceConnected(device: DiscoveredDevice): Boolean
     fun isRemoteDevice(device: DiscoveredDevice): Boolean
     fun requestPairing(target: DiscoveredDevice, onResult: (PairResult) -> Unit)
-    fun disconnectDevice(target: DiscoveredDevice)
+    fun disconnectDevice(target: DiscoveredDevice, notifyPeer: Boolean = true)
     fun acceptPairRequest(request: IncomingPairRequest)
     fun rejectPairRequest(request: IncomingPairRequest)
     fun acceptTransferRequest(request: IncomingTransferRequest)

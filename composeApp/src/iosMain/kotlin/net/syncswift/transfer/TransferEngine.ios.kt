@@ -312,7 +312,7 @@ actual object TransferEngine {
                                 port = senderPort,
                                 osType = "Mobile"
                             )
-                            ConnectionManager.disconnectDevice(peerDev)
+                            ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
                         }
 
                         TYPE_FILE_HANDSHAKE -> {

@@ -59,5 +59,10 @@ expect object SessionManager {
 
     fun saveLastShownPaywallSlot(slot: String)
     fun getLastShownPaywallSlot(): String?
+
+    fun getPlatformDeviceId(): String
+    fun getMyDeviceName(): String
+    fun getMyPlatformName(): String
+    fun getMyPushToken(): String
 }
 
