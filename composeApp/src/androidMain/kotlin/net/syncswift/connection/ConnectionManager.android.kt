@@ -131,7 +131,13 @@ actual object ConnectionManager {
     }
 
     actual fun acceptPairRequest(request: IncomingPairRequest) {
-        if (_pendingPairRequest.value?.requestId != request.requestId) {
+        val key = deviceKey(request.senderHost, request.senderPort)
+        if (_pendingPairRequest.value?.requestId != request.requestId ||
+            isRequestCancelled(key) ||
+            isRequestCancelled(request.senderId) ||
+            isRequestCancelled(request.senderHost)) {
+            _pendingPairRequest.value = null
+            request.deferredResponse.complete(false)
             showNativeToast(currentAppCopy().requestCancelledBySender)
             return
         }
@@ -141,7 +147,6 @@ actual object ConnectionManager {
             showNativeToast(currentAppCopy().requestCancelledBySender)
             return
         }
-        val key = deviceKey(request.senderHost, request.senderPort)
         val isRemote = request.senderHost.startsWith("remote-") || request.senderPushToken.isNotBlank() || !request.senderHost.contains(".")
         markDeviceConnected(key, isRemote = isRemote)
         markDeviceConnected(request.senderId, isRemote = isRemote)
@@ -158,6 +163,8 @@ actual object ConnectionManager {
                 val selfPort = self?.port ?: 52424
                 val selfId = java.util.UUID.nameUUIDFromBytes("${Build.MANUFACTURER}_${Build.MODEL}_${Build.ID}".toByteArray()).toString()
 
+                val ctx = SessionManager.getAppContext()
+                val myPushToken = if (ctx != null) SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
                 sendFcmNotification(
                     token = senderToken,
                     title = targetCopy.connectionAccepted,
@@ -168,6 +175,7 @@ actual object ConnectionManager {
                         "senderHost" to selfHost,
                         "senderPort" to "$selfPort",
                         "senderId" to selfId,
+                        "senderPushToken" to myPushToken,
                         "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
                     )
                 )
@@ -449,9 +457,6 @@ actual object ConnectionManager {
                             name = deviceName,
                             osType = deviceType
                         )
-                        markDeviceConnected(targetHost, isRemote = true)
-                        markDeviceConnected(targetDevKey, isRemote = true)
-                        markDeviceConnected(deviceId, isRemote = true)
 
                         // Send FCM pair request to notify the target for approval in their language
                         if (pushToken.isNotBlank()) {
@@ -500,6 +505,28 @@ actual object ConnectionManager {
                             markDeviceDisconnected(targetDevKey)
                             DeviceDiscoveryManager.removeManualDevice(targetHost)
                             OutgoingStatusManager.dismiss()
+
+                            if (pushToken.isNotBlank()) {
+                                scope.launch {
+                                    val self = DeviceDiscoveryManager.getSelfDevice()
+                                    val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                                    val selfHost = self?.host ?: ""
+                                    val selfPort = self?.port ?: 52424
+                                    val selfId = self?.id ?: ""
+                                    sendFcmNotification(
+                                        token = pushToken,
+                                        title = "",
+                                        body = "",
+                                        data = mapOf(
+                                            "type" to "pair_cancelled",
+                                            "senderId" to selfId,
+                                            "senderName" to selfName,
+                                            "senderHost" to selfHost,
+                                            "senderPort" to "$selfPort"
+                                        )
+                                    )
+                                }
+                            }
                         }
 
                         OutgoingStatusManager.show(
@@ -563,6 +590,29 @@ actual object ConnectionManager {
             markDeviceDisconnected(deviceKey(target.host, target.port))
             markDeviceDisconnected(target.id)
             DeviceDiscoveryManager.removeManualDevice(target.host)
+
+            scope.launch {
+                val token = if (target.pushToken?.isNotBlank() == true) target.pushToken else queryPushTokenFromSupabase(target.host, target.name)
+                if (!token.isNullOrBlank()) {
+                    val self = DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                    val selfHost = self?.host ?: ""
+                    val selfPort = self?.port ?: 52424
+                    val selfId = self?.id ?: ""
+                    sendFcmNotification(
+                        token = token,
+                        title = "",
+                        body = "",
+                        data = mapOf(
+                            "type" to "pair_cancelled",
+                            "senderId" to selfId,
+                            "senderName" to selfName,
+                            "senderHost" to selfHost,
+                            "senderPort" to "$selfPort"
+                        )
+                    )
+                }
+            }
         }
 
         OutgoingStatusManager.show(

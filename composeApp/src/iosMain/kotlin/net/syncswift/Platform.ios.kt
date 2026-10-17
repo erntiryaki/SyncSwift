@@ -151,6 +151,19 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
     println("[SyncSwift iOS] Remote notification received: type=$type, raw=$userInfo")
     when (type.lowercase()) {
         "pair_cancelled" -> {
+            val senderId = extractNotificationField(userInfo, "senderId") ?: ""
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val key = "$senderHost:$senderPort"
+
+            net.syncswift.connection.ConnectionManager.markRequestCancelled(key)
+            if (senderId.isNotBlank()) net.syncswift.connection.ConnectionManager.markRequestCancelled(senderId)
+            if (senderHost.isNotBlank()) net.syncswift.connection.ConnectionManager.markRequestCancelled(senderHost)
+
+            net.syncswift.connection.ConnectionManager.markDeviceDisconnected(key)
+            if (senderId.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderId)
+            if (senderHost.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderHost)
+
             net.syncswift.connection.ConnectionManager.cancelIncomingPairRequest()
             showNativeToast(copy.requestCancelledBySender)
         }
@@ -159,11 +172,34 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
             val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
             val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            val senderPushToken = extractNotificationField(userInfo, "senderPushToken") ?: ""
             val key = "$senderHost:$senderPort"
             if (net.syncswift.connection.ConnectionManager.isRequestCancelled(key) ||
                 net.syncswift.connection.ConnectionManager.isRequestCancelled(senderId) ||
                 net.syncswift.connection.ConnectionManager.isRequestCancelled(senderHost)) {
-                println("[SyncSwift iOS] Ignoring pair_accepted for cancelled request from $senderName")
+                println("[SyncSwift iOS] Ignoring pair_accepted for cancelled request from $senderName, echoing pair_cancelled")
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                    val token = if (senderPushToken.isNotBlank()) senderPushToken else net.syncswift.connection.ConnectionManager.queryPushTokenFromSupabase(senderHost, senderName)
+                    if (!token.isNullOrBlank()) {
+                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                        val selfName = cleanDeviceDisplayName(self?.name ?: platform.UIKit.UIDevice.currentDevice.name)
+                        val selfHost = self?.host ?: ""
+                        val selfPort = self?.port ?: 52424
+                        val selfId = self?.id ?: platform.UIKit.UIDevice.currentDevice.identifierForVendor?.UUIDString ?: ""
+                        net.syncswift.connection.ConnectionManager.sendFcmNotification(
+                            token = token,
+                            title = "",
+                            body = "",
+                            data = mapOf(
+                                "type" to "pair_cancelled",
+                                "senderName" to selfName,
+                                "senderHost" to selfHost,
+                                "senderPort" to "$selfPort",
+                                "senderId" to selfId
+                            )
+                        )
+                    }
+                }
                 return
             }
             if (senderHost.isNotBlank()) {

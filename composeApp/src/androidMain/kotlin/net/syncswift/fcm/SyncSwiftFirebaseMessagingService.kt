@@ -12,6 +12,9 @@ import net.syncswift.MainActivity
 import net.syncswift.connection.ConnectionManager
 import net.syncswift.connection.IncomingPairRequest
 import net.syncswift.connection.IncomingTransferRequest
+import kotlinx.coroutines.launch
+import net.syncswift.discovery.DeviceDiscoveryManager
+import net.syncswift.discovery.cleanDeviceDisplayName
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -59,6 +62,19 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
 
         when (type) {
             "pair_cancelled" -> {
+                val senderId = data["senderId"] ?: ""
+                val senderHost = data["senderHost"] ?: ""
+                val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
+                val key = "$senderHost:$senderPort"
+
+                ConnectionManager.markRequestCancelled(key)
+                if (senderId.isNotBlank()) ConnectionManager.markRequestCancelled(senderId)
+                if (senderHost.isNotBlank()) ConnectionManager.markRequestCancelled(senderHost)
+
+                ConnectionManager.markDeviceDisconnected(key)
+                if (senderId.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderId)
+                if (senderHost.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderHost)
+
                 ConnectionManager.cancelIncomingPairRequest()
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.cancel(NOTIFICATION_PAIR_ID)
@@ -158,11 +174,34 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val senderId = data["senderId"] ?: ""
                 val senderHost = data["senderHost"] ?: ""
                 val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
+                val senderPushToken = data["senderPushToken"] ?: ""
                 val key = "$senderHost:$senderPort"
                 if (ConnectionManager.isRequestCancelled(key) ||
                     ConnectionManager.isRequestCancelled(senderId) ||
                     ConnectionManager.isRequestCancelled(senderHost)) {
-                    Log.d(TAG, "Ignoring pair_accepted for cancelled request from $senderName")
+                    Log.d(TAG, "Ignoring pair_accepted for cancelled request from $senderName, echoing pair_cancelled")
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        val token = if (senderPushToken.isNotBlank()) senderPushToken else ConnectionManager.queryPushTokenFromSupabase(senderHost, senderName)
+                        if (!token.isNullOrBlank()) {
+                            val self = DeviceDiscoveryManager.getSelfDevice()
+                            val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                            val selfHost = self?.host ?: ""
+                            val selfPort = self?.port ?: 52424
+                            val selfId = self?.id ?: ""
+                            ConnectionManager.sendFcmNotification(
+                                token = token,
+                                title = "",
+                                body = "",
+                                data = mapOf(
+                                    "type" to "pair_cancelled",
+                                    "senderName" to selfName,
+                                    "senderHost" to selfHost,
+                                    "senderPort" to "$selfPort",
+                                    "senderId" to selfId
+                                )
+                            )
+                        }
+                    }
                     return
                 }
                 if (senderHost.isNotBlank()) {

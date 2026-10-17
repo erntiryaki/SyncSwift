@@ -54,14 +54,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
                 val senderPort = intent.getIntExtra(EXTRA_SENDER_PORT, 52424)
                 val senderId = intent.getStringExtra(EXTRA_SENDER_ID) ?: ""
+                val key = "$senderHost:$senderPort"
 
-                if (pending == null) {
+                if (pending == null ||
+                    ConnectionManager.isRequestCancelled(key) ||
+                    ConnectionManager.isRequestCancelled(senderId) ||
+                    ConnectionManager.isRequestCancelled(senderHost)) {
                     showToast(copy.requestCancelledBySender)
                     return
                 }
 
                 ConnectionManager.acceptPairRequest(pending)
-                showToast(copy.operationCompletedDesc.replace("%s", senderName))
             }
             ACTION_REJECT_PAIR -> {
                 val pending = ConnectionManager.pendingPairRequest.value

@@ -98,7 +98,7 @@ object SubscriptionManager {
     }
 
     fun checkTimedPaywall() {
-        if (isProActive()) return
+        if (isProActive() || _isPro.value || SessionManager.getSavedProStatus()) return
         val currentSlot = net.syncswift.getCurrentPaywallSlotKey()
         val lastSlot = SessionManager.getLastShownPaywallSlot()
         if (currentSlot != lastSlot) {

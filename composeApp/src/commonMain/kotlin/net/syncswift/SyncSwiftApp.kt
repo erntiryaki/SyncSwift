@@ -139,7 +139,11 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         }
     }
     LaunchedEffect(Unit) {
-        net.syncswift.subscription.SubscriptionManager.checkTimedPaywall()
+        if (!net.syncswift.subscription.SubscriptionManager.isProActive() &&
+            !net.syncswift.subscription.SubscriptionManager.isPro.value &&
+            !net.syncswift.SessionManager.getSavedProStatus()) {
+            net.syncswift.subscription.SubscriptionManager.checkTimedPaywall()
+        }
     }
     var targetedDevice by remember { mutableStateOf<net.syncswift.discovery.DiscoveredDevice?>(null) }
     var pendingFileToSend by remember { mutableStateOf<Triple<String, ByteArray, String>?>(null) }
