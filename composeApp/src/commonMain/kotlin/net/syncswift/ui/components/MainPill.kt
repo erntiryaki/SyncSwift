@@ -13,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import net.syncswift.platformFontFamily
 import net.syncswift.ui.theme.*
 
 @Composable
@@ -38,6 +39,11 @@ fun MainPill(
         ),
         elevation = null
     ) {
-        Text(text = text, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+        Text(
+            text = text,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = platformFontFamily()
+        )
     }
 }

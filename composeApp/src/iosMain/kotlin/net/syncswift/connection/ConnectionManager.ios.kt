@@ -14,6 +14,7 @@ import platform.Foundation.*
 import platform.UIKit.UIDevice
 import platform.darwin.*
 import platform.posix.*
+import kotlin.coroutines.resume
 import kotlin.random.Random
 
 import net.syncswift.currentAppCopy
@@ -131,20 +132,6 @@ actual object ConnectionManager {
     fun dispatchIncomingTransferRequest(request: IncomingTransferRequest) {
         dispatch_async(dispatch_get_main_queue()) {
             _pendingTransferRequest.value = request
-        }
-    }
-
-    fun cancelIncomingTransferRequest(requestId: String? = null) {
-        dispatch_async(dispatch_get_main_queue()) {
-            if (requestId == null || _pendingTransferRequest.value?.requestId == requestId) {
-                _pendingTransferRequest.value = null
-            }
-        }
-    }
-
-    fun cancelIncomingPairRequest() {
-        dispatch_async(dispatch_get_main_queue()) {
-            _pendingPairRequest.value = null
         }
     }
 
@@ -531,13 +518,20 @@ actual object ConnectionManager {
     }
 
     actual fun cancelIncomingPairRequest() {
-        _pendingPairRequest.value?.deferredResponse?.complete(false)
-        _pendingPairRequest.value = null
+        dispatch_async(dispatch_get_main_queue()) {
+            _pendingPairRequest.value?.deferredResponse?.complete(false)
+            _pendingPairRequest.value = null
+        }
     }
 
     actual fun cancelIncomingTransferRequest(transferId: String?) {
-        _pendingTransferRequest.value?.deferredResponse?.complete(false)
-        _pendingTransferRequest.value = null
+        dispatch_async(dispatch_get_main_queue()) {
+            val current = _pendingTransferRequest.value
+            if (transferId == null || current?.transferId == transferId || current?.requestId == transferId) {
+                current?.deferredResponse?.complete(false)
+                _pendingTransferRequest.value = null
+            }
+        }
     }
 
     actual fun generateOrRotatePairingCode() {
@@ -668,18 +662,20 @@ actual object ConnectionManager {
                                     if (pToken.isNotBlank()) {
                                         val self = DeviceDiscoveryManager.getSelfDevice()
                                         val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
-                                        sendFcmNotification(
-                                            token = pToken,
-                                            title = "SyncSwift Uzaktan Bağlantı",
-                                            body = "$selfName cihazınızla eşleşti.",
-                                            data = mapOf(
-                                                "type" to "pair_request",
-                                                "senderName" to selfName,
-                                                "senderHost" to (self?.host ?: ""),
-                                                "senderPort" to "${self?.port ?: 52424}",
-                                                "senderOs" to "iOS"
+                                        scope.launch(Dispatchers.Default) {
+                                            sendFcmNotification(
+                                                token = pToken,
+                                                title = "SyncSwift Uzaktan Bağlantı",
+                                                body = "$selfName cihazınızla eşleşti.",
+                                                data = mapOf(
+                                                    "type" to "pair_request",
+                                                    "senderName" to selfName,
+                                                    "senderHost" to (self?.host ?: ""),
+                                                    "senderPort" to "${self?.port ?: 52424}",
+                                                    "senderOs" to "iOS"
+                                                )
                                             )
-                                        )
+                                        }
                                     }
 
                                     // Delete consumed pairing code so it cannot be reused

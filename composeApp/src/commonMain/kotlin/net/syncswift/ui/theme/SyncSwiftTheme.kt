@@ -132,12 +132,33 @@ fun SyncSwiftTheme(
         )
     }
 
+    val font = net.syncswift.platformFontFamily()
+    val baseTypography = androidx.compose.material3.Typography()
+    val typography = baseTypography.copy(
+        displayLarge = baseTypography.displayLarge.copy(fontFamily = font),
+        displayMedium = baseTypography.displayMedium.copy(fontFamily = font),
+        displaySmall = baseTypography.displaySmall.copy(fontFamily = font),
+        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = font),
+        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = font),
+        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = font),
+        titleLarge = baseTypography.titleLarge.copy(fontFamily = font),
+        titleMedium = baseTypography.titleMedium.copy(fontFamily = font),
+        titleSmall = baseTypography.titleSmall.copy(fontFamily = font),
+        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = font),
+        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = font),
+        bodySmall = baseTypography.bodySmall.copy(fontFamily = font),
+        labelLarge = baseTypography.labelLarge.copy(fontFamily = font),
+        labelMedium = baseTypography.labelMedium.copy(fontFamily = font),
+        labelSmall = baseTypography.labelSmall.copy(fontFamily = font)
+    )
+
     CompositionLocalProvider(
         LocalSyncSwiftColors provides colors,
         LocalThemeMode provides themeMode
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
+            typography = typography,
             content = content
         )
     }

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import net.syncswift.IdentityProvider
 import net.syncswift.LockIcon
 import net.syncswift.SocialProviderIcon
+import net.syncswift.platformFontFamily
 import net.syncswift.ui.theme.*
 
 import androidx.compose.foundation.BorderStroke
@@ -52,6 +53,7 @@ fun SocialPill(
             Text(
                 text = label,
                 fontWeight = FontWeight.Bold,
+                fontFamily = platformFontFamily(),
                 fontSize = 16.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 1,

@@ -267,6 +267,7 @@ fun EmailAuthScreen(
                 color = Blue,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = platformFontFamily(),
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { onContinueLocally() }

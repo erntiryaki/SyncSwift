@@ -21,6 +21,7 @@ import platform.UIKit.UIDevice
 import platform.UIKit.UIPasteboard
 import platform.darwin.*
 import platform.posix.*
+import kotlin.coroutines.resume
 import kotlin.Byte
 
 @OptIn(ExperimentalForeignApi::class)
@@ -1085,7 +1086,7 @@ actual object TransferEngine {
 
                     val sizeBuf = ByteArray(8)
                     val rSize = sizeBuf.usePinned { recv(sock, it.addressOf(0), 8.convert(), 0) }
-                    val incomingSize = if (rSize == 8) {
+                    val incomingSize = if (rSize.toInt() == 8) {
                         ((sizeBuf[0].toLong() and 0xFF) shl 56) or
                         ((sizeBuf[1].toLong() and 0xFF) shl 48) or
                         ((sizeBuf[2].toLong() and 0xFF) shl 40) or
