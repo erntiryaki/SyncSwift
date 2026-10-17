@@ -48,6 +48,7 @@ private suspend fun executeRequest(
 
 actual object SupabaseNetwork {
     private fun cleanEmail(email: String): String = email.lowercase().trim()
+    private val effectiveKey: String get() = PlatformConfig.supabaseServiceRoleKey.ifBlank { PlatformConfig.supabaseAnonKey }
 
     actual suspend fun registerUserInSupabase(
         email: String,
@@ -58,7 +59,7 @@ actual object SupabaseNetwork {
         password: String
     ): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
 
         try {
@@ -160,7 +161,7 @@ actual object SupabaseNetwork {
 
     actual suspend fun checkUserExists(email: String): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
             val clean = cleanEmail(email)
@@ -181,7 +182,7 @@ actual object SupabaseNetwork {
 
     actual suspend fun getUserProvider(email: String): IdentityProvider? {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
         try {
             val clean = cleanEmail(email)
@@ -228,7 +229,7 @@ actual object SupabaseNetwork {
 
     private suspend fun getUserIdFromProfile(cleanEmail: String): String? {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
         try {
             val resp = executeRequest(
@@ -250,7 +251,7 @@ actual object SupabaseNetwork {
 
     actual suspend fun fetchUserProfile(email: String): UserProfileData? {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
         try {
             val clean = cleanEmail(email)
@@ -291,7 +292,7 @@ actual object SupabaseNetwork {
 
     actual suspend fun updateUserPassword(email: String, newPassword: String): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
             val clean = cleanEmail(email)
@@ -319,7 +320,7 @@ actual object SupabaseNetwork {
         lastName: String
     ): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
             val cleanOld = cleanEmail(oldEmail)
@@ -374,7 +375,7 @@ actual object SupabaseNetwork {
 
     actual suspend fun deleteUserAccount(email: String): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
             val clean = cleanEmail(email)

@@ -806,7 +806,7 @@ actual object TransferEngine {
         mimeType: String
     ): String? {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        val serviceKey = PlatformConfig.supabaseServiceRoleKey.ifBlank { PlatformConfig.supabaseAnonKey }
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
 
         val ext = fileName.substringAfterLast(".", "")

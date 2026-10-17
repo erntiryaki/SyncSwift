@@ -289,7 +289,7 @@ actual object ConnectionManager {
                 val localIp = self?.host ?: ""
                 val subnet = if (localIp.contains(".")) localIp.substringBeforeLast(".") else ""
                 val supabaseUrl = PlatformConfig.supabaseUrl
-                val serviceKey = PlatformConfig.supabaseServiceRoleKey
+                val serviceKey = PlatformConfig.supabaseServiceRoleKey.ifBlank { PlatformConfig.supabaseAnonKey }
 
                 val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices") ?: return@launch
                 val req = NSMutableURLRequest.requestWithURL(url)
