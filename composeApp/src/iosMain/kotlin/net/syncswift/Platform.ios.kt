@@ -71,26 +71,72 @@ fun getSavedIosPushToken(): String? {
     return platform.Foundation.NSUserDefaults.standardUserDefaults.stringForKey("syncswift_push_token")
 }
 
+private fun findRawInMap(map: Map<*, *>, targetKey: String): Any? {
+    for ((k, v) in map) {
+        if (k?.toString().equals(targetKey, ignoreCase = true)) {
+            return v
+        }
+    }
+    return null
+}
+
+private fun findInMap(map: Map<*, *>, targetKey: String): String? {
+    val raw = findRawInMap(map, targetKey) ?: return null
+    return raw.toString()
+}
+
+fun extractNotificationField(userInfo: Map<Any?, *>, key: String): String? {
+    findInMap(userInfo, key)?.let { return it }
+
+    val dataObj = findRawInMap(userInfo, "data")
+    if (dataObj is Map<*, *>) {
+        findInMap(dataObj, key)?.let { return it }
+    } else if (dataObj is String) {
+        val match = Regex(""""$key"\s*:\s*"([^"]*)"""", RegexOption.IGNORE_CASE).find(dataObj)
+        if (match != null) return match.groupValues[1]
+    }
+
+    val apsObj = findRawInMap(userInfo, "aps")
+    if (apsObj is Map<*, *>) {
+        findInMap(apsObj, key)?.let { return it }
+    }
+
+    val alertObj = findRawInMap(userInfo, "alert")
+    if (alertObj is Map<*, *>) {
+        findInMap(alertObj, key)?.let { return it }
+    }
+
+    return null
+}
+
 fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
-    val type = userInfo["type"] as? String ?: return
+    val type = extractNotificationField(userInfo, "type")
+        ?: extractNotificationField(userInfo, "requestType")
+        ?: return
     val copy = currentAppCopy()
-    println("[SyncSwift iOS] Remote notification received: type=$type")
-    when (type) {
+    println("[SyncSwift iOS] Remote notification received: type=$type, raw=$userInfo")
+    when (type.lowercase()) {
         "pair_cancelled" -> {
             net.syncswift.connection.ConnectionManager.cancelIncomingPairRequest()
             showNativeToast(copy.requestCancelledBySender)
         }
         "file_cancelled" -> {
-            val transferId = userInfo["transferId"] as? String
+            val transferId = extractNotificationField(userInfo, "transferId")
             net.syncswift.connection.ConnectionManager.cancelIncomingTransferRequest(transferId)
             showNativeToast(copy.transferCancelledBySender)
         }
+        "clipboard_sync" -> {
+            val clipText = extractNotificationField(userInfo, "text") ?: ""
+            if (clipText.isNotBlank()) {
+                net.syncswift.transfer.TransferEngine.applyIncomingClipboard(clipText)
+            }
+        }
         "pair_request" -> {
-            val senderId = userInfo["senderId"] as? String ?: ""
-            val senderName = userInfo["senderName"] as? String ?: copy.deviceSingle
-            val senderHost = userInfo["senderHost"] as? String ?: ""
-            val senderPort = (userInfo["senderPort"] as? String)?.toIntOrNull() ?: 52424
-            val senderOs = userInfo["senderOs"] as? String ?: "iOS"
+            val senderId = extractNotificationField(userInfo, "senderId") ?: ""
+            val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val senderOs = extractNotificationField(userInfo, "senderOs") ?: "iOS"
 
             val request = net.syncswift.connection.IncomingPairRequest(
                 senderId = senderId,
@@ -101,16 +147,16 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             )
             net.syncswift.connection.ConnectionManager.dispatchIncomingPairRequest(request)
         }
-        "file_request" -> {
-            val transferId = userInfo["transferId"] as? String ?: ""
-            val senderName = userInfo["senderName"] as? String ?: copy.deviceSingle
-            val senderHost = userInfo["senderHost"] as? String ?: ""
-            val senderPort = (userInfo["senderPort"] as? String)?.toIntOrNull() ?: 52424
-            val fileName = userInfo["fileName"] as? String ?: "File"
-            val fileSize = (userInfo["fileSize"] as? String)?.toLongOrNull() ?: 0L
-            val mimeType = userInfo["mimeType"] as? String ?: "application/octet-stream"
-            val downloadUrl = userInfo["downloadUrl"] as? String ?: ""
-            val isRemote = userInfo["isRemote"] == "true"
+        "file_request", "file_transfer" -> {
+            val transferId = extractNotificationField(userInfo, "transferId") ?: ""
+            val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
+            val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
+            val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val fileName = extractNotificationField(userInfo, "fileName") ?: "File"
+            val fileSize = extractNotificationField(userInfo, "fileSize")?.toLongOrNull() ?: 0L
+            val mimeType = extractNotificationField(userInfo, "mimeType") ?: "application/octet-stream"
+            val downloadUrl = extractNotificationField(userInfo, "downloadUrl") ?: ""
+            val isRemote = extractNotificationField(userInfo, "isRemote")?.equals("true", ignoreCase = true) == true || downloadUrl.isNotBlank()
 
             val request = net.syncswift.connection.IncomingTransferRequest(
                 senderName = senderName,
@@ -127,3 +173,4 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
         }
     }
 }
+

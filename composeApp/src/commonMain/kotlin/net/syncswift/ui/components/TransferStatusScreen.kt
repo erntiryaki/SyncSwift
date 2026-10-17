@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
 import net.syncswift.LaptopVectorIcon
+import net.syncswift.PhoneVectorIcon
 import net.syncswift.TransferVectorIcon
 import net.syncswift.connection.OutgoingRequestState
 import net.syncswift.connection.OutgoingStatusType
@@ -228,6 +229,20 @@ private fun TransferWaitingSection(
         )
     )
 
+    val isMobile = remember(state.deviceName) {
+        val dev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+            net.syncswift.discovery.cleanDeviceDisplayName(it.name).equals(net.syncswift.discovery.cleanDeviceDisplayName(state.deviceName), ignoreCase = true)
+        }
+        val os = dev?.osType ?: ""
+        val name = state.deviceName.lowercase()
+        os.equals("Android", ignoreCase = true) || os.equals("iOS", ignoreCase = true) ||
+        name.contains("iphone") || name.contains("android") || name.contains("galaxy") ||
+        name.contains("pixel") || name.contains("redmi") || name.contains("xiaomi") ||
+        name.contains("huawei") || name.contains("samsung") || name.contains("oppo") ||
+        name.contains("vivo") || name.contains("phone") || name.contains("ipad") ||
+        name.contains("tablet")
+    }
+
     Box(
         modifier = Modifier
             .size(140.dp)
@@ -240,7 +255,11 @@ private fun TransferWaitingSection(
         if (state.type == OutgoingStatusType.FILE) {
             TransferVectorIcon(Modifier.size(54.dp), color = Blue)
         } else {
-            LaptopVectorIcon(Modifier.size(54.dp), color = Blue)
+            if (isMobile) {
+                PhoneVectorIcon(Modifier.size(54.dp), color = Blue)
+            } else {
+                LaptopVectorIcon(Modifier.size(54.dp), color = Blue)
+            }
         }
     }
 
@@ -275,7 +294,11 @@ private fun TransferWaitingSection(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            LaptopVectorIcon(Modifier.size(16.dp), color = Mist)
+            if (isMobile) {
+                PhoneVectorIcon(Modifier.size(16.dp), color = Mist)
+            } else {
+                LaptopVectorIcon(Modifier.size(16.dp), color = Mist)
+            }
             Spacer(Modifier.width(8.dp))
             Text(
                 text = state.deviceName,

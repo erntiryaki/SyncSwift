@@ -15,6 +15,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 }
             }
         }
+
+        // If app was launched from a tapped remote notification (cold start)
+        if let remoteNotification = launchOptions?[.remoteNotification] as? [AnyHashable : Any] {
+            print("[SyncSwift iOS] Launched from cold-start remote notification: \(remoteNotification)")
+            // Wait slightly so Compose UI hierarchy and StateFlow collectors are ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                Platform_iosKt.onIosRemoteNotificationReceived(userInfo: remoteNotification)
+            }
+        }
         return true
     }
 
@@ -48,7 +57,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didReceiveRemoteNotification userInfo: [AnyHashable : Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        Platform_iosKt.onIosRemoteNotificationReceived(userInfo: userInfo)
+        print("[SyncSwift iOS] didReceiveRemoteNotification: \(userInfo)")
+        DispatchQueue.main.async {
+            Platform_iosKt.onIosRemoteNotificationReceived(userInfo: userInfo)
+        }
         completionHandler(.newData)
     }
 
@@ -58,7 +70,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        Platform_iosKt.onIosRemoteNotificationReceived(userInfo: notification.request.content.userInfo)
+        let userInfo = notification.request.content.userInfo
+        print("[SyncSwift iOS] userNotificationCenter willPresent: \(userInfo)")
+        DispatchQueue.main.async {
+            Platform_iosKt.onIosRemoteNotificationReceived(userInfo: userInfo)
+        }
         completionHandler([.banner, .sound, .badge])
     }
 
@@ -68,7 +84,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        Platform_iosKt.onIosRemoteNotificationReceived(userInfo: response.notification.request.content.userInfo)
+        let userInfo = response.notification.request.content.userInfo
+        print("[SyncSwift iOS] userNotificationCenter didReceive tap: \(userInfo)")
+        DispatchQueue.main.async {
+            Platform_iosKt.onIosRemoteNotificationReceived(userInfo: userInfo)
+        }
         completionHandler()
     }
 }

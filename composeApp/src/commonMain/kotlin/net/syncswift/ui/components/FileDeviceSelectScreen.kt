@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
 import net.syncswift.LaptopVectorIcon
+import net.syncswift.PhoneVectorIcon
 import net.syncswift.TransferVectorIcon
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
@@ -190,7 +191,20 @@ fun FileDeviceSelectScreen(
                                         .background(if (connected) SuccessGreen.copy(alpha = 0.15f) else InputBg),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    LaptopVectorIcon(Modifier.size(20.dp), color = if (connected) SuccessGreen else Mist)
+                                    val isMobile = dev.osType.equals("Android", ignoreCase = true) ||
+                                            dev.osType.equals("iOS", ignoreCase = true) ||
+                                            dev.name.lowercase().let { n ->
+                                                n.contains("iphone") || n.contains("android") || n.contains("galaxy") ||
+                                                n.contains("pixel") || n.contains("redmi") || n.contains("xiaomi") ||
+                                                n.contains("huawei") || n.contains("samsung") || n.contains("oppo") ||
+                                                n.contains("vivo") || n.contains("phone") || n.contains("ipad") ||
+                                                n.contains("tablet")
+                                            }
+                                    if (isMobile) {
+                                        PhoneVectorIcon(Modifier.size(20.dp), color = if (connected) SuccessGreen else Mist)
+                                    } else {
+                                        LaptopVectorIcon(Modifier.size(20.dp), color = if (connected) SuccessGreen else Mist)
+                                    }
                                 }
 
                                 Spacer(Modifier.width(14.dp))

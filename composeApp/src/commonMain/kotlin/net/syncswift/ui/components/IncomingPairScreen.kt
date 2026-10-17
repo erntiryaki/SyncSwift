@@ -13,6 +13,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
 import net.syncswift.LaptopVectorIcon
+import net.syncswift.PhoneVectorIcon
 import net.syncswift.connection.IncomingPairRequest
 import net.syncswift.ui.theme.*
 
@@ -39,6 +41,16 @@ fun IncomingPairScreen(
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
+    val isMobile = remember(request) {
+        val os = request.senderOsType
+        val name = request.senderName.lowercase()
+        os.equals("Android", ignoreCase = true) || os.equals("iOS", ignoreCase = true) ||
+        name.contains("iphone") || name.contains("android") || name.contains("galaxy") ||
+        name.contains("pixel") || name.contains("redmi") || name.contains("xiaomi") ||
+        name.contains("huawei") || name.contains("samsung") || name.contains("oppo") ||
+        name.contains("vivo") || name.contains("phone") || name.contains("ipad") ||
+        name.contains("tablet")
+    }
     val infiniteTransition = rememberInfiniteTransition()
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
@@ -114,7 +126,11 @@ fun IncomingPairScreen(
                             .background(Blue),
                         contentAlignment = Alignment.Center
                     ) {
-                        LaptopVectorIcon(Modifier.size(36.dp), color = Color.White)
+                        if (isMobile) {
+                            PhoneVectorIcon(Modifier.size(36.dp), color = Color.White)
+                        } else {
+                            LaptopVectorIcon(Modifier.size(36.dp), color = Color.White)
+                        }
                     }
                 }
 

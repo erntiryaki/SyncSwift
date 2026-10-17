@@ -557,6 +557,9 @@ actual object TransferEngine {
                         timeout.tv_usec = 0
                         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
                         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                        val nosigpipe = alloc<IntVar>()
+                        nosigpipe.value = 1
+                        setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
 
                         val serverAddr = alloc<sockaddr_in>()
                         serverAddr.sin_family = AF_INET.convert()
@@ -729,7 +732,7 @@ actual object TransferEngine {
                 title = copy.notificationFileRequestTitle,
                 body = copy.notificationFileRequestBody.replace("%s", selfName).replace("%f", fileName),
                 data = mapOf(
-                    "type" to "file_transfer",
+                    "type" to "file_request",
                     "transferId" to transferId,
                     "senderName" to selfName,
                     "fileName" to fileName,
@@ -757,7 +760,7 @@ actual object TransferEngine {
         }
     }
 
-    private fun uploadToSupabaseStorage(
+    private suspend fun uploadToSupabaseStorage(
         transferId: String,
         fileName: String,
         fileBytes: ByteArray,
@@ -771,34 +774,42 @@ actual object TransferEngine {
         val objectPath = "$transferId.$ext"
         val url = NSURL.URLWithString("$supabaseUrl/storage/v1/object/syncswift_transfers/$objectPath") ?: return null
 
-        val req = NSMutableURLRequest.requestWithURL(url)
-        req.setHTTPMethod("POST")
-        req.setValue(if (mimeType.isNotBlank()) mimeType else "application/octet-stream", forHTTPHeaderField = "Content-Type")
-        req.setValue(serviceKey, forHTTPHeaderField = "apikey")
-        req.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
-        req.setValue("true", forHTTPHeaderField = "x-upsert")
-
-        val data = fileBytes.usePinned { pinned ->
-            NSData.create(bytes = pinned.addressOf(0), length = fileBytes.size.convert())
-        }
-        req.setHTTPBody(data)
-
-        var success = false
-        val sem = dispatch_semaphore_create(0)
-        NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
-            if (err == null && resp != null) {
-                val http = resp as? NSHTTPURLResponse
-                if (http?.statusCode?.toInt() in 200..299) {
-                    success = true
+        return suspendCancellableCoroutine { continuation ->
+            try {
+                val req = NSMutableURLRequest.requestWithURL(url).apply {
+                    setHTTPMethod("POST")
+                    setTimeoutInterval(30.0)
+                    setValue(if (mimeType.isNotBlank()) mimeType else "application/octet-stream", forHTTPHeaderField = "Content-Type")
+                    setValue(serviceKey, forHTTPHeaderField = "apikey")
+                    setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
+                    setValue("true", forHTTPHeaderField = "x-upsert")
                 }
-            }
-            dispatch_semaphore_signal(sem)
-        }.resume()
-        dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 30_000_000_000L))
 
-        return if (success) {
-            "$supabaseUrl/storage/v1/object/public/syncswift_transfers/$objectPath"
-        } else null
+                val data = fileBytes.usePinned { pinned ->
+                    NSData.create(bytes = pinned.addressOf(0), length = fileBytes.size.convert())
+                }
+                req.setHTTPBody(data)
+
+                val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
+                    try {
+                        val success = if (err == null && resp != null) {
+                            val http = resp as? NSHTTPURLResponse
+                            (http?.statusCode?.toInt() ?: 0) in 200..299
+                        } else false
+                        val publicUrl = if (success) {
+                            "$supabaseUrl/storage/v1/object/public/syncswift_transfers/$objectPath"
+                        } else null
+                        if (continuation.isActive) continuation.resume(publicUrl)
+                    } catch (_: Throwable) {
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+                }
+                continuation.invokeOnCancellation { task.cancel() }
+                task.resume()
+            } catch (_: Throwable) {
+                if (continuation.isActive) continuation.resume(null)
+            }
+        }
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -886,6 +897,9 @@ actual object TransferEngine {
             timeout.tv_usec = 0
             setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
             setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+            val nosigpipe = alloc<IntVar>()
+            nosigpipe.value = 1
+            setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
 
             val serverAddr = alloc<sockaddr_in>()
             serverAddr.sin_family = AF_INET.convert()
@@ -923,7 +937,7 @@ actual object TransferEngine {
         }
     }
 
-    private fun sendViaFcmRelay(targetName: String, targetHost: String, text: String): Boolean {
+    private suspend fun sendViaFcmRelay(targetName: String, targetHost: String, text: String): Boolean {
         val cleanTarget = cleanDeviceDisplayName(targetName)
         val token = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
         if (token.isNullOrBlank()) return false

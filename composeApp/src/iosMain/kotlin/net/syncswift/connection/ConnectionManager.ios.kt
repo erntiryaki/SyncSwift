@@ -61,7 +61,31 @@ private fun buildPairRequestPacket(name: String, host: String, port: Int, os: St
     return buf
 }
 
-private fun sendPairRequestViaFcm(target: DiscoveredDevice, selfName: String, selfHost: String, selfPort: Int, selfOs: String): Boolean {
+private fun escapeJson(s: String): String {
+    val sb = StringBuilder()
+    for (ch in s) {
+        when (ch) {
+            '\\' -> sb.append("\\\\")
+            '"' -> sb.append("\\\"")
+            '\b' -> sb.append("\\b")
+            '\u000C' -> sb.append("\\f")
+            '\n' -> sb.append("\\n")
+            '\r' -> sb.append("\\r")
+            '\t' -> sb.append("\\t")
+            else -> {
+                if (ch.code < 32) {
+                    val hex = ch.code.toString(16).padStart(4, '0')
+                    sb.append("\\u$hex")
+                } else {
+                    sb.append(ch)
+                }
+            }
+        }
+    }
+    return sb.toString()
+}
+
+private suspend fun sendPairRequestViaFcm(target: DiscoveredDevice, selfName: String, selfHost: String, selfPort: Int, selfOs: String): Boolean {
     var token = target.pushToken
     if (token.isNullOrBlank() && target.host.isNotBlank()) {
         token = ConnectionManager.queryPushTokenFromSupabase(target.host, target.name)
@@ -96,19 +120,31 @@ actual object ConnectionManager {
     actual val pendingPairRequest: StateFlow<IncomingPairRequest?> = _pendingPairRequest.asStateFlow()
 
     fun dispatchIncomingPairRequest(request: IncomingPairRequest) {
-        _pendingPairRequest.value = request
+        dispatch_async(dispatch_get_main_queue()) {
+            _pendingPairRequest.value = request
+        }
     }
 
     private val _pendingTransferRequest = MutableStateFlow<IncomingTransferRequest?>(null)
     actual val pendingTransferRequest: StateFlow<IncomingTransferRequest?> = _pendingTransferRequest.asStateFlow()
 
     fun dispatchIncomingTransferRequest(request: IncomingTransferRequest) {
-        _pendingTransferRequest.value = request
+        dispatch_async(dispatch_get_main_queue()) {
+            _pendingTransferRequest.value = request
+        }
     }
 
-    fun cancelIncomingTransferRequest(requestId: String) {
-        if (_pendingTransferRequest.value?.requestId == requestId) {
-            _pendingTransferRequest.value = null
+    fun cancelIncomingTransferRequest(requestId: String? = null) {
+        dispatch_async(dispatch_get_main_queue()) {
+            if (requestId == null || _pendingTransferRequest.value?.requestId == requestId) {
+                _pendingTransferRequest.value = null
+            }
+        }
+    }
+
+    fun cancelIncomingPairRequest() {
+        dispatch_async(dispatch_get_main_queue()) {
+            _pendingPairRequest.value = null
         }
     }
 
@@ -165,8 +201,8 @@ actual object ConnectionManager {
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
     }
 
-    fun queryPushTokenFromSupabase(host: String, name: String): String? {
-        return try {
+    suspend fun queryPushTokenFromSupabase(host: String, name: String): String? = suspendCancellableCoroutine { continuation ->
+        try {
             val cleanName = cleanDeviceDisplayName(name)
             val supabaseUrl = PlatformConfig.supabaseUrl
             val anonKey = PlatformConfig.supabaseAnonKey
@@ -177,71 +213,82 @@ actual object ConnectionManager {
             } else {
                 "device_name=eq.$encodedName"
             }
-            val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices?select=push_token&$queryParam&limit=1") ?: return null
-            val req = NSMutableURLRequest.requestWithURL(url)
-            req.setHTTPMethod("GET")
-            req.setValue(anonKey, forHTTPHeaderField = "apikey")
-            req.setValue("Bearer $anonKey", forHTTPHeaderField = "Authorization")
+            val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices?select=push_token&$queryParam&limit=1")
+            if (url == null) {
+                continuation.resume(null)
+                return@suspendCancellableCoroutine
+            }
+            val req = NSMutableURLRequest.requestWithURL(url).apply {
+                setHTTPMethod("GET")
+                setTimeoutInterval(6.0)
+                setValue(anonKey, forHTTPHeaderField = "apikey")
+                setValue("Bearer $anonKey", forHTTPHeaderField = "Authorization")
+            }
 
-            var resultToken: String? = null
-            val sem = dispatch_semaphore_create(0)
-            NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, err ->
-                if (err == null && data != null) {
-                    val body = NSString.create(data, NSUTF8StringEncoding).toString()
-                    val match = Regex(""""push_token"\s*:\s*"([^"]+)"""").find(body)
-                    resultToken = match?.groupValues?.get(1)?.ifBlank { null }
+            val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, err ->
+                try {
+                    if (err == null && data != null) {
+                        val body = NSString.create(data, NSUTF8StringEncoding)?.toString() ?: ""
+                        val match = Regex(""""push_token"\s*:\s*"([^"]+)"""").find(body)
+                        val resultToken = match?.groupValues?.get(1)?.ifBlank { null }
+                        if (continuation.isActive) continuation.resume(resultToken)
+                    } else {
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+                } catch (_: Throwable) {
+                    if (continuation.isActive) continuation.resume(null)
                 }
-                dispatch_semaphore_signal(sem)
-            }.resume()
-            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 4_000_000_000L))
-            resultToken
-        } catch (_: Exception) {
-            null
+            }
+            continuation.invokeOnCancellation { task.cancel() }
+            task.resume()
+        } catch (_: Throwable) {
+            if (continuation.isActive) continuation.resume(null)
         }
     }
 
-    fun sendFcmNotification(
+    suspend fun sendFcmNotification(
         token: String,
         title: String,
         body: String,
         data: Map<String, String> = emptyMap()
     ): Boolean {
         if (token.isBlank()) return false
-        return try {
-            val url = NSURL.URLWithString("https://api.syncswift.net/api/fcm/send") ?: return false
-            val req = NSMutableURLRequest.requestWithURL(url)
-            req.setHTTPMethod("POST")
-            req.setValue("application/json", forHTTPHeaderField = "Content-Type")
-
-            val dataPairs = data.entries.joinToString(",") { (k, v) ->
-                "\"$k\": \"${v.replace("\"", "\\\"").replace("\n", "\\n")}\""
-            }
-            val jsonBody = """
-                {
-                    "targetToken": "$token",
-                    "token": "$token",
-                    "title": "${title.replace("\"", "\\\"")}",
-                    "body": "${body.replace("\"", "\\\"")}",
-                    "data": { $dataPairs }
+        return suspendCancellableCoroutine { continuation ->
+            try {
+                val url = NSURL.URLWithString("https://api.syncswift.net/api/fcm/send")
+                if (url == null) {
+                    continuation.resume(false)
+                    return@suspendCancellableCoroutine
                 }
-            """.trimIndent()
-            req.setHTTPBody((jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
+                val req = NSMutableURLRequest.requestWithURL(url).apply {
+                    setHTTPMethod("POST")
+                    setTimeoutInterval(8.0)
+                    setValue("application/json", forHTTPHeaderField = "Content-Type")
+                }
 
-            var success = false
-            val sem = dispatch_semaphore_create(0)
-            NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
-                if (err == null && resp != null) {
-                    val http = resp as? NSHTTPURLResponse
-                    if (http?.statusCode?.toInt() in 200..299) {
-                        success = true
+                val dataPairs = data.entries.joinToString(",") { (k, v) ->
+                    "\"${escapeJson(k)}\": \"${escapeJson(v)}\""
+                }
+                val jsonBody = """{"targetToken":"${escapeJson(token)}","token":"${escapeJson(token)}","title":"${escapeJson(title)}","body":"${escapeJson(body)}","data":{$dataPairs}}"""
+                val bodyData = (jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding)
+                req.setHTTPBody(bodyData)
+
+                val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
+                    try {
+                        val success = if (err == null && resp != null) {
+                            val http = resp as? NSHTTPURLResponse
+                            (http?.statusCode?.toInt() ?: 0) in 200..299
+                        } else false
+                        if (continuation.isActive) continuation.resume(success)
+                    } catch (_: Throwable) {
+                        if (continuation.isActive) continuation.resume(false)
                     }
                 }
-                dispatch_semaphore_signal(sem)
-            }.resume()
-            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 6_000_000_000L))
-            success
-        } catch (_: Exception) {
-            false
+                continuation.invokeOnCancellation { task.cancel() }
+                task.resume()
+            } catch (_: Throwable) {
+                if (continuation.isActive) continuation.resume(false)
+            }
         }
     }
 
@@ -350,6 +397,9 @@ actual object ConnectionManager {
                         timeout.tv_usec = 0
                         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
                         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                        val nosigpipe = alloc<IntVar>()
+                        nosigpipe.value = 1
+                        setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
 
                         val serverAddr = alloc<sockaddr_in>()
                         serverAddr.sin_family = AF_INET.convert()
