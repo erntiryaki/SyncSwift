@@ -182,6 +182,14 @@ actual object SessionManager {
         return getPrefs()?.getString("notifications_history_json", null)
     }
 
+    actual fun saveClipboardHistoryJson(json: String) {
+        getPrefs()?.edit()?.putString("clipboard_history_json", json)?.apply()
+    }
+
+    actual fun getSavedClipboardHistoryJson(): String? {
+        return getPrefs()?.getString("clipboard_history_json", null)
+    }
+
     actual fun saveProStatus(isPro: Boolean) {
         getPrefs()?.edit()?.putBoolean("is_pro_member", isPro)?.apply()
     }

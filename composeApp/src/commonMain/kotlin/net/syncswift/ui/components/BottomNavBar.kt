@@ -20,13 +20,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import net.syncswift.ClipboardVectorIcon
 import net.syncswift.Copy
 import net.syncswift.HomeVectorIcon
 import net.syncswift.TransferVectorIcon
 import net.syncswift.UserIcon
 import net.syncswift.ui.theme.*
 
-enum class MainNavTab { Transfers, Home, Account }
+enum class MainNavTab { Home, Transfers, ClipboardHistory, Account }
 
 @Composable
 fun BottomNavBar(
@@ -53,32 +54,40 @@ fun BottomNavBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 8.dp, vertical = 8.dp)
                 .navigationBarsPadding(),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: Transfers
-            NavBarPillItem(
-                selected = selectedTab == MainNavTab.Transfers,
-                label = copy.transfersTab,
-                icon = { color -> TransferVectorIcon(Modifier.size(21.dp), color = color) },
-                onClick = { onTabSelected(MainNavTab.Transfers) }
-            )
-
-            // Center: Home
+            // 1. Home (en başta)
             NavBarPillItem(
                 selected = selectedTab == MainNavTab.Home,
                 label = copy.homeTab,
-                icon = { color -> HomeVectorIcon(Modifier.size(22.dp), color = color) },
+                icon = { color -> HomeVectorIcon(Modifier.size(20.dp), color = color) },
                 onClick = { onTabSelected(MainNavTab.Home) }
             )
 
-            // Right: Account
+            // 2. Transfers
+            NavBarPillItem(
+                selected = selectedTab == MainNavTab.Transfers,
+                label = copy.transfersTab,
+                icon = { color -> TransferVectorIcon(Modifier.size(19.dp), color = color) },
+                onClick = { onTabSelected(MainNavTab.Transfers) }
+            )
+
+            // 3. Clipboard History
+            NavBarPillItem(
+                selected = selectedTab == MainNavTab.ClipboardHistory,
+                label = copy.clipboardHistoryTab,
+                icon = { color -> ClipboardVectorIcon(Modifier.size(18.dp), color = color) },
+                onClick = { onTabSelected(MainNavTab.ClipboardHistory) }
+            )
+
+            // 4. Account
             NavBarPillItem(
                 selected = selectedTab == MainNavTab.Account,
                 label = copy.accountTab,
-                icon = { color -> UserIcon(Modifier.size(21.dp), color = color) },
+                icon = { color -> UserIcon(Modifier.size(19.dp), color = color) },
                 onClick = { onTabSelected(MainNavTab.Account) }
             )
         }
@@ -115,8 +124,8 @@ private fun NavBarPillItem(
                 if (selected) Modifier.border(0.5.dp, PillButtonBorder.copy(alpha = 0.5f), CircleShape) else Modifier
             )
             .padding(
-                horizontal = if (selected) 18.dp else 14.dp,
-                vertical = 10.dp
+                horizontal = if (selected) 14.dp else 10.dp,
+                vertical = 8.dp
             ),
         contentAlignment = Alignment.Center
     ) {

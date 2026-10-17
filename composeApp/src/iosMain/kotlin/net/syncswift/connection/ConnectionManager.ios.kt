@@ -95,17 +95,26 @@ private suspend fun sendPairRequestViaFcm(target: DiscoveredDevice, selfName: St
     if (token.isNullOrBlank()) return false
 
     val targetCopy = net.syncswift.copyForLanguageCode(target.language)
+    val self = DeviceDiscoveryManager.getSelfDevice()
+    val selfId = platform.UIKit.UIDevice.currentDevice.identifierForVendor?.UUIDString ?: (self?.id ?: "ios-device")
+    val myPushToken = net.syncswift.getSavedIosPushToken() ?: ""
+    val isRemoteTarget = target.isRemote || target.host.startsWith("remote-") ||
+        DeviceDiscoveryManager.devices.value.none { it.host == target.host && it.isOnline && !it.isRemote }
+
     return ConnectionManager.sendFcmNotification(
         token = token,
         title = targetCopy.notificationPairRequestTitle,
         body = targetCopy.notificationPairRequestBody.replace("%s", selfName),
         data = mapOf(
             "type" to "pair_request",
+            "senderId" to selfId,
             "senderName" to selfName,
             "senderHost" to selfHost,
             "senderPort" to "$selfPort",
             "senderOs" to selfOs,
+            "senderPushToken" to myPushToken,
             "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+            "isRemote" to "$isRemoteTarget",
             "timestamp" to "${currentTimeMs()}"
         )
     )
@@ -515,10 +524,120 @@ actual object ConnectionManager {
         }
     }
 
+    private fun writeUTFBytes(str: String): ByteArray {
+        val bytes = str.encodeToByteArray()
+        val buf = ByteArray(2 + bytes.size)
+        buf[0] = ((bytes.size shr 8) and 0xFF).toByte()
+        buf[1] = (bytes.size and 0xFF).toByte()
+        bytes.copyInto(buf, 2)
+        return buf
+    }
+
+    private fun buildUnpairPacket(selfHost: String, selfPort: Int, selfId: String, selfName: String): ByteArray {
+        val header = byteArrayOf(1 /* PROTOCOL_VERSION */, 4 /* TYPE_UNPAIR */)
+        val hostBytes = writeUTFBytes(selfHost)
+        val portBytes = ByteArray(4)
+        portBytes[0] = ((selfPort shr 24) and 0xFF).toByte()
+        portBytes[1] = ((selfPort shr 16) and 0xFF).toByte()
+        portBytes[2] = ((selfPort shr 8) and 0xFF).toByte()
+        portBytes[3] = (selfPort and 0xFF).toByte()
+        val idBytes = writeUTFBytes(selfId)
+        val nameBytes = writeUTFBytes(selfName)
+        return header + hostBytes + portBytes + idBytes + nameBytes
+    }
+
     actual fun disconnectDevice(target: DiscoveredDevice) {
         val key = deviceKey(target.host, target.port)
-        markDeviceDisconnected(key)
-        markDeviceDisconnected(target.id)
+        val clean = cleanDeviceDisplayName(target.name)
+        val targetHost = target.host
+        val targetName = target.name
+        val targetId = target.id
+
+        val keysToRemove = setOf(key, targetId, targetHost, targetName, clean).filter { it.isNotBlank() }.toSet()
+
+        val newConnected = _connectedDeviceKeys.value.filter { existingKey ->
+            val existingClean = cleanDeviceDisplayName(existingKey)
+            !keysToRemove.contains(existingKey) &&
+            (targetHost.isBlank() || !existingKey.contains(targetHost)) &&
+            (clean.isBlank() || existingClean != clean) &&
+            (targetName.isBlank() || existingKey != targetName)
+        }.toSet()
+        _connectedDeviceKeys.value = newConnected
+        SessionManager.saveConnectedDeviceKeys(newConnected)
+
+        val newRemote = _remoteConnectedDeviceKeys.value.filter { existingKey ->
+            val existingClean = cleanDeviceDisplayName(existingKey)
+            !keysToRemove.contains(existingKey) &&
+            (targetHost.isBlank() || !existingKey.contains(targetHost)) &&
+            (clean.isBlank() || existingClean != clean) &&
+            (targetName.isBlank() || existingKey != targetName)
+        }.toSet()
+        _remoteConnectedDeviceKeys.value = newRemote
+        SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
+
+        scope.launch(Dispatchers.Default) {
+            val self = DeviceDiscoveryManager.getSelfDevice()
+            val selfHost = self?.host ?: ""
+            val selfPort = self?.port ?: 52424
+            val selfId = self?.id ?: ""
+            val selfName = self?.name ?: ""
+
+            // 1. Try local TCP unpair packet
+            if (target.host.isNotBlank() && !target.host.startsWith("remote-") && target.port > 0) {
+                val sock = socket(AF_INET, SOCK_STREAM, 0)
+                if (sock >= 0) {
+                    try {
+                        memScoped {
+                            val timeout = alloc<timeval>()
+                            timeout.tv_sec = 2
+                            timeout.tv_usec = 0
+                            setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                            val nosigpipe = alloc<IntVar>()
+                            nosigpipe.value = 1
+                            setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
+
+                            val serverAddr = alloc<sockaddr_in>()
+                            serverAddr.sin_family = AF_INET.convert()
+                            serverAddr.sin_port = htons(target.port.toUShort())
+                            val parsedIp = parseIpv4(target.host)
+                            if (parsedIp != null) {
+                                serverAddr.sin_addr.s_addr = parsedIp.convert()
+                                if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) == 0) {
+                                    val packet = buildUnpairPacket(selfHost, selfPort, selfId, selfName)
+                                    packet.usePinned { pinned ->
+                                        send(sock, pinned.addressOf(0), packet.size.convert(), 0)
+                                    }
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {
+                    } finally {
+                        close(sock)
+                    }
+                }
+            }
+
+            // 2. Try remote FCM unpair push notification
+            try {
+                val targetPushToken = target.pushToken.ifBlank {
+                    queryPushTokenFromSupabase(target.host, target.name) ?: ""
+                }
+                if (targetPushToken.isNotBlank()) {
+                    net.syncswift.fcm.FcmSyncManager.sendNotificationToDevice(
+                        targetToken = targetPushToken,
+                        data = mapOf(
+                            "type" to "unpair",
+                            "senderHost" to selfHost,
+                            "senderPort" to "$selfPort",
+                            "senderId" to selfId,
+                            "senderName" to selfName
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                println("[SyncSwift iOS] Unpair push error: ${e.message}")
+            }
+        }
     }
 
     actual fun acceptPairRequest(request: IncomingPairRequest) {
@@ -542,9 +661,11 @@ actual object ConnectionManager {
             it.host == request.senderHost || cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(request.senderName)
         }
         val isRemote = when {
+            request.isRemote -> true
             matchedDev != null -> matchedDev.isRemote
             request.senderHost.startsWith("remote-") -> true
             request.senderHost.isBlank() || !request.senderHost.contains(".") -> true
+            request.senderPushToken.isNotBlank() && DeviceDiscoveryManager.devices.value.none { it.host == request.senderHost && it.isOnline && !it.isRemote } -> true
             else -> false
         }
         markDeviceConnected(key, isRemote = isRemote)
@@ -585,7 +706,8 @@ actual object ConnectionManager {
                         "senderPort" to "$selfPort",
                         "senderId" to selfId,
                         "senderPushToken" to myPushToken,
-                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
+                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                        "isRemote" to "$isRemote"
                     )
                 )
             }

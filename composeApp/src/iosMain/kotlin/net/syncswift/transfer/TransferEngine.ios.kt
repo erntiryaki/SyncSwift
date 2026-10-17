@@ -44,6 +44,7 @@ actual object TransferEngine {
     private const val TYPE_CLIPBOARD: Byte = 1
     private const val TYPE_FILE: Byte = 2
     private const val TYPE_PAIR_REQUEST: Byte = 3
+    private const val TYPE_UNPAIR: Byte = 4
     private const val TYPE_FILE_HANDSHAKE: Byte = 5
     private const val ACK: Byte = 6
     private const val RESP_ACCEPTED: Byte = 7
@@ -298,6 +299,21 @@ actual object TransferEngine {
                             }
                         }
 
+                        TYPE_UNPAIR -> {
+                            val senderHost = readUTF(clientSock) ?: ""
+                            val senderPort = readInt(clientSock) ?: 52424
+                            val senderId = readUTF(clientSock) ?: ""
+                            val senderName = readUTF(clientSock) ?: ""
+                            val peerDev = DiscoveredDevice(
+                                id = senderId.ifBlank { "manual-$senderHost" },
+                                name = senderName,
+                                host = senderHost,
+                                port = senderPort,
+                                osType = "Mobile"
+                            )
+                            ConnectionManager.disconnectDevice(peerDev)
+                        }
+
                         TYPE_FILE_HANDSHAKE -> {
                             val senderName = readUTF(clientSock) ?: return@memScoped
                             val fileName = readUTF(clientSock) ?: return@memScoped
@@ -528,6 +544,7 @@ actual object TransferEngine {
         dispatch_async(dispatch_get_main_queue()) {
             try {
                 UIPasteboard.generalPasteboard.string = text
+                net.syncswift.clipboard.ClipboardHistoryManager.addClip(text)
                 val copy = currentAppCopy()
                 showNativeToast(copy.clipboardSynced.replace("%s", text.take(30)))
             } catch (e: Exception) {

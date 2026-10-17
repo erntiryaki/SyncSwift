@@ -27,6 +27,7 @@ data class IncomingPairRequest(
     val senderOsType: String,
     val senderLanguage: String = "en",
     val senderPushToken: String = "",
+    val isRemote: Boolean = false,
     val deferredResponse: CompletableDeferred<Boolean> = CompletableDeferred()
 )
 

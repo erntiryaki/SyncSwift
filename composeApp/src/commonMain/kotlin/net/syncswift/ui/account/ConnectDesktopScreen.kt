@@ -28,7 +28,7 @@ import net.syncswift.ui.components.rememberQrScanner
 import net.syncswift.ui.theme.*
 
 /**
- * Full-page, modern screen for pairing mobile device with Desktop (Windows, macOS, Linux).
+ * Full-page, modern screen for pairing mobile device with Desktop (Windows, macOS).
  * Supports both QR Code Scanning and direct 6-Digit Code pairing.
  */
 @Composable

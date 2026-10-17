@@ -133,6 +133,12 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val senderOs = data["senderOs"] ?: "Android"
                 val senderLanguage = data["senderLanguage"] ?: "en"
                 val senderPushToken = data["senderPushToken"] ?: ""
+                val isRemoteReq = data["isRemote"]?.equals("true", ignoreCase = true) == true ||
+                        senderPushToken.isNotBlank() ||
+                        senderHost.startsWith("remote-") ||
+                        net.syncswift.discovery.DeviceDiscoveryManager.devices.value.none {
+                            it.host == senderHost && it.isOnline && !it.isRemote
+                        }
 
                 val request = IncomingPairRequest(
                     senderId = senderId,
@@ -141,7 +147,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     senderPort = senderPort,
                     senderOsType = senderOs,
                     senderLanguage = senderLanguage,
-                    senderPushToken = senderPushToken
+                    senderPushToken = senderPushToken,
+                    isRemote = isRemoteReq
                 )
                 ConnectionManager.dispatchIncomingPairRequest(request)
             }
@@ -210,9 +217,13 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     it.id == senderId
                 }
                 val isRemote = when {
-                    matchedDev != null -> matchedDev.isRemote
+                    data["isRemote"]?.equals("true", ignoreCase = true) == true -> true
+                    matchedDev != null && matchedDev.isOnline && !matchedDev.isRemote -> false
+                    matchedDev != null && matchedDev.isRemote -> true
+                    senderPushToken.isNotBlank() -> true
                     senderHost.startsWith("remote-") -> true
                     senderHost.isBlank() || !senderHost.contains(".") -> true
+                    DeviceDiscoveryManager.devices.value.none { it.host == senderHost && it.isOnline && !it.isRemote } -> true
                     else -> false
                 }
                 if (senderHost.isNotBlank()) {
@@ -253,6 +264,22 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     ConnectionManager.markDeviceDisconnected(senderId)
                 }
                 net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
+            }
+            "unpair", "disconnect" -> {
+                val senderId = data["senderId"] ?: ""
+                val senderHost = data["senderHost"] ?: ""
+                val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
+                val peerDev = net.syncswift.discovery.DiscoveredDevice(
+                    id = senderId.ifBlank { "remote-$senderHost" },
+                    name = senderName,
+                    host = senderHost,
+                    port = senderPort,
+                    osType = data["senderOs"] ?: "Mobile",
+                    isRemote = true
+                )
+                ConnectionManager.disconnectDevice(peerDev)
+                net.syncswift.showNativeToast("${cleanDeviceDisplayName(senderName)}: ${copy.disconnected}")
+                return
             }
             "file_rejected" -> {
                 val transferId = data["transferId"]

@@ -44,6 +44,8 @@ expect object SessionManager {
     fun getSavedTransfersJson(): String?
     fun saveNotificationsJson(json: String)
     fun getSavedNotificationsJson(): String?
+    fun saveClipboardHistoryJson(json: String)
+    fun getSavedClipboardHistoryJson(): String?
 
     fun saveProStatus(isPro: Boolean)
     fun getSavedProStatus(): Boolean

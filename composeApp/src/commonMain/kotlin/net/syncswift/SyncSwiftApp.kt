@@ -593,6 +593,18 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                 copy = copy
                                                             )
                                                         }
+                                                        net.syncswift.ui.components.MainNavTab.ClipboardHistory -> {
+                                                            net.syncswift.ui.clipboard.ClipboardHistoryScreen(
+                                                                copy = copy,
+                                                                onSendToDevice = { text ->
+                                                                    if (selectableDevicesForTransfer.isEmpty()) {
+                                                                        showNativeToast(copy.noDevicesOnNetwork)
+                                                                    } else {
+                                                                        pendingClipboardToSend = text
+                                                                    }
+                                                                }
+                                                            )
+                                                        }
                                                         net.syncswift.ui.components.MainNavTab.Account -> {
                                                             net.syncswift.ui.account.AccountScreen(
                                                                 copy = copy,

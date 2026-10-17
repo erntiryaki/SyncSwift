@@ -84,6 +84,7 @@ actual object TransferEngine {
                     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                     val clip = ClipData.newPlainText("SyncSwift", text)
                     cm?.setPrimaryClip(clip)
+                    net.syncswift.clipboard.ClipboardHistoryManager.addClip(text)
                     showNativeToast(copy.clipboardSynced.replace("%s", text.take(30)))
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set clipboard: ${e.message}")
@@ -276,7 +277,16 @@ actual object TransferEngine {
                     TYPE_UNPAIR -> {
                         val senderHost = input.readUTF()
                         val senderPort = input.readInt()
-                        ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+                        val senderId = try { input.readUTF() } catch (_: Exception) { "" }
+                        val senderName = try { input.readUTF() } catch (_: Exception) { "" }
+                        val peerDev = net.syncswift.discovery.DiscoveredDevice(
+                            id = senderId.ifBlank { "manual-$senderHost" },
+                            name = senderName,
+                            host = senderHost,
+                            port = senderPort,
+                            osType = "Mobile"
+                        )
+                        ConnectionManager.disconnectDevice(peerDev)
                     }
 
                     TYPE_CLIPBOARD -> {

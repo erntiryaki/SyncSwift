@@ -1,5 +1,12 @@
 package net.syncswift.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,6 +49,12 @@ fun TransfersScreen(
             else -> allTransfers
         }
     }
+
+    var isRecentExpanded by remember { mutableStateOf(true) }
+    var isHistoryExpanded by remember { mutableStateOf(true) }
+
+    val recentList = remember(filteredList) { filteredList.take(5) }
+    val historyList = remember(filteredList) { filteredList.drop(5) }
 
     Column(
         modifier = Modifier
@@ -124,9 +138,60 @@ fun TransfersScreen(
                 }
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                filteredList.forEach { item ->
-                    TransferItemDetailCard(item, copy)
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Son Transferler (Recent Transfers)
+                CollapsibleSectionHeader(
+                    title = copy.recentTransfersSection,
+                    count = recentList.size,
+                    isExpanded = isRecentExpanded,
+                    onToggle = { isRecentExpanded = !isRecentExpanded }
+                )
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isRecentExpanded,
+                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        recentList.forEach { item ->
+                            TransferItemDetailCard(item, copy)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Geçmiş (Transfer History)
+                CollapsibleSectionHeader(
+                    title = copy.transfersHistorySection,
+                    count = historyList.size,
+                    isExpanded = isHistoryExpanded,
+                    onToggle = { isHistoryExpanded = !isHistoryExpanded }
+                )
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isHistoryExpanded,
+                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                ) {
+                    if (historyList.isEmpty()) {
+                        Text(
+                            text = copy.noTransfersYet,
+                            color = Mist.copy(alpha = 0.6f),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp)
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier.padding(top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            historyList.forEach { item ->
+                                TransferItemDetailCard(item, copy)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -352,5 +417,60 @@ private fun TransferItemDetailCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CollapsibleSectionHeader(
+    title: String,
+    count: Int,
+    isExpanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onToggle)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                color = Cloud,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.3).sp
+            )
+            if (count > 0) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Blue.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "$count",
+                        color = Blue,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+        val rotation by animateFloatAsState(
+            targetValue = if (isExpanded) 180f else 0f,
+            animationSpec = tween(200)
+        )
+        ChevronDownIcon(
+            modifier = Modifier
+                .size(16.dp)
+                .rotate(rotation),
+            color = Mist
+        )
     }
 }

@@ -163,9 +163,11 @@ actual object ConnectionManager {
             it.host == request.senderHost || cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(request.senderName)
         }
         val isRemote = when {
+            request.isRemote -> true
             matchedDev != null -> matchedDev.isRemote
             request.senderHost.startsWith("remote-") -> true
             request.senderHost.isBlank() || !request.senderHost.contains(".") -> true
+            request.senderPushToken.isNotBlank() && DeviceDiscoveryManager.devices.value.none { it.host == request.senderHost && it.isOnline && !it.isRemote } -> true
             else -> false
         }
         markDeviceConnected(key, isRemote = isRemote)
@@ -211,7 +213,8 @@ actual object ConnectionManager {
                         "senderPort" to "$selfPort",
                         "senderId" to selfId,
                         "senderPushToken" to myPushToken,
-                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode())
+                        "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                        "isRemote" to "$isRemote"
                     )
                 )
             }
@@ -723,6 +726,9 @@ actual object ConnectionManager {
             val targetCopy = net.syncswift.copyForLanguageCode(target.language)
             if (!token.isNullOrBlank()) {
                 Log.d(TAG, "Sending FCM wake-up pairing request to token: $token")
+                val ctx = SessionManager.getAppContext()
+                val myPushToken = if (ctx != null) SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
+                val isRemoteTarget = target.isRemote || !isLocalDiscovered || target.host.startsWith("remote-")
                 val fcmSent = sendFcmNotification(
                     token = token,
                     title = targetCopy.notificationPairRequestTitle,
@@ -734,7 +740,9 @@ actual object ConnectionManager {
                         "senderHost" to selfHost,
                         "senderPort" to "$selfPort",
                         "senderOs" to selfOs,
+                        "senderPushToken" to myPushToken,
                         "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
+                        "isRemote" to "$isRemoteTarget",
                         "timestamp" to "${System.currentTimeMillis()}"
                     )
                 )
@@ -765,25 +773,81 @@ actual object ConnectionManager {
 
     actual fun disconnectDevice(target: DiscoveredDevice) {
         val key = deviceKey(target.host, target.port)
-        markDeviceDisconnected(key)
-        markDeviceDisconnected(target.id)
+        val clean = cleanDeviceDisplayName(target.name)
+        val targetHost = target.host
+        val targetName = target.name
+        val targetId = target.id
 
-        scope.launch {
-            try {
-                if (target.host.isNotBlank() && !target.host.startsWith("remote-")) {
+        val keysToRemove = setOf(key, targetId, targetHost, targetName, clean).filter { it.isNotBlank() }.toSet()
+
+        val newConnected = _connectedDeviceKeys.value.filter { existingKey ->
+            val existingClean = cleanDeviceDisplayName(existingKey)
+            !keysToRemove.contains(existingKey) &&
+            (targetHost.isBlank() || !existingKey.contains(targetHost)) &&
+            (clean.isBlank() || existingClean != clean) &&
+            (targetName.isBlank() || existingKey != targetName)
+        }.toSet()
+        _connectedDeviceKeys.value = newConnected
+        SessionManager.saveConnectedDeviceKeys(newConnected)
+
+        val newRemote = _remoteConnectedDeviceKeys.value.filter { existingKey ->
+            val existingClean = cleanDeviceDisplayName(existingKey)
+            !keysToRemove.contains(existingKey) &&
+            (targetHost.isBlank() || !existingKey.contains(targetHost)) &&
+            (clean.isBlank() || existingClean != clean) &&
+            (targetName.isBlank() || existingKey != targetName)
+        }.toSet()
+        _remoteConnectedDeviceKeys.value = newRemote
+        SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
+
+        scope.launch(Dispatchers.IO) {
+            val self = DeviceDiscoveryManager.getSelfDevice()
+            val selfHost = self?.host ?: ""
+            val selfPort = self?.port ?: 52424
+            val selfId = self?.id ?: ""
+            val selfName = self?.name ?: ""
+
+            // 1. Try local TCP unpair packet if target has local host
+            if (target.host.isNotBlank() && !target.host.startsWith("remote-") && target.port > 0) {
+                try {
                     val socket = Socket()
-                    socket.connect(InetSocketAddress(target.host, target.port), 3000)
+                    socket.connect(InetSocketAddress(target.host, target.port), 2500)
                     socket.use { s ->
                         val out = DataOutputStream(s.getOutputStream())
                         out.writeByte(PROTOCOL_VERSION.toInt())
                         out.writeByte(TYPE_UNPAIR.toInt())
-                        out.writeUTF(target.host)
-                        out.writeInt(target.port)
+                        out.writeUTF(selfHost)
+                        out.writeInt(selfPort)
+                        out.writeUTF(selfId)
+                        out.writeUTF(selfName)
                         out.flush()
                     }
+                } catch (e: Exception) {
+                    Log.d(TAG, "Local unpair notification skipped/failed: ${e.message}")
+                }
+            }
+
+            // 2. Try remote FCM unpair push notification
+            try {
+                val targetPushToken = (target.pushToken ?: "").ifBlank {
+                    queryPushTokenFromSupabase(target.host, target.name)
+                }
+                if (!targetPushToken.isNullOrBlank()) {
+                    sendFcmNotification(
+                        token = targetPushToken,
+                        title = "",
+                        body = "",
+                        data = mapOf(
+                            "type" to "unpair",
+                            "senderHost" to selfHost,
+                            "senderPort" to "$selfPort",
+                            "senderId" to selfId,
+                            "senderName" to selfName
+                        )
+                    )
                 }
             } catch (e: Exception) {
-                Log.d(TAG, "Unpair notification sent/skipped: ${e.message}")
+                Log.d(TAG, "Remote unpair push failed: ${e.message}")
             }
         }
     }

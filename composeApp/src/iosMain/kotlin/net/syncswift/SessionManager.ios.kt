@@ -144,6 +144,14 @@ actual object SessionManager {
         return NSUserDefaults.standardUserDefaults.stringForKey("notifications_history_json")
     }
 
+    actual fun saveClipboardHistoryJson(json: String) {
+        NSUserDefaults.standardUserDefaults.setObject(json, "clipboard_history_json")
+    }
+
+    actual fun getSavedClipboardHistoryJson(): String? {
+        return NSUserDefaults.standardUserDefaults.stringForKey("clipboard_history_json")
+    }
+
     actual fun saveProStatus(isPro: Boolean) {
         NSUserDefaults.standardUserDefaults.setBool(isPro, "is_pro_member")
     }

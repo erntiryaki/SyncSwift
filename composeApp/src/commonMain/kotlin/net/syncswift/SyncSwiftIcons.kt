@@ -426,6 +426,17 @@ fun ChevronLeftIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas
 }
 
 @Composable
+fun ChevronDownIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val s = Stroke(size.minDimension * 0.075f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    drawPath(Path().apply {
+        moveTo(w * 0.22f, h * 0.36f)
+        lineTo(w * 0.50f, h * 0.64f)
+        lineTo(w * 0.78f, h * 0.36f)
+    }, color, style = s)
+}
+
+@Composable
 fun OutgoingArrowIcon(modifier: Modifier = Modifier, color: Color = SuccessGreen) = Canvas(modifier) {
     val w = size.width; val h = size.height
     val s = Stroke(size.minDimension * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1237,7 +1248,7 @@ fun PhoneVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas
     )
 }
 
-/** Vector Laptop / Desktop Icon for PC (Windows / macOS / Linux) */
+/** Vector Laptop / Desktop Icon for PC (Windows / macOS) */
 @Composable
 fun LaptopVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
     val sw = size.minDimension * 0.08f
@@ -1516,4 +1527,54 @@ fun WarningTriangleIcon(modifier: Modifier = Modifier, color: Color = ErrorRed) 
     // Dot
     drawCircle(color, radius = sw * 0.7f, center = Offset(w * 0.5f, h * 0.72f))
 }
+
+@Composable
+fun StarVectorIcon(modifier: Modifier = Modifier, color: Color = Blue, filled: Boolean = false) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.08f
+    val path = Path().apply {
+        moveTo(w * 0.50f, h * 0.12f)
+        lineTo(w * 0.62f, h * 0.36f)
+        lineTo(w * 0.88f, h * 0.40f)
+        lineTo(w * 0.69f, h * 0.59f)
+        lineTo(w * 0.74f, h * 0.86f)
+        lineTo(w * 0.50f, h * 0.73f)
+        lineTo(w * 0.26f, h * 0.86f)
+        lineTo(w * 0.31f, h * 0.59f)
+        lineTo(w * 0.12f, h * 0.40f)
+        lineTo(w * 0.38f, h * 0.36f)
+        close()
+    }
+    if (filled) {
+        drawPath(path, color = color)
+    } else {
+        drawPath(path, color = color, style = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
+
+@Composable
+fun SearchVectorIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.09f
+    val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+    // Glass circle
+    drawCircle(
+        color = color,
+        radius = w * 0.32f,
+        center = Offset(w * 0.42f, h * 0.42f),
+        style = s
+    )
+    // Handle
+    drawLine(
+        color = color,
+        start = Offset(w * 0.65f, h * 0.65f),
+        end = Offset(w * 0.86f, h * 0.86f),
+        strokeWidth = sw,
+        cap = StrokeCap.Round
+    )
+}
+
 
