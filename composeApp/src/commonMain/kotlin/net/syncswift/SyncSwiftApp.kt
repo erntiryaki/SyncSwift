@@ -59,7 +59,8 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             AppLanguage.entries.find { it.code == saved } ?: AppLanguage.English
         } else {
             val sysLang = getSystemLanguageCode()
-            val matched = resolveInitialLanguage(sysLang)
+            val sysCountry = getSystemCountryCode()
+            val matched = resolveInitialLanguage(sysLang, sysCountry)
             SessionManager.saveLanguage(matched.code)
             matched
         }

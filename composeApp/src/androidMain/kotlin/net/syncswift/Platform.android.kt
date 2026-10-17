@@ -9,6 +9,13 @@ import java.io.File
 actual fun currentPlatform(): PlatformFlavor = PlatformFlavor.Android
 actual fun currentTimeMs(): Long = System.currentTimeMillis()
 actual fun getSystemLanguageCode(): String = java.util.Locale.getDefault().language ?: "en"
+actual fun getSystemCountryCode(): String {
+    return try {
+        java.util.Locale.getDefault().country?.uppercase() ?: ""
+    } catch (_: Throwable) {
+        ""
+    }
+}
 actual fun showNativeToast(message: String) {
     ToastNotifier.show(message)
 }

@@ -26,6 +26,7 @@ object ToastNotifier {
 expect fun currentPlatform(): PlatformFlavor
 expect fun currentTimeMs(): Long
 expect fun getSystemLanguageCode(): String
+expect fun getSystemCountryCode(): String
 expect fun showNativeToast(message: String)
 @androidx.compose.runtime.Composable
 expect fun UpdateSystemBars(isDark: Boolean)

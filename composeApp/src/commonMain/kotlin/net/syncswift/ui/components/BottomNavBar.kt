@@ -54,7 +54,7 @@ fun BottomNavBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
+                .padding(horizontal = 10.dp, vertical = 11.dp)
                 .navigationBarsPadding(),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
@@ -63,7 +63,7 @@ fun BottomNavBar(
             NavBarPillItem(
                 selected = selectedTab == MainNavTab.Home,
                 label = copy.homeTab,
-                icon = { color -> HomeVectorIcon(Modifier.size(20.dp), color = color) },
+                icon = { color -> HomeVectorIcon(Modifier.size(22.dp), color = color) },
                 onClick = { onTabSelected(MainNavTab.Home) }
             )
 
@@ -71,7 +71,7 @@ fun BottomNavBar(
             NavBarPillItem(
                 selected = selectedTab == MainNavTab.Transfers,
                 label = copy.transfersTab,
-                icon = { color -> TransferVectorIcon(Modifier.size(19.dp), color = color) },
+                icon = { color -> TransferVectorIcon(Modifier.size(21.dp), color = color) },
                 onClick = { onTabSelected(MainNavTab.Transfers) }
             )
 
@@ -79,7 +79,7 @@ fun BottomNavBar(
             NavBarPillItem(
                 selected = selectedTab == MainNavTab.ClipboardHistory,
                 label = copy.clipboardHistoryTab,
-                icon = { color -> ClipboardVectorIcon(Modifier.size(18.dp), color = color) },
+                icon = { color -> ClipboardVectorIcon(Modifier.size(20.dp), color = color) },
                 onClick = { onTabSelected(MainNavTab.ClipboardHistory) }
             )
 
@@ -87,7 +87,7 @@ fun BottomNavBar(
             NavBarPillItem(
                 selected = selectedTab == MainNavTab.Account,
                 label = copy.accountTab,
-                icon = { color -> UserIcon(Modifier.size(19.dp), color = color) },
+                icon = { color -> UserIcon(Modifier.size(21.dp), color = color) },
                 onClick = { onTabSelected(MainNavTab.Account) }
             )
         }
@@ -124,8 +124,8 @@ private fun NavBarPillItem(
                 if (selected) Modifier.border(0.5.dp, PillButtonBorder.copy(alpha = 0.5f), CircleShape) else Modifier
             )
             .padding(
-                horizontal = if (selected) 14.dp else 10.dp,
-                vertical = 8.dp
+                horizontal = if (selected) 16.dp else 12.dp,
+                vertical = 9.dp
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -136,11 +136,11 @@ private fun NavBarPillItem(
             icon(itemColor)
 
             if (selected) {
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(9.dp))
                 Text(
                     text = label,
                     color = PillButtonText,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.2).sp,
                     maxLines = 1

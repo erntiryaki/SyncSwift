@@ -504,7 +504,21 @@ fun copyFor(language: AppLanguage): Copy = when (language) {
     AppLanguage.Arabic -> ArabicCopy
 }
 
-fun resolveInitialLanguage(code: String): AppLanguage {
+fun resolveInitialLanguage(code: String, countryCode: String = ""): AppLanguage {
+    val cleanCountry = countryCode.uppercase().trim()
+    val fromCountry = when (cleanCountry) {
+        "TR", "CY" -> AppLanguage.Turkish
+        "DE", "AT", "CH", "LI" -> AppLanguage.German
+        "FR", "BE", "MC" -> AppLanguage.French
+        "ES", "MX", "AR", "CO", "CL", "PE", "VE", "EC", "GT", "CU", "BO", "DO", "HN", "PY", "SV", "NI", "CR", "PA", "UY", "PR", "GQ" -> AppLanguage.Spanish
+        "IT", "SM", "VA" -> AppLanguage.Italian
+        "PT", "BR", "AO", "MZ", "CV", "GW", "ST", "TL" -> AppLanguage.Portuguese
+        "RU", "BY", "KZ", "KG" -> AppLanguage.Russian
+        "SA", "AE", "EG", "IQ", "QA", "KW", "JO", "LB", "OM", "DZ", "MA", "TN", "BH", "YE", "LY", "SD", "SY", "PS" -> AppLanguage.Arabic
+        else -> null
+    }
+    if (fromCountry != null) return fromCountry
+
     val clean = code.lowercase().take(2)
     return AppLanguage.entries.firstOrNull { it.code == clean } ?: AppLanguage.English
 }
@@ -517,8 +531,13 @@ fun copyForLanguageCode(code: String?): Copy {
 fun Copy.formatDeviceCount(count: Int): String = "$count $deviceSingle"
 
 fun currentAppCopy(): Copy {
-    val langCode = SessionManager.getSavedLanguage() ?: getSystemLanguageCode()
-    return copyFor(resolveInitialLanguage(langCode))
+    val saved = SessionManager.getSavedLanguage()
+    if (saved != null) {
+        return copyFor(resolveInitialLanguage(saved))
+    }
+    val langCode = getSystemLanguageCode()
+    val countryCode = getSystemCountryCode()
+    return copyFor(resolveInitialLanguage(langCode, countryCode))
 }
 
 

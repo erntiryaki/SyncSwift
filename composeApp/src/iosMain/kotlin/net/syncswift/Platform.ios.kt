@@ -19,6 +19,15 @@ actual fun getSystemLanguageCode(): String {
         "en"
     }
 }
+actual fun getSystemCountryCode(): String {
+    return try {
+        val currentLocale = platform.Foundation.NSLocale.currentLocale
+        val code = currentLocale.countryCode ?: currentLocale.objectForKey(platform.Foundation.NSLocaleCountryCode) as? String
+        (code as? String)?.uppercase() ?: ""
+    } catch (_: Throwable) {
+        ""
+    }
+}
 actual fun showNativeToast(message: String) {
     ToastNotifier.show(message)
     println("[SyncSwift Native Toast] $message")
