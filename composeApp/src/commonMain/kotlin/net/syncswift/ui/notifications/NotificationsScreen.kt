@@ -35,6 +35,8 @@ fun NotificationsScreen(
     copy: Copy,
     onBack: () -> Unit
 ) {
+    BackHandler { onBack() }
+
     val notifications by NotificationHistoryManager.notifications.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -45,6 +47,7 @@ fun NotificationsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Night)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {

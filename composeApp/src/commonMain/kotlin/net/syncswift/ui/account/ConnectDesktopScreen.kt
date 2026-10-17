@@ -186,7 +186,7 @@ fun ConnectDesktopScreen(
                 Spacer(Modifier.height(20.dp))
 
                 Text(
-                    text = "Windows & Mac Sync",
+                    text = copy.windowsMacSyncTitle,
                     color = Cloud,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
@@ -389,9 +389,9 @@ fun ConnectDesktopScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        StepRow(number = "1", text = "Bilgisayarınızda SyncSwift uygulamasını açın.")
-                        StepRow(number = "2", text = "Ekranda gösterilen QR kodu veya 6 haneli kodu açın.")
-                        StepRow(number = "3", text = "Yukarıdaki kamera veya kod girişini kullanarak bağlanın.")
+                        StepRow(number = "1", text = copy.desktopStep1)
+                        StepRow(number = "2", text = copy.desktopStep2)
+                        StepRow(number = "3", text = copy.desktopStep3)
                     }
                 }
 

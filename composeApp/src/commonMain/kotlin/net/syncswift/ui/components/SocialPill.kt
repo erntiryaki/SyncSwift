@@ -66,7 +66,7 @@ fun SocialPill(
                 Spacer(Modifier.width(10.dp))
                 Text(
                     text = label,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.Black,
                     fontFamily = platformFontFamily(),
                     fontSize = 16.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,

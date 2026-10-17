@@ -206,12 +206,15 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     // Handle double-back press to exit app on root screens
     val isRootAuthScreen = (screen == AuthStep.Email && authProvider != IdentityProvider.Local) || screen == AuthStep.Onboarding
     val isRootHomeScreen = screen == AuthStep.Home && mainTab == net.syncswift.ui.components.MainNavTab.Home
-    if (!inSettings && !inEditProfile && !inHelpSupport && !inConnectedDevices && (isRootAuthScreen || isRootHomeScreen)) {
+    val isAnySubScreenOpen = inSettings || inEditProfile || inHelpSupport || inConnectedDevices || inConnectDesktop || inNotifications
+    if (!isAnySubScreenOpen && (isRootAuthScreen || isRootHomeScreen)) {
         DoubleBackToExitHandler(exitMessage = copy.exitToast)
     }
 
     // System Back Gesture / Button Navigation
-    if (inSettings) {
+    if (inNotifications) {
+        BackHandler { inNotifications = false }
+    } else if (inSettings) {
         BackHandler { inSettings = false }
     } else if (inEditProfile) {
         BackHandler { inEditProfile = false }

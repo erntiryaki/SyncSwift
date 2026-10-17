@@ -42,9 +42,9 @@ val DarkSyncSwiftColors = SyncSwiftColors(
     inputBg = Color(0xFF1A2436),
     inputBorder = Color(0xFF28364D),
     borderHighlight = Color(0x44334663),
-    cloud = Color(0xFFF8FAFC),
-    mist = Color(0xFFA6B4C9),
-    placeholder = Color(0xFF64748B),
+    cloud = Color(0xFFFFFFFF), // Pure bright crisp white
+    mist = Color(0xFFD1DCED), // Bright, clear secondary text
+    placeholder = Color(0xFF94A3B8),
     blue = Color(0xFF2BC5D3), // Refined premium turquoise
     pillButtonBg = Color(0xFF147D87), // Darker, richer turquoise button background in dark theme
     pillButtonBorder = Color(0xFF1C8D98),
@@ -58,16 +58,16 @@ val DarkSyncSwiftColors = SyncSwiftColors(
     isDark = true
 )
 
-// Modern, sleek soft titanium slate light palette (subtle off-white, comfortable, crystal-clear readability)
+// Modern, sleek soft titanium slate light palette (pure solid black text, rich contrast)
 val LightSyncSwiftColors = SyncSwiftColors(
-    night = Color(0xFFEFF2F6), // Cleaner soft off-white background (closer to white, eye-friendly, not harsh)
+    night = Color(0xFFEFF2F6), // Cleaner soft off-white background
     cardSurface = Color(0xFFE2E7EE), // Clean layered soft slate surface
     inputBg = Color(0xFFE2E7EE), // Input container background
     inputBorder = Color(0xFFC5CED9), // Crisp soft slate border
     borderHighlight = Color(0x330E8388),
-    cloud = Color(0xFF0F172A), // Deep rich charcoal slate for crystal-clear readability
-    mist = Color(0xFF475569), // Elegant slate secondary text
-    placeholder = Color(0xFF64748B),
+    cloud = Color(0xFF000000), // Solid deep pitch black for ultra-crisp readability
+    mist = Color(0xFF1E293B), // Very dark slate black for secondary text
+    placeholder = Color(0xFF334155),
     blue = Color(0xFF086872), // Deep petroleum turquoise
     pillButtonBg = Color(0xFF086872), // Bold button background in light mode
     pillButtonBorder = Color(0xFF054A52),
@@ -132,24 +132,25 @@ fun SyncSwiftTheme(
         )
     }
 
+    val isLight = themeMode == AppThemeMode.Light
     val font = net.syncswift.platformFontFamily()
     val baseTypography = androidx.compose.material3.Typography()
     val typography = baseTypography.copy(
-        displayLarge = baseTypography.displayLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold),
-        displayMedium = baseTypography.displayMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-        displaySmall = baseTypography.displaySmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold),
-        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-        titleLarge = baseTypography.titleLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold),
-        titleMedium = baseTypography.titleMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-        titleSmall = baseTypography.titleSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-        bodySmall = baseTypography.bodySmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-        labelLarge = baseTypography.labelLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
-        labelMedium = baseTypography.labelMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
-        labelSmall = baseTypography.labelSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        displayLarge = baseTypography.displayLarge.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Black else androidx.compose.ui.text.font.FontWeight.ExtraBold),
+        displayMedium = baseTypography.displayMedium.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Black else androidx.compose.ui.text.font.FontWeight.Bold),
+        displaySmall = baseTypography.displaySmall.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold),
+        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Black else androidx.compose.ui.text.font.FontWeight.ExtraBold),
+        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold),
+        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold),
+        titleLarge = baseTypography.titleLarge.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Black else androidx.compose.ui.text.font.FontWeight.ExtraBold),
+        titleMedium = baseTypography.titleMedium.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold),
+        titleSmall = baseTypography.titleSmall.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Bold),
+        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium),
+        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium),
+        bodySmall = baseTypography.bodySmall.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
+        labelLarge = baseTypography.labelLarge.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.SemiBold),
+        labelMedium = baseTypography.labelMedium.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.SemiBold),
+        labelSmall = baseTypography.labelSmall.copy(fontFamily = font, fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.SemiBold)
     )
 
     CompositionLocalProvider(
@@ -157,7 +158,7 @@ fun SyncSwiftTheme(
         LocalThemeMode provides themeMode,
         androidx.compose.material3.LocalTextStyle provides androidx.compose.ui.text.TextStyle(
             fontFamily = font,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+            fontWeight = if (isLight) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium
         )
     ) {
         MaterialTheme(
