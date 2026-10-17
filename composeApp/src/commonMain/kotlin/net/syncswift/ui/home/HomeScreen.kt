@@ -175,7 +175,7 @@ fun HomeScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        // Current Device Banner (Across the width)
+        // Current Device Info (Boxless, across the width)
         val selfDev = remember { DeviceDiscoveryManager.getSelfDevice() }
         val selfDeviceName = selfDev?.name ?: "SyncSwift Device"
         val modelCode = selfDev?.modelCode.orEmpty()
@@ -188,67 +188,64 @@ fun HomeScreen(
         val deviceSubtitle = "$osText (${copy.yourDevice})"
         val isMobileDevice = osText.equals("Android", ignoreCase = true) || osText.equals("iOS", ignoreCase = true)
 
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(CardSurface)
-                .border(1.dp, InputBorder, RoundedCornerShape(16.dp))
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(InputBg.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Blue.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isMobileDevice) {
-                        PhoneVectorIcon(Modifier.size(20.dp), color = Blue)
-                    } else {
-                        LaptopVectorIcon(Modifier.size(20.dp), color = Blue)
-                    }
+                if (isMobileDevice) {
+                    PhoneVectorIcon(Modifier.size(19.dp), color = Blue)
+                } else {
+                    LaptopVectorIcon(Modifier.size(19.dp), color = Blue)
                 }
+            }
 
-                Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(14.dp))
 
-                Column(
-                    modifier = Modifier.weight(1f)
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = nameWithModel,
+                    color = Cloud,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (-0.2).sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = nameWithModel,
-                        color = Cloud,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.2).sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(SuccessGreen)
                     )
-                    Spacer(Modifier.height(3.dp))
                     Text(
                         text = deviceSubtitle,
                         color = Mist,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                Spacer(Modifier.width(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(SuccessGreen)
-                )
             }
         }
+
+        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
 
         // Modern Pull-to-Refresh: circular indicator with text underneath, no dots, no box
         AnimatedVisibility(

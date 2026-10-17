@@ -610,7 +610,7 @@ actual object TransferEngine {
                     val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
                     ConnectionManager.sendFcmNotification(
                         token = token,
-                        title = targetCopy.requestCancelled,
+                        title = targetCopy.requestCancelledBySender,
                         body = targetCopy.transferCancelledBySender,
                         data = mapOf(
                             "type" to "file_cancelled",
@@ -963,7 +963,7 @@ actual object TransferEngine {
                     val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
                     ConnectionManager.sendFcmNotification(
                         token = token,
-                        title = targetCopy.requestCancelled,
+                        title = targetCopy.requestCancelledBySender,
                         body = targetCopy.clipboardCancelledBySender,
                         data = mapOf(
                             "type" to "clipboard_cancelled",
