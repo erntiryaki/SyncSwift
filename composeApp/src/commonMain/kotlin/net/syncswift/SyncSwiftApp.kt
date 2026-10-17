@@ -174,14 +174,31 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         net.syncswift.subscription.SubscriptionManager.init()
     }
 
-    // Fetch profile data from Supabase if not yet cached locally
+    // Fetch profile data from Supabase if not yet cached locally or if name needs cleaning
     LaunchedEffect(email, screen, authProvider) {
-        if (screen == AuthStep.Home && authProvider != IdentityProvider.Local && email.isNotBlank() && (firstName.isBlank() || lastName.isBlank())) {
-            val prof = SupabaseNetwork.fetchUserProfile(email)
-            if (prof != null) {
-                if (prof.firstName.isNotBlank()) firstName = prof.firstName
-                if (prof.lastName.isNotBlank()) lastName = prof.lastName
-                SessionManager.updateUserProfile(firstName, lastName)
+        if (screen == AuthStep.Home && authProvider != IdentityProvider.Local && email.isNotBlank()) {
+            val needsRefresh = firstName.isBlank() || lastName.isBlank() || firstName.any { it.isDigit() } || firstName.contains("@")
+            if (needsRefresh) {
+                val prof = SupabaseNetwork.fetchUserProfile(email)
+                if (prof != null) {
+                    val (f, l) = SmartNameExtractor.extract(email, prof.firstName, prof.lastName)
+                    if (f.isNotBlank()) firstName = f
+                    if (l.isNotBlank()) lastName = l
+                    SessionManager.updateUserProfile(firstName, lastName)
+                    if (prof.firstName.any { it.isDigit() } || prof.firstName.contains("@") || (prof.lastName.isBlank() && l.isNotBlank())) {
+                        SupabaseNetwork.registerUserInSupabase(
+                            email = email,
+                            firstName = firstName,
+                            lastName = lastName,
+                            provider = authProvider
+                        )
+                    }
+                } else {
+                    val (f, l) = SmartNameExtractor.extract(email, firstName, lastName)
+                    if (f.isNotBlank()) firstName = f
+                    if (l.isNotBlank()) lastName = l
+                    SessionManager.updateUserProfile(firstName, lastName)
+                }
             }
         }
     }
@@ -308,8 +325,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 },
                                 onGoogleSignIn = { googleUser ->
                                     val targetEmail = googleUser.email.trim().lowercase()
-                                    val gFirstName = googleUser.givenName ?: googleUser.displayName?.split(" ")?.firstOrNull() ?: ""
-                                    val gLastName = googleUser.familyName ?: googleUser.displayName?.split(" ")?.drop(1)?.joinToString(" ") ?: ""
+                                    val rawFirst = googleUser.givenName ?: googleUser.displayName?.split(" ")?.firstOrNull() ?: ""
+                                    val rawLast = googleUser.familyName ?: googleUser.displayName?.split(" ")?.drop(1)?.joinToString(" ") ?: ""
+                                    val (gFirstName, gLastName) = SmartNameExtractor.extract(targetEmail, rawFirst, rawLast)
                                     scope.launch {
                                         val existingProvider = SupabaseNetwork.getUserProvider(targetEmail) ?: authPolicy.getRegisteredProvider(targetEmail)
                                         if (existingProvider == IdentityProvider.EmailPassword) {
@@ -329,30 +347,34 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                         !SessionManager.getLoggedInEmail().isNullOrBlank() -> SessionManager.getLoggedInEmail()!!.trim().lowercase()
                                         else -> "${appleUser.userIdentifier}@apple.id"
                                     }
-                                    var aFirstName = appleUser.givenName ?: ""
-                                    var aLastName = appleUser.familyName ?: ""
+                                    val (cleanFirst, cleanLast) = SmartNameExtractor.extract(
+                                        email = targetEmail,
+                                        hintFirstName = appleUser.givenName ?: "",
+                                        hintLastName = appleUser.familyName ?: ""
+                                    )
+                                    var aFirstName = cleanFirst
+                                    var aLastName = cleanLast
                                     scope.launch {
-                                        if (aFirstName.isBlank() && aLastName.isBlank()) {
+                                        if (aFirstName.isBlank() || aLastName.isBlank()) {
                                             val existingProfile = SupabaseNetwork.fetchUserProfile(targetEmail)
                                             if (existingProfile != null) {
-                                                if (existingProfile.firstName.isNotBlank()) aFirstName = existingProfile.firstName
-                                                if (existingProfile.lastName.isNotBlank()) aLastName = existingProfile.lastName
+                                                val (pFirst, pLast) = SmartNameExtractor.extract(
+                                                    email = targetEmail,
+                                                    hintFirstName = existingProfile.firstName,
+                                                    hintLastName = existingProfile.lastName
+                                                )
+                                                if (aFirstName.isBlank() && pFirst.isNotBlank()) aFirstName = pFirst
+                                                if (aLastName.isBlank() && pLast.isNotBlank()) aLastName = pLast
                                             }
                                         }
-                                        if (aFirstName.isBlank() && aLastName.isBlank()) {
-                                            if (SessionManager.getUserFirstName().isNotBlank()) aFirstName = SessionManager.getUserFirstName()
-                                            if (SessionManager.getUserLastName().isNotBlank()) aLastName = SessionManager.getUserLastName()
-                                        }
-                                        if (aFirstName.isBlank() && aLastName.isBlank() && targetEmail.isNotBlank() && !targetEmail.contains("@privaterelay") && !targetEmail.endsWith("@apple.id")) {
-                                            val prefix = targetEmail.substringBefore("@")
-                                            val parts = prefix.replace(".", " ").replace("_", " ").replace("-", " ").split(" ").filter { it.isNotBlank() }
-                                            if (parts.size >= 2) {
-                                                aFirstName = parts.first().replaceFirstChar { it.uppercase() }
-                                                aLastName = parts.drop(1).joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                                            } else if (parts.size == 1) {
-                                                aFirstName = parts.first().replaceFirstChar { it.uppercase() }
-                                                aLastName = ""
-                                            }
+                                        if (aFirstName.isBlank() || aLastName.isBlank()) {
+                                            val (sFirst, sLast) = SmartNameExtractor.extract(
+                                                email = targetEmail,
+                                                hintFirstName = SessionManager.getUserFirstName(),
+                                                hintLastName = SessionManager.getUserLastName()
+                                            )
+                                            if (aFirstName.isBlank() && sFirst.isNotBlank()) aFirstName = sFirst
+                                            if (aLastName.isBlank() && sLast.isNotBlank()) aLastName = sLast
                                         }
                                         val existingProvider = SupabaseNetwork.getUserProvider(targetEmail) ?: authPolicy.getRegisteredProvider(targetEmail)
                                         if (existingProvider == IdentityProvider.EmailPassword) {

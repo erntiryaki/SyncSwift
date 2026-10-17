@@ -7,6 +7,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 actual object SupabaseNetwork {
+    private val effectiveKey: String get() = SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.ifBlank { SyncSwiftConfig.SUPABASE_ANON_KEY }
+
     actual suspend fun registerUserInSupabase(
         email: String,
         firstName: String,
@@ -28,8 +30,8 @@ actual object SupabaseNetwork {
             val url = URL("${SyncSwiftConfig.SUPABASE_URL}/auth/v1/admin/users")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
-            conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             conn.setRequestProperty("Content-Type", "application/json")
             conn.doOutput = true
 
@@ -77,8 +79,8 @@ actual object SupabaseNetwork {
                 patchConn.requestMethod = "PATCH"
                 patchConn.connectTimeout = 8000
                 patchConn.readTimeout = 8000
-                patchConn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                patchConn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                patchConn.setRequestProperty("apikey", effectiveKey)
+                patchConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
                 patchConn.setRequestProperty("Content-Type", "application/json")
                 patchConn.setRequestProperty("Prefer", "return=representation")
                 patchConn.doOutput = true
@@ -116,8 +118,8 @@ actual object SupabaseNetwork {
                     postConn.requestMethod = "POST"
                     postConn.connectTimeout = 8000
                     postConn.readTimeout = 8000
-                    postConn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                    postConn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                    postConn.setRequestProperty("apikey", effectiveKey)
+                    postConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
                     postConn.setRequestProperty("Content-Type", "application/json")
                     postConn.doOutput = true
                     postConn.outputStream.use { os ->
@@ -138,7 +140,7 @@ actual object SupabaseNetwork {
     }
 
     actual suspend fun checkUserExists(email: String): Boolean = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.isBlank()) return@withContext false
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
             val cleanEmail = email.lowercase().trim()
             val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=id")
@@ -146,8 +148,8 @@ actual object SupabaseNetwork {
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code in 200..299) {
@@ -164,7 +166,7 @@ actual object SupabaseNetwork {
     }
 
     actual suspend fun getUserProvider(email: String): IdentityProvider? = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.isBlank()) return@withContext null
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext null
         try {
             val cleanEmail = email.lowercase().trim()
             val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=id,auth_provider")
@@ -172,8 +174,8 @@ actual object SupabaseNetwork {
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code in 200..299) {
@@ -227,8 +229,8 @@ actual object SupabaseNetwork {
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code in 200..299) {
@@ -243,7 +245,7 @@ actual object SupabaseNetwork {
     }
 
     actual suspend fun fetchUserProfile(email: String): UserProfileData? = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.isBlank()) return@withContext null
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext null
         try {
             val cleanEmail = email.lowercase().trim()
             val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/profiles?email=eq.$cleanEmail&select=email,first_name,last_name,auth_provider")
@@ -251,8 +253,8 @@ actual object SupabaseNetwork {
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code in 200..299) {
@@ -282,8 +284,8 @@ actual object SupabaseNetwork {
                             userConn.requestMethod = "GET"
                             userConn.connectTimeout = 8000
                             userConn.readTimeout = 8000
-                            userConn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                            userConn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                            userConn.setRequestProperty("apikey", effectiveKey)
+                            userConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
                             userConn.setRequestProperty("Accept", "application/json")
                             if (userConn.responseCode in 200..299) {
                                 val userBody = userConn.inputStream.bufferedReader().readText()
@@ -320,7 +322,7 @@ actual object SupabaseNetwork {
     }
 
     actual suspend fun updateUserPassword(email: String, newPassword: String): Boolean = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.isBlank()) return@withContext false
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
             val cleanEmail = email.lowercase().trim()
             val userId = getUserIdFromProfile(cleanEmail)
@@ -333,8 +335,8 @@ actual object SupabaseNetwork {
             conn.requestMethod = "PUT"
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
-            conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             conn.setRequestProperty("Content-Type", "application/json")
             conn.doOutput = true
             val payload = """{"password":"$newPassword"}"""
@@ -355,7 +357,7 @@ actual object SupabaseNetwork {
         firstName: String,
         lastName: String
     ): Boolean = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.isBlank()) return@withContext false
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
             val cleanOld = oldEmail.lowercase().trim()
             val cleanNew = newEmail.lowercase().trim()
@@ -371,8 +373,8 @@ actual object SupabaseNetwork {
             patchConn.requestMethod = "PATCH"
             patchConn.connectTimeout = 8000
             patchConn.readTimeout = 8000
-            patchConn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            patchConn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            patchConn.setRequestProperty("apikey", effectiveKey)
+            patchConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             patchConn.setRequestProperty("Content-Type", "application/json")
             patchConn.setRequestProperty("Prefer", "return=representation")
             patchConn.doOutput = true
@@ -391,8 +393,8 @@ actual object SupabaseNetwork {
                     patchIdConn.requestMethod = "PATCH"
                     patchIdConn.connectTimeout = 8000
                     patchIdConn.readTimeout = 8000
-                    patchIdConn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                    patchIdConn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                    patchIdConn.setRequestProperty("apikey", effectiveKey)
+                    patchIdConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
                     patchIdConn.setRequestProperty("Content-Type", "application/json")
                     patchIdConn.setRequestProperty("Prefer", "return=representation")
                     patchIdConn.doOutput = true
@@ -414,8 +416,8 @@ actual object SupabaseNetwork {
                     authConn.requestMethod = "PUT"
                     authConn.connectTimeout = 10000
                     authConn.readTimeout = 10000
-                    authConn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                    authConn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                    authConn.setRequestProperty("apikey", effectiveKey)
+                    authConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
                     authConn.setRequestProperty("Content-Type", "application/json")
                     authConn.doOutput = true
 
@@ -458,7 +460,7 @@ actual object SupabaseNetwork {
     }
 
     actual suspend fun deleteUserAccount(email: String): Boolean = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.isBlank()) return@withContext false
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
             val cleanEmail = email.lowercase().trim()
             val userId = getUserIdFromProfile(cleanEmail)
@@ -469,8 +471,8 @@ actual object SupabaseNetwork {
                 conn.requestMethod = "DELETE"
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
-                conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                conn.setRequestProperty("apikey", effectiveKey)
+                conn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
                 val responseCode = conn.responseCode
                 authDeleted = responseCode in 200..299
                 Log.d("SupabaseNetwork", "deleteUserAccount auth.users code=$responseCode")
@@ -482,8 +484,8 @@ actual object SupabaseNetwork {
             profConn.requestMethod = "DELETE"
             profConn.connectTimeout = 8000
             profConn.readTimeout = 8000
-            profConn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-            profConn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+            profConn.setRequestProperty("apikey", effectiveKey)
+            profConn.setRequestProperty("Authorization", "Bearer ${effectiveKey}")
             val profCode = profConn.responseCode
             Log.d("SupabaseNetwork", "deleteUserAccount profiles table code=$profCode")
 

@@ -18,7 +18,6 @@ if (envFile.exists()) {
 
 val envSupabaseUrl = System.getenv("SUPABASE_URL") ?: envProps.getProperty("SUPABASE_URL", "")
 val envSupabaseAnonKey = System.getenv("SUPABASE_ANON_KEY") ?: envProps.getProperty("SUPABASE_ANON_KEY", "")
-val envSupabaseServiceRoleKey = System.getenv("SUPABASE_SERVICE_ROLE_KEY") ?: envProps.getProperty("SUPABASE_SERVICE_ROLE_KEY", "")
 val envGoogleWebClientId = System.getenv("GOOGLE_WEB_CLIENT_ID") ?: envProps.getProperty("GOOGLE_WEB_CLIENT_ID", "")
 val envBrevoApiKey = System.getenv("BREVO_API_KEY") ?: envProps.getProperty("BREVO_API_KEY", "")
 val envBrevoSenderEmail = System.getenv("BREVO_SENDER_EMAIL") ?: envProps.getProperty("BREVO_SENDER_EMAIL", "noreply@syncswift.net")
@@ -28,6 +27,10 @@ val envAwsSesRegion = System.getenv("AWS_SES_REGION") ?: envProps.getProperty("A
 val envAwsSesSenderEmail = System.getenv("AWS_SES_SENDER_EMAIL") ?: envProps.getProperty("AWS_SES_SENDER_EMAIL", "noreply@syncswift.net")
 val envRevenueCatApiKey = System.getenv("REVENUECAT_API_KEY") ?: envProps.getProperty("REVENUECAT_API_KEY", "")
 val envAdmobBannerId = System.getenv("ADMOB_BANNER_ID") ?: envProps.getProperty("ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111")
+val envKeystoreFile = System.getenv("KEYSTORE_FILE") ?: envProps.getProperty("KEYSTORE_FILE", "syncdrop_release.jks")
+val envKeystorePassword = System.getenv("KEYSTORE_PASSWORD") ?: envProps.getProperty("KEYSTORE_PASSWORD", "")
+val envKeyAlias = System.getenv("KEY_ALIAS") ?: envProps.getProperty("KEY_ALIAS", "syncdrop_key")
+val envKeyPassword = System.getenv("KEY_PASSWORD") ?: envProps.getProperty("KEY_PASSWORD", "")
 
 kotlin {
     androidTarget { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
@@ -77,7 +80,7 @@ android {
 
         buildConfigField("String", "SUPABASE_URL", "\"$envSupabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$envSupabaseAnonKey\"")
-        buildConfigField("String", "SUPABASE_SERVICE_ROLE_KEY", "\"$envSupabaseServiceRoleKey\"")
+        buildConfigField("String", "SUPABASE_SERVICE_ROLE_KEY", "\"\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$envGoogleWebClientId\"")
         buildConfigField("String", "BREVO_API_KEY", "\"$envBrevoApiKey\"")
         buildConfigField("String", "BREVO_SENDER_EMAIL", "\"$envBrevoSenderEmail\"")
@@ -94,10 +97,10 @@ android {
     }
     signingConfigs {
         create("release") {
-            storeFile = file("syncdrop_release.jks")
-            storePassword = "***REMOVED***"
-            keyAlias = "syncdrop_key"
-            keyPassword = "***REMOVED***"
+            storeFile = file(envKeystoreFile)
+            storePassword = envKeystorePassword
+            keyAlias = envKeyAlias
+            keyPassword = envKeyPassword
             enableV1Signing = true
             enableV2Signing = true
         }

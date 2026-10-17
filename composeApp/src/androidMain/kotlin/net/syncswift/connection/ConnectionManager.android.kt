@@ -313,8 +313,9 @@ actual object ConnectionManager {
                 conn.readTimeout = 5000
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                val key = SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.ifBlank { SyncSwiftConfig.SUPABASE_ANON_KEY }
+                conn.setRequestProperty("apikey", key)
+                conn.setRequestProperty("Authorization", "Bearer $key")
                 conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
 
                 val payload = JSONObject().apply {

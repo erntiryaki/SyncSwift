@@ -991,9 +991,9 @@ actual object TransferEngine {
                 requestMethod = "POST"
                 doOutput = true
                 connectTimeout = 30000
-                readTimeout = 60000
-                setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY)
-                setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY}")
+                val key = SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.ifBlank { SyncSwiftConfig.SUPABASE_ANON_KEY }
+                setRequestProperty("apikey", key)
+                setRequestProperty("Authorization", "Bearer $key")
                 setRequestProperty("Content-Type", if (mimeType.isNotBlank()) mimeType else "application/octet-stream")
                 setFixedLengthStreamingMode(fileBytes.size)
             }
