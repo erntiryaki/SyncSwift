@@ -45,6 +45,7 @@ actual object TransferEngine {
     private const val ACK: Byte = 6
     private const val RESP_ACCEPTED: Byte = 7
     private const val RESP_REJECTED: Byte = 8
+    private const val TYPE_REQUEST_FILE_DOWNLOAD: Byte = 9
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _transfers = MutableStateFlow<List<TransferItem>>(emptyList())
@@ -955,5 +956,177 @@ actual object TransferEngine {
                 "senderName" to selfName
             )
         )
+    }
+
+    fun downloadRemoteFile(
+        downloadUrl: String,
+        fileName: String,
+        fileSize: Long,
+        mimeType: String,
+        transferId: String,
+        senderName: String
+    ) {
+        scope.launch(Dispatchers.Default) {
+            try {
+                val item = TransferItem(
+                    id = transferId,
+                    fileName = fileName,
+                    fileSizeBytes = fileSize,
+                    mimeType = mimeType,
+                    bytesTransferred = 0,
+                    isSent = false,
+                    peerName = senderName,
+                    status = TransferStatus.IN_PROGRESS,
+                    timestamp = (NSDate().timeIntervalSince1970 * 1000).toLong()
+                )
+                recordTransfer(item)
+
+                val url = NSURL.URLWithString(downloadUrl) ?: run {
+                    updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                    return@launch
+                }
+
+                val task = NSURLSession.sharedSession.downloadTaskWithURL(url) { tempLocalUrl, resp, err ->
+                    if (err == null && tempLocalUrl != null) {
+                        val fileManager = NSFileManager.defaultManager
+                        val docDirs = fileManager.URLsForDirectory(NSDocumentDirectory, NSUserDomainMask)
+                        val docDir = docDirs.firstOrNull() as? NSURL
+                        if (docDir != null) {
+                            val destUrl = docDir.URLByAppendingPathComponent(fileName)
+                            if (destUrl != null) {
+                                fileManager.removeItemAtURL(destUrl, null)
+                                val moved = fileManager.moveItemAtURL(tempLocalUrl, destUrl, null)
+                                val destPath = destUrl.path
+                                if (moved && destPath != null) {
+                                    val finalSize = if (fileSize > 0) fileSize else (fileManager.attributesOfItemAtPath(destPath, null)?.get(NSFileSize) as? Long ?: 0L)
+                                    updateTransferProgress(transferId, finalSize, TransferStatus.COMPLETED, destPath)
+                                    dispatch_async(dispatch_get_main_queue()) {
+                                        val copy = currentAppCopy()
+                                        showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))
+                                    }
+                                    return@downloadTaskWithURL
+                                }
+                            }
+                        }
+                    }
+                    updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                }
+                task.resume()
+            } catch (_: Throwable) {
+                updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+            }
+        }
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    fun downloadStagedFile(
+        senderHost: String,
+        senderPort: Int,
+        senderName: String,
+        transferId: String,
+        fileName: String,
+        fileSize: Long,
+        mimeType: String
+    ) {
+        scope.launch(Dispatchers.Default) {
+            try {
+                if (senderHost.isBlank()) return@launch
+
+                val sock = socket(AF_INET, SOCK_STREAM, 0)
+                if (sock < 0) return@launch
+
+                memScoped {
+                    val timeout = alloc<timeval>()
+                    timeout.tv_sec = 20
+                    timeout.tv_usec = 0
+                    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                    val nosigpipe = alloc<IntVar>()
+                    nosigpipe.value = 1
+                    setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, nosigpipe.ptr, sizeOf<IntVar>().convert())
+
+                    val serverAddr = alloc<sockaddr_in>()
+                    serverAddr.sin_family = AF_INET.convert()
+                    serverAddr.sin_port = htons(senderPort.toUShort())
+                    val parsedIp = parseIpv4(senderHost) ?: run {
+                        close(sock)
+                        return@memScoped
+                    }
+                    serverAddr.sin_addr.s_addr = parsedIp.convert()
+
+                    if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
+                        close(sock)
+                        return@memScoped
+                    }
+
+                    val idBytes = writeUTF(transferId)
+                    val modelBytes = writeUTF(UIDevice.currentDevice.name)
+                    val reqPacket = ByteArray(2 + idBytes.size + modelBytes.size)
+                    var idx = 0
+                    reqPacket[idx++] = PROTOCOL_VERSION
+                    reqPacket[idx++] = TYPE_REQUEST_FILE_DOWNLOAD
+                    idBytes.copyInto(reqPacket, idx); idx += idBytes.size
+                    modelBytes.copyInto(reqPacket, idx); idx += modelBytes.size
+
+                    val sent = reqPacket.usePinned { pinned ->
+                        send(sock, pinned.addressOf(0), reqPacket.size.convert(), 0)
+                    }
+                    if (sent <= 0) {
+                        close(sock)
+                        return@memScoped
+                    }
+
+                    val resp = ByteArray(1)
+                    val r = resp.usePinned { recv(sock, it.addressOf(0), 1.convert(), 0) }
+                    if (r <= 0 || resp[0] != RESP_ACCEPTED) {
+                        close(sock)
+                        return@memScoped
+                    }
+
+                    val sizeBuf = ByteArray(8)
+                    val rSize = sizeBuf.usePinned { recv(sock, it.addressOf(0), 8.convert(), 0) }
+                    val incomingSize = if (rSize == 8) {
+                        ((sizeBuf[0].toLong() and 0xFF) shl 56) or
+                        ((sizeBuf[1].toLong() and 0xFF) shl 48) or
+                        ((sizeBuf[2].toLong() and 0xFF) shl 40) or
+                        ((sizeBuf[3].toLong() and 0xFF) shl 32) or
+                        ((sizeBuf[4].toLong() and 0xFF) shl 24) or
+                        ((sizeBuf[5].toLong() and 0xFF) shl 16) or
+                        ((sizeBuf[6].toLong() and 0xFF) shl 8) or
+                        (sizeBuf[7].toLong() and 0xFF)
+                    } else fileSize
+
+                    val finalSize = if (incomingSize > 0) incomingSize else fileSize
+
+                    val item = TransferItem(
+                        id = transferId,
+                        fileName = fileName,
+                        fileSizeBytes = finalSize,
+                        mimeType = mimeType,
+                        bytesTransferred = 0,
+                        isSent = false,
+                        peerName = senderName,
+                        status = TransferStatus.IN_PROGRESS,
+                        timestamp = (NSDate().timeIntervalSince1970 * 1000).toLong()
+                    )
+                    recordTransfer(item)
+
+                    val savedPath = saveIncomingStream(fileName, finalSize, transferId, sock)
+                    close(sock)
+
+                    if (savedPath != null) {
+                        updateTransferProgress(transferId, finalSize, TransferStatus.COMPLETED, savedPath)
+                        dispatch_async(dispatch_get_main_queue()) {
+                            val copy = currentAppCopy()
+                            showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))
+                        }
+                    } else {
+                        updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                    }
+                }
+            } catch (_: Exception) {
+                updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+            }
+        }
     }
 }

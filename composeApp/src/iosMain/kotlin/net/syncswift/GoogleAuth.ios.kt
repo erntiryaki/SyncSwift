@@ -14,6 +14,7 @@ import platform.AuthenticationServices.ASWebAuthenticationSession
 import platform.Foundation.*
 import platform.UIKit.UIApplication
 import platform.UIKit.UIWindow
+import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 import kotlin.coroutines.resume
