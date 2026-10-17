@@ -236,6 +236,8 @@ val ItalianCopy = Copy().apply {
     connecting = "Connessione in corso..."
     offlineSleeping = "Non in linea / Sospeso"
     invalidPairingCode = "Codice a 6 cifre non valido o scaduto."
+    codeExpiredOrAlreadyUsed = "Questo codice QR o a 6 cifre è scaduto o è già stato utilizzato. Genera un nuovo codice."
+    refreshCode = "Aggiorna"
     outsideLocalNetwork = "Fuori dalla rete locale"
 
     emailVerifiedBadge = "Email verificata"

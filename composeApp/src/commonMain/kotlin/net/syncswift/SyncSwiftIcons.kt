@@ -1424,5 +1424,34 @@ fun OpenExternalIcon(modifier: Modifier = Modifier, color: Color = Color.White) 
     drawPath(arrowHead, color = color, style = Stroke(width = sw, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
 }
 
+@Composable
+fun RefreshIcon(modifier: Modifier = Modifier, color: Color = Cloud) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.085f
+    val r = size.minDimension * 0.34f
+    val cx = w * 0.5f
+    val cy = h * 0.5f
 
+    // Arc from 50 to 330 degrees (leaving a gap at top-right for arrow)
+    drawArc(
+        color = color,
+        startAngle = 50f,
+        sweepAngle = 280f,
+        useCenter = false,
+        topLeft = Offset(cx - r, cy - r),
+        size = Size(r * 2, r * 2),
+        style = Stroke(width = sw, cap = StrokeCap.Round)
+    )
 
+    // Arrow pointing into the circle at the end of the arc (top-right)
+    val headSize = size.minDimension * 0.16f
+    val arrowTipX = cx + r * 0.65f
+    val arrowTipY = cy - r * 0.75f
+    val arrow = Path().apply {
+        moveTo(arrowTipX - headSize, arrowTipY - headSize * 0.1f)
+        lineTo(arrowTipX + headSize * 0.2f, arrowTipY)
+        lineTo(arrowTipX - headSize * 0.1f, arrowTipY + headSize)
+    }
+    drawPath(arrow, color = color, style = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+}

@@ -34,9 +34,29 @@ private class AppleSignInHandler(
             val userIdentifier = credential.user
             val idTokenData = credential.identityToken
             val idToken = idTokenData?.let { NSString.create(it, NSUTF8StringEncoding).toString() } ?: userIdentifier
-            val email = credential.email ?: ""
-            val givenName = credential.fullName?.givenName
-            val familyName = credential.fullName?.familyName
+            val jwtEmail = decodeAppleJwtEmail(idToken)
+            val defaults = platform.Foundation.NSUserDefaults.standardUserDefaults
+
+            var email = credential.email?.ifBlank { null }
+                ?: jwtEmail?.ifBlank { null }
+                ?: defaults.stringForKey("apple_email_$userIdentifier")?.ifBlank { null }
+                ?: ""
+
+            if (email.isNotBlank()) {
+                defaults.setObject(email, "apple_email_$userIdentifier")
+            }
+
+            val givenName = credential.fullName?.givenName?.ifBlank { null }
+                ?: defaults.stringForKey("apple_given_name_$userIdentifier")?.ifBlank { null }
+            val familyName = credential.fullName?.familyName?.ifBlank { null }
+                ?: defaults.stringForKey("apple_family_name_$userIdentifier")?.ifBlank { null }
+
+            if (!credential.fullName?.givenName.isNullOrBlank()) {
+                defaults.setObject(credential.fullName!!.givenName, "apple_given_name_$userIdentifier")
+            }
+            if (!credential.fullName?.familyName.isNullOrBlank()) {
+                defaults.setObject(credential.fullName!!.familyName, "apple_family_name_$userIdentifier")
+            }
 
             onSuccess(
                 AppleUserData(
@@ -49,6 +69,23 @@ private class AppleSignInHandler(
             )
         } else {
             onError("No Apple ID credentials received.")
+        }
+    }
+
+    private fun decodeAppleJwtEmail(idToken: String): String? {
+        try {
+            val parts = idToken.split(".")
+            if (parts.size < 2) return null
+            var base64 = parts[1].replace("-", "+").replace("_", "/")
+            while (base64.length % 4 != 0) {
+                base64 += "="
+            }
+            val nsData = platform.Foundation.NSData.create(base64Encoding = base64) ?: return null
+            val json = platform.Foundation.NSString.create(nsData, platform.Foundation.NSUTF8StringEncoding)?.toString() ?: return null
+            val match = Regex(""""email"\s*:\s*"([^"]+)"""").find(json)
+            return match?.groupValues?.get(1)
+        } catch (_: Exception) {
+            return null
         }
     }
 

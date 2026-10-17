@@ -316,7 +316,12 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     }
                                 },
                                 onAppleSignIn = { appleUser ->
-                                    val targetEmail = if (appleUser.email.isNotBlank()) appleUser.email.trim().lowercase() else "${appleUser.userIdentifier}@privaterelay.appleid.com"
+                                    val targetEmail = when {
+                                        appleUser.email.isNotBlank() && !appleUser.email.contains("@privaterelay") -> appleUser.email.trim().lowercase()
+                                        appleUser.email.isNotBlank() -> appleUser.email.trim().lowercase()
+                                        !SessionManager.getLoggedInEmail().isNullOrBlank() -> SessionManager.getLoggedInEmail()!!.trim().lowercase()
+                                        else -> "${appleUser.userIdentifier}@apple.id"
+                                    }
                                     var aFirstName = appleUser.givenName ?: ""
                                     var aLastName = appleUser.familyName ?: ""
                                     scope.launch {
@@ -325,6 +330,17 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             if (existingProfile != null) {
                                                 if (existingProfile.firstName.isNotBlank()) aFirstName = existingProfile.firstName
                                                 if (existingProfile.lastName.isNotBlank()) aLastName = existingProfile.lastName
+                                            }
+                                        }
+                                        if (aFirstName.isBlank() && aLastName.isBlank()) {
+                                            val cleanName = targetEmail.substringBefore("@").replace(".", " ").replace("_", " ").trim()
+                                            val words = cleanName.split(" ").filter { it.isNotBlank() }
+                                            if (words.size >= 2) {
+                                                aFirstName = words[0].replaceFirstChar { it.uppercase() }
+                                                aLastName = words[1].replaceFirstChar { it.uppercase() }
+                                            } else if (words.isNotEmpty()) {
+                                                aFirstName = words[0].replaceFirstChar { it.uppercase() }
+                                                aLastName = "Apple User"
                                             }
                                         }
                                         val existingProvider = SupabaseNetwork.getUserProvider(targetEmail) ?: authPolicy.getRegisteredProvider(targetEmail)

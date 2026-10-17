@@ -236,6 +236,8 @@ val ArabicCopy = Copy().apply {
     connecting = "جارٍ الاتصال..."
     offlineSleeping = "غير متصل / في وضع السكون"
     invalidPairingCode = "رمز مكون من 6 أرقام غير صالح أو منتهي الصلاحية."
+    codeExpiredOrAlreadyUsed = "انتهت صلاحية رمز الاستجابة السريعة (QR) أو الرمز المكون من 6 أرقام، أو تم استخدامه بالفعل. يُرجى إنشاء رمز جديد."
+    refreshCode = "تحديث"
     outsideLocalNetwork = "خارج الشبكة المحلية"
 
     emailVerifiedBadge = "تم تأكيد البريد الإلكتروني"

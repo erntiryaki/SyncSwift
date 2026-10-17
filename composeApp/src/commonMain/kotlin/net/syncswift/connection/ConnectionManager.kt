@@ -14,7 +14,8 @@ enum class PairResult {
     ACCEPTED,
     REJECTED,
     UNAVAILABLE,
-    PENDING_APPROVAL
+    PENDING_APPROVAL,
+    EXPIRED_OR_USED
 }
 
 data class IncomingPairRequest(

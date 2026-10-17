@@ -287,6 +287,8 @@ class Copy {
     var connecting: String = "Connecting..."
     var offlineSleeping: String = "Offline / Sleeping"
     var invalidPairingCode: String = "Invalid or expired 6-digit code."
+    var codeExpiredOrAlreadyUsed: String = "This QR code or 6-digit code has expired or has already been used. Please generate a new code."
+    var refreshCode: String = "Refresh"
     var outsideLocalNetwork: String = "Outside Local Network"
     var noRemoteConnectedDevices: String = "No remote connected devices yet."
 

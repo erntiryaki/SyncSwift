@@ -46,34 +46,65 @@ fun ConnectDesktopScreen(
                 clean.contains("code=") -> clean.substringAfter("code=", "").substringBefore("&").replace(" ", "").trim()
                 clean.length == 6 && clean.all { it.isDigit() } -> clean
                 clean.length == 7 && clean.contains(" ") -> clean.replace(" ", "")
+                clean.matches(Regex(""".*\b(\d{3}\s?\d{3})\b.*""")) -> {
+                    Regex("""\b(\d{3}\s?\d{3})\b""").find(clean)?.groupValues?.get(1)?.replace(" ", "")
+                }
                 else -> null
             }
+
+            val urlWithoutScheme = clean.removePrefix("syncswift://").removePrefix("syncdrop://")
+            val host = when {
+                clean.contains("host=") -> clean.substringAfter("host=", "").substringBefore("&").trim()
+                urlWithoutScheme.contains(":") -> urlWithoutScheme.substringBefore(":").trim()
+                clean.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$""")) -> clean
+                else -> ""
+            }
+            val port = when {
+                clean.contains("port=") -> clean.substringAfter("port=", "").substringBefore("&").toIntOrNull() ?: 52424
+                urlWithoutScheme.contains(":") -> urlWithoutScheme.substringAfter(":").substringBefore("/").toIntOrNull() ?: 52424
+                else -> 52424
+            }
+            val name = when {
+                clean.contains("name=") -> clean.substringAfter("name=", "").substringBefore("&").replace("%20", " ").trim()
+                else -> "Desktop"
+            }
+            val os = when {
+                clean.contains("os=") -> clean.substringAfter("os=", "").substringBefore("&").trim()
+                else -> "Desktop"
+            }
+
+            fun attemptDirectLocalPairing() {
+                if (host.isNotBlank() && host != "127.0.0.1" && host != "0.0.0.0") {
+                    val dev = net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(host, port, name, os)
+                    ConnectionManager.requestPairing(dev) { pairRes ->
+                        isConnecting = false
+                        if (pairRes == PairResult.ACCEPTED) {
+                            showNativeToast(copy.connectionAccepted)
+                            onDismiss()
+                        } else {
+                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                        }
+                    }
+                } else {
+                    isConnecting = false
+                    showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                }
+            }
+
             if (extractedCode != null && extractedCode.length == 6 && extractedCode.all { it.isDigit() }) {
                 isConnecting = true
                 ConnectionManager.connectViaPairingCode(extractedCode) { res ->
-                    isConnecting = false
                     if (res == PairResult.ACCEPTED) {
+                        isConnecting = false
                         showNativeToast(copy.connectionAccepted)
                         onDismiss()
                     } else {
-                        showNativeToast(copy.invalidPairingCode)
+                        attemptDirectLocalPairing()
                     }
                 }
-            } else if (clean.startsWith("syncswift://pair") || clean.startsWith("syncdrop://pair") || clean.contains(":")) {
-                val host = clean.substringAfter("host=", "").substringBefore("&")
-                    .ifBlank { clean.substringBefore(":").removePrefix("syncswift://").removePrefix("syncdrop://") }
-                val port = clean.substringAfter("port=", "").substringBefore("&")
-                    .ifBlank { clean.substringAfter(":", "52424") }.toIntOrNull() ?: 52424
-                if (host.isNotBlank()) {
-                    val dev = net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(host, port, "Desktop", "Desktop")
-                    ConnectionManager.markDeviceConnected("$host:$port")
-                    showNativeToast(copy.connectionAccepted)
-                    onDismiss()
-                } else {
-                    showNativeToast(copy.invalidPairingCode)
-                }
             } else {
-                showNativeToast(copy.invalidPairingCode)
+                isConnecting = true
+                attemptDirectLocalPairing()
             }
         },
         onError = { err ->
@@ -306,8 +337,10 @@ fun ConnectDesktopScreen(
                                                 desktopCodeInput = ""
                                                 showNativeToast(copy.connectionAccepted)
                                                 onDismiss()
+                                            } else if (res == PairResult.EXPIRED_OR_USED) {
+                                                showNativeToast(copy.codeExpiredOrAlreadyUsed)
                                             } else {
-                                                showNativeToast(copy.invalidPairingCode)
+                                                showNativeToast(copy.codeExpiredOrAlreadyUsed)
                                             }
                                         }
                                     }

@@ -5,13 +5,19 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import net.syncswift.PlatformConfig
 import net.syncswift.connection.ConnectionManager
 import net.syncswift.connection.IncomingPairRequest
+import net.syncswift.connection.IncomingTransferRequest
+import net.syncswift.connection.OutgoingStatusManager
+import net.syncswift.connection.OutgoingStatusType
+import net.syncswift.connection.OutgoingStep
 import net.syncswift.currentAppCopy
 import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.showNativeToast
 import platform.Foundation.*
+import platform.UIKit.UIDevice
 import platform.UIKit.UIPasteboard
 import platform.darwin.*
 import platform.posix.*
@@ -30,9 +36,12 @@ actual object TransferEngine {
         if (b0 > 255u || b1 > 255u || b2 > 255u || b3 > 255u) return null
         return b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
     }
+
     private const val PROTOCOL_VERSION: Byte = 1
     private const val TYPE_CLIPBOARD: Byte = 1
+    private const val TYPE_FILE: Byte = 2
     private const val TYPE_PAIR_REQUEST: Byte = 3
+    private const val TYPE_FILE_HANDSHAKE: Byte = 5
     private const val ACK: Byte = 6
     private const val RESP_ACCEPTED: Byte = 7
     private const val RESP_REJECTED: Byte = 8
@@ -67,9 +76,13 @@ actual object TransferEngine {
     }
 
     fun startForegroundServer() {
-        if (isListening) return
+        if (isListening && serverSocketFd >= 0) return
         scope.launch(Dispatchers.Default) {
             try {
+                if (serverSocketFd >= 0) {
+                    close(serverSocketFd)
+                    serverSocketFd = -1
+                }
                 serverSocketFd = socket(AF_INET, SOCK_STREAM, 0)
                 if (serverSocketFd < 0) return@launch
 
@@ -77,6 +90,7 @@ actual object TransferEngine {
                     val opt = alloc<IntVar>()
                     opt.value = 1
                     setsockopt(serverSocketFd, SOL_SOCKET, SO_REUSEADDR, opt.ptr, sizeOf<IntVar>().convert())
+                    setsockopt(serverSocketFd, SOL_SOCKET, SO_REUSEPORT, opt.ptr, sizeOf<IntVar>().convert())
 
                     val serverAddr = alloc<sockaddr_in>()
                     serverAddr.sin_family = AF_INET.convert()
@@ -85,18 +99,20 @@ actual object TransferEngine {
 
                     if (bind(serverSocketFd, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) < 0) {
                         close(serverSocketFd)
+                        serverSocketFd = -1
                         return@launch
                     }
 
                     if (listen(serverSocketFd, 10) < 0) {
                         close(serverSocketFd)
+                        serverSocketFd = -1
                         return@launch
                     }
 
                     isListening = true
                     println("[SyncSwift iOS] TransferEngine listening on port 52424")
 
-                    while (isListening) {
+                    while (isListening && serverSocketFd >= 0) {
                         val clientAddr = alloc<sockaddr_in>()
                         val clientLen = alloc<socklen_tVar>()
                         clientLen.value = sizeOf<sockaddr_in>().convert()
@@ -148,12 +164,40 @@ actual object TransferEngine {
     }
 
     @OptIn(ExperimentalForeignApi::class)
+    private fun readLong(sock: Int): Long? {
+        val buf = ByteArray(8)
+        if (!readExact(sock, buf, 0, 8)) return null
+        var value = 0L
+        for (i in 0 until 8) {
+            value = (value shl 8) or (buf[i].toLong() and 0xFFL)
+        }
+        return value
+    }
+
+    private fun writeLong(value: Long): ByteArray {
+        val buf = ByteArray(8)
+        for (i in 0 until 8) {
+            buf[i] = ((value ushr ((7 - i) * 8)) and 0xFF).toByte()
+        }
+        return buf
+    }
+
+    private fun writeUTF(str: String): ByteArray {
+        val bytes = str.encodeToByteArray()
+        val buf = ByteArray(2 + bytes.size)
+        buf[0] = ((bytes.size shr 8) and 0xFF).toByte()
+        buf[1] = (bytes.size and 0xFF).toByte()
+        bytes.copyInto(buf, 2)
+        return buf
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
     private fun handleIncomingClient(clientSock: Int) {
         scope.launch(Dispatchers.Default) {
             try {
                 memScoped {
                     val tv = alloc<timeval>()
-                    tv.tv_sec = 35
+                    tv.tv_sec = 40
                     tv.tv_usec = 0
                     setsockopt(clientSock, SOL_SOCKET, SO_RCVTIMEO, tv.ptr, sizeOf<timeval>().convert())
 
@@ -199,9 +243,114 @@ actual object TransferEngine {
                             }
                         }
 
+                        TYPE_FILE_HANDSHAKE -> {
+                            val senderName = readUTF(clientSock) ?: return@memScoped
+                            val fileName = readUTF(clientSock) ?: return@memScoped
+                            val fileSize = readLong(clientSock) ?: return@memScoped
+                            val mimeType = readUTF(clientSock) ?: "application/octet-stream"
+
+                            println("[SyncSwift iOS] Incoming file request: $fileName ($fileSize bytes) from $senderName")
+
+                            val transferRequest = IncomingTransferRequest(
+                                senderName = senderName,
+                                fileName = fileName,
+                                fileSize = fileSize,
+                                mimeType = mimeType
+                            )
+
+                            ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
+
+                            val accepted = try {
+                                withTimeout(35000) {
+                                    transferRequest.deferredResponse.await()
+                                }
+                            } catch (e: Exception) {
+                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                false
+                            }
+
+                            if (!accepted) {
+                                val respByte = byteArrayOf(RESP_REJECTED)
+                                respByte.usePinned { pinned ->
+                                    send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                }
+                                return@memScoped
+                            }
+
+                            // Receiver accepted -> send acceptance to start streaming
+                            val respAcc = byteArrayOf(RESP_ACCEPTED)
+                            respAcc.usePinned { pinned ->
+                                send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                            }
+
+                            val transferId = NSUUID().UUIDString
+                            val item = TransferItem(
+                                id = transferId,
+                                fileName = fileName,
+                                fileSizeBytes = fileSize,
+                                mimeType = mimeType,
+                                bytesTransferred = 0,
+                                isSent = false,
+                                peerName = senderName,
+                                status = TransferStatus.IN_PROGRESS,
+                                timestamp = (NSDate().timeIntervalSince1970 * 1000).toLong()
+                            )
+                            recordTransfer(item)
+
+                            val savedPath = saveIncomingStream(fileName, fileSize, transferId, clientSock)
+                            if (savedPath != null) {
+                                updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED, savedPath)
+                                val ackByte = byteArrayOf(ACK)
+                                ackByte.usePinned { pinned ->
+                                    send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                }
+                                dispatch_async(dispatch_get_main_queue()) {
+                                    val copy = currentAppCopy()
+                                    showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))
+                                }
+                            } else {
+                                updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                            }
+                        }
+
+                        TYPE_FILE -> {
+                            val senderName = readUTF(clientSock) ?: return@memScoped
+                            val fileName = readUTF(clientSock) ?: return@memScoped
+                            val fileSize = readLong(clientSock) ?: return@memScoped
+                            val mimeType = readUTF(clientSock) ?: "application/octet-stream"
+
+                            val transferId = NSUUID().UUIDString
+                            val item = TransferItem(
+                                id = transferId,
+                                fileName = fileName,
+                                fileSizeBytes = fileSize,
+                                mimeType = mimeType,
+                                bytesTransferred = 0,
+                                isSent = false,
+                                peerName = senderName,
+                                status = TransferStatus.IN_PROGRESS,
+                                timestamp = (NSDate().timeIntervalSince1970 * 1000).toLong()
+                            )
+                            recordTransfer(item)
+
+                            val savedPath = saveIncomingStream(fileName, fileSize, transferId, clientSock)
+                            if (savedPath != null) {
+                                updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED, savedPath)
+                                val ackByte = byteArrayOf(ACK)
+                                ackByte.usePinned { pinned ->
+                                    send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                }
+                                dispatch_async(dispatch_get_main_queue()) {
+                                    val copy = currentAppCopy()
+                                    showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))
+                                }
+                            } else {
+                                updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                            }
+                        }
+
                         TYPE_CLIPBOARD -> {
                             val str1 = readUTF(clientSock) ?: return@memScoped
-                            // Check if sender also sent text (when str1 is senderName)
                             val str2 = readUTF(clientSock)
                             val receivedText = str2 ?: str1
 
@@ -223,6 +372,39 @@ actual object TransferEngine {
             } finally {
                 close(clientSock)
             }
+        }
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    private fun saveIncomingStream(fileName: String, fileSize: Long, transferId: String, sock: Int): String? {
+        val fileManager = NSFileManager.defaultManager
+        val docDirs = fileManager.URLsForDirectory(NSDocumentDirectory, NSUserDomainMask)
+        val docDir = docDirs.firstOrNull() as? NSURL ?: return null
+        val targetUrl = docDir.URLByAppendingPathComponent(fileName) ?: return null
+        val targetPath = targetUrl.path ?: return null
+
+        val filePtr = fopen(targetPath, "wb") ?: return null
+        try {
+            val chunk = ByteArray(64 * 1024)
+            var totalRead = 0L
+            while (totalRead < fileSize) {
+                val toRead = minOf(chunk.size.toLong(), fileSize - totalRead).toInt()
+                val r = chunk.usePinned { pinned ->
+                    recv(sock, pinned.addressOf(0), toRead.convert(), 0)
+                }
+                if (r <= 0) break
+                chunk.usePinned { pinned ->
+                    fwrite(pinned.addressOf(0), 1.convert(), r.convert(), filePtr)
+                }
+                totalRead += r.toLong()
+                updateTransferProgress(transferId, totalRead, TransferStatus.IN_PROGRESS)
+            }
+            fflush(filePtr)
+            return if (totalRead >= fileSize) targetPath else null
+        } catch (_: Exception) {
+            return null
+        } finally {
+            fclose(filePtr)
         }
     }
 
@@ -251,6 +433,7 @@ actual object TransferEngine {
         recordTransfer(item)
     }
 
+    @OptIn(ExperimentalForeignApi::class)
     actual fun sendFile(
         targetHost: String,
         targetPort: Int,
@@ -261,7 +444,297 @@ actual object TransferEngine {
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        onError("iOS file sending not supported yet")
+        val copy = currentAppCopy()
+        val transferId = NSUUID().UUIDString
+        val item = TransferItem(
+            id = transferId,
+            fileName = fileName,
+            fileSizeBytes = fileBytes.size.toLong(),
+            mimeType = mimeType,
+            bytesTransferred = 0,
+            isSent = true,
+            peerName = targetDeviceName,
+            status = TransferStatus.PENDING,
+            timestamp = (NSDate().timeIntervalSince1970 * 1000).toLong()
+        )
+        recordTransfer(item)
+
+        var activeSocket: Int = -1
+        val cancelTransfer: () -> Unit = {
+            if (activeSocket >= 0) {
+                close(activeSocket)
+                activeSocket = -1
+            }
+            updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
+        }
+
+        OutgoingStatusManager.show(
+            type = OutgoingStatusType.FILE,
+            deviceName = targetDeviceName,
+            fileName = fileName,
+            totalBytes = fileBytes.size.toLong(),
+            step = OutgoingStep.WAITING_APPROVAL,
+            message = copy.waitingForRecipientApproval,
+            onCancel = cancelTransfer
+        )
+
+        scope.launch(Dispatchers.Default) {
+            val self = DeviceDiscoveryManager.getSelfDevice()
+            val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+
+            // 1. Direct Socket Transfer
+            if (targetHost.isNotBlank() && targetHost != "127.0.0.1" && !targetHost.startsWith("remote-")) {
+                val sock = socket(AF_INET, SOCK_STREAM, 0)
+                if (sock >= 0) {
+                    activeSocket = sock
+                    val directSuccess = memScoped {
+                        val timeout = alloc<timeval>()
+                        timeout.tv_sec = 40
+                        timeout.tv_usec = 0
+                        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+                        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
+
+                        val serverAddr = alloc<sockaddr_in>()
+                        serverAddr.sin_family = AF_INET.convert()
+                        serverAddr.sin_port = htons(targetPort.toUShort())
+                        val parsedIp = parseIpv4(targetHost)
+                        if (parsedIp == null) {
+                            close(sock)
+                            activeSocket = -1
+                            return@memScoped false
+                        }
+                        serverAddr.sin_addr.s_addr = parsedIp.convert()
+
+                        if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) != 0) {
+                            close(sock)
+                            activeSocket = -1
+                            return@memScoped false
+                        }
+
+                        // Send Handshake: PROTOCOL_VERSION (1), TYPE_FILE_HANDSHAKE (5), selfName, fileName, fileSize, mimeType
+                        val nameBytes = writeUTF(selfName)
+                        val fileBytesUtf = writeUTF(fileName)
+                        val sizeBytes = writeLong(fileBytes.size.toLong())
+                        val mimeBytes = writeUTF(mimeType)
+                        val handshakeSize = 2 + nameBytes.size + fileBytesUtf.size + sizeBytes.size + mimeBytes.size
+                        val handshake = ByteArray(handshakeSize)
+                        var hIdx = 0
+                        handshake[hIdx++] = PROTOCOL_VERSION
+                        handshake[hIdx++] = TYPE_FILE_HANDSHAKE
+                        nameBytes.copyInto(handshake, hIdx); hIdx += nameBytes.size
+                        fileBytesUtf.copyInto(handshake, hIdx); hIdx += fileBytesUtf.size
+                        sizeBytes.copyInto(handshake, hIdx); hIdx += sizeBytes.size
+                        mimeBytes.copyInto(handshake, hIdx); hIdx += mimeBytes.size
+
+                        val sent = handshake.usePinned { pinned ->
+                            send(sock, pinned.addressOf(0), handshake.size.convert(), 0)
+                        }
+                        if (sent <= 0) {
+                            close(sock)
+                            activeSocket = -1
+                            return@memScoped false
+                        }
+
+                        // Wait for recipient acceptance
+                        val respBuf = ByteArray(1)
+                        val r = respBuf.usePinned { pinned ->
+                            recv(sock, pinned.addressOf(0), 1.convert(), 0)
+                        }
+                        if (r <= 0 || respBuf[0] != RESP_ACCEPTED) {
+                            close(sock)
+                            activeSocket = -1
+                            updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                            OutgoingStatusManager.fail(copy.transferDeclined)
+                            withContext(Dispatchers.Main) {
+                                showNativeToast(copy.transferDeclined)
+                                onError(copy.transferDeclined)
+                            }
+                            return@memScoped true // Handled rejection
+                        }
+
+                        // Receiver accepted -> stream file bytes
+                        updateTransferProgress(transferId, 0, TransferStatus.IN_PROGRESS)
+                        OutgoingStatusManager.updateProgress(
+                            transferredBytes = 0L,
+                            totalBytes = fileBytes.size.toLong(),
+                            message = copy.transferringFile
+                        )
+                        val chunkSize = 64 * 1024
+                        var offset = 0
+                        while (offset < fileBytes.size) {
+                            val len = minOf(chunkSize, fileBytes.size - offset)
+                            val s = fileBytes.usePinned { pinned ->
+                                send(sock, pinned.addressOf(offset), len.convert(), 0)
+                            }
+                            if (s <= 0) break
+                            offset += s.toInt()
+                            updateTransferProgress(transferId, offset.toLong(), TransferStatus.IN_PROGRESS)
+                            OutgoingStatusManager.updateProgress(
+                                transferredBytes = offset.toLong(),
+                                totalBytes = fileBytes.size.toLong(),
+                                message = copy.transferringFile
+                            )
+                        }
+
+                        // Wait for completion ACK
+                        val ackBuf = ByteArray(1)
+                        val ackRes = ackBuf.usePinned { pinned ->
+                            recv(sock, pinned.addressOf(0), 1.convert(), 0)
+                        }
+                        close(sock)
+                        activeSocket = -1
+
+                        if (ackRes > 0 && ackBuf[0] == ACK) {
+                            updateTransferProgress(transferId, fileBytes.size.toLong(), TransferStatus.COMPLETED)
+                            OutgoingStatusManager.completeSuccess(copy.fileSentSuccessfully.replace("%s", fileName))
+                            withContext(Dispatchers.Main) {
+                                showNativeToast(copy.fileSentSuccessfully.replace("%s", fileName))
+                                onSuccess()
+                            }
+                            return@memScoped true
+                        }
+                        false
+                    }
+                    if (directSuccess) return@launch
+                }
+            }
+
+            // 2. Direct socket failed -> Remote Transfer via Supabase Storage
+            if (!net.syncswift.subscription.SubscriptionManager.canRemoteTransfer()) {
+                updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+                OutgoingStatusManager.fail(copy.remoteTransferProRequired)
+                net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                    net.syncswift.subscription.PaywallReason.REMOTE_TRANSFER
+                )
+                withContext(Dispatchers.Main) {
+                    showNativeToast(copy.remoteTransferProRequired)
+                    onError(copy.remoteTransferProRequired)
+                }
+                return@launch
+            }
+
+            executeRemoteFileTransfer(
+                targetDeviceName = targetDeviceName,
+                targetHost = targetHost,
+                fileName = fileName,
+                fileBytes = fileBytes,
+                mimeType = mimeType,
+                transferId = transferId,
+                onSuccess = onSuccess,
+                onError = onError
+            )
+        }
+    }
+
+    private suspend fun executeRemoteFileTransfer(
+        targetDeviceName: String,
+        targetHost: String,
+        fileName: String,
+        fileBytes: ByteArray,
+        mimeType: String,
+        transferId: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val copy = currentAppCopy()
+        OutgoingStatusManager.updateProgress(
+            transferredBytes = 0L,
+            totalBytes = fileBytes.size.toLong(),
+            message = copy.remoteTransferUploading
+        )
+
+        val cleanTarget = cleanDeviceDisplayName(targetDeviceName)
+        val token = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+
+        val downloadUrl = uploadToSupabaseStorage(transferId, fileName, fileBytes, mimeType)
+        if (downloadUrl == null) {
+            updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+            OutgoingStatusManager.fail(copy.transferFailed)
+            withContext(Dispatchers.Main) {
+                showNativeToast(copy.transferFailed)
+                onError(copy.transferFailed)
+            }
+            return
+        }
+
+        if (!token.isNullOrBlank()) {
+            val self = DeviceDiscoveryManager.getSelfDevice()
+            val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+            val fcmSent = ConnectionManager.sendFcmNotification(
+                token = token,
+                title = copy.notificationFileRequestTitle,
+                body = copy.notificationFileRequestBody.replace("%s", selfName).replace("%f", fileName),
+                data = mapOf(
+                    "type" to "file_transfer",
+                    "transferId" to transferId,
+                    "senderName" to selfName,
+                    "fileName" to fileName,
+                    "fileSize" to "${fileBytes.size}",
+                    "mimeType" to mimeType,
+                    "downloadUrl" to downloadUrl
+                )
+            )
+            if (fcmSent) {
+                updateTransferProgress(transferId, fileBytes.size.toLong(), TransferStatus.COMPLETED)
+                OutgoingStatusManager.completeSuccess(copy.remoteTransferUploaded)
+                withContext(Dispatchers.Main) {
+                    showNativeToast(copy.remoteTransferUploaded)
+                    onSuccess()
+                }
+                return
+            }
+        }
+
+        updateTransferProgress(transferId, 0, TransferStatus.FAILED)
+        OutgoingStatusManager.fail(copy.deviceNotAvailable)
+        withContext(Dispatchers.Main) {
+            showNativeToast(copy.deviceNotAvailable)
+            onError(copy.deviceNotAvailable)
+        }
+    }
+
+    private fun uploadToSupabaseStorage(
+        transferId: String,
+        fileName: String,
+        fileBytes: ByteArray,
+        mimeType: String
+    ): String? {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = PlatformConfig.supabaseServiceRoleKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
+
+        val ext = fileName.substringAfterLast(".", "")
+        val objectPath = "$transferId.$ext"
+        val url = NSURL.URLWithString("$supabaseUrl/storage/v1/object/syncswift_transfers/$objectPath") ?: return null
+
+        val req = NSMutableURLRequest.requestWithURL(url)
+        req.setHTTPMethod("POST")
+        req.setValue(if (mimeType.isNotBlank()) mimeType else "application/octet-stream", forHTTPHeaderField = "Content-Type")
+        req.setValue(serviceKey, forHTTPHeaderField = "apikey")
+        req.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
+        req.setValue("true", forHTTPHeaderField = "x-upsert")
+
+        val data = fileBytes.usePinned { pinned ->
+            NSData.create(bytes = pinned.addressOf(0), length = fileBytes.size.convert())
+        }
+        req.setHTTPBody(data)
+
+        var success = false
+        val sem = dispatch_semaphore_create(0)
+        NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
+            if (err == null && resp != null) {
+                val http = resp as? NSHTTPURLResponse
+                if (http?.statusCode?.toInt() in 200..299) {
+                    success = true
+                }
+            }
+            dispatch_semaphore_signal(sem)
+        }.resume()
+        dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 30_000_000_000L))
+
+        return if (success) {
+            "$supabaseUrl/storage/v1/object/public/syncswift_transfers/$objectPath"
+        } else null
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -387,47 +860,22 @@ actual object TransferEngine {
     }
 
     private fun sendViaFcmRelay(targetName: String, targetHost: String, text: String): Boolean {
-        // Query push token & send push notification via syncswift API
-        return try {
-            val urlString = "https://api.syncswift.net/api/fcm/send"
-            val url = NSURL.URLWithString(urlString) ?: return false
-            val request = NSMutableURLRequest.requestWithURL(url)
-            request.setHTTPMethod("POST")
-            request.setValue("application/json", forHTTPHeaderField = "Content-Type")
+        val cleanTarget = cleanDeviceDisplayName(targetName)
+        val token = ConnectionManager.queryPushTokenFromSupabase(targetHost, cleanTarget)
+        if (token.isNullOrBlank()) return false
 
-            val jsonBody = """
-                {
-                    "targetName": "$targetName",
-                    "targetHost": "$targetHost",
-                    "title": "SyncSwift Ortak Pano",
-                    "body": "${text.take(30).replace("\"", "\\\"")}",
-                    "data": {
-                        "type": "clipboard_sync",
-                        "text": "${text.replace("\"", "\\\"").replace("\n", "\\n")}",
-                        "senderName": "iOS Device"
-                    }
-                }
-            """.trimIndent()
-
-            val data = (jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding)
-            request.setHTTPBody(data)
-
-            var success = false
-            val semaphore = dispatch_semaphore_create(0)
-            val task = NSURLSession.sharedSession.dataTaskWithRequest(request) { _, response, error ->
-                if (error == null && response != null) {
-                    val httpResponse = response as? NSHTTPURLResponse
-                    if (httpResponse?.statusCode?.toInt() in 200..299) {
-                        success = true
-                    }
-                }
-                dispatch_semaphore_signal(semaphore)
-            }
-            task.resume()
-            dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 5_000_000_000L))
-            success
-        } catch (e: Exception) {
-            false
-        }
+        val self = DeviceDiscoveryManager.getSelfDevice()
+        val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+        val copy = currentAppCopy()
+        return ConnectionManager.sendFcmNotification(
+            token = token,
+            title = copy.clipboard,
+            body = text.take(30),
+            data = mapOf(
+                "type" to "clipboard_sync",
+                "text" to text,
+                "senderName" to selfName
+            )
+        )
     }
 }

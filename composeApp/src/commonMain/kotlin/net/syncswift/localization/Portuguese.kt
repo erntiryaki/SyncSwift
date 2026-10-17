@@ -236,6 +236,8 @@ val PortugueseCopy = Copy().apply {
     connecting = "Conectando..."
     offlineSleeping = "Offline / Em espera"
     invalidPairingCode = "Código de 6 dígitos inválido ou expirado."
+    codeExpiredOrAlreadyUsed = "Este código QR ou de 6 dígitos expirou ou já foi utilizado. Por favor gere um novo código."
+    refreshCode = "Atualizar"
     outsideLocalNetwork = "Fora da rede local"
 
     emailVerifiedBadge = "E-mail verificado"

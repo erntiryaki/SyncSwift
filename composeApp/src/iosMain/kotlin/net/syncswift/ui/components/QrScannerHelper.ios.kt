@@ -41,18 +41,55 @@ private var activeImagePickerDelegate: ImagePickerDelegate? = null
 private class QrCaptureDelegate(
     private val onCodeFound: (String) -> Unit
 ) : NSObject(), AVCaptureMetadataOutputObjectsDelegateProtocol {
+    private var isHandled = false
+
     override fun captureOutput(
         output: platform.AVFoundation.AVCaptureOutput,
         didOutputMetadataObjects: List<*>,
         fromConnection: platform.AVFoundation.AVCaptureConnection
     ) {
+        if (isHandled) return
         val firstObj = didOutputMetadataObjects.firstOrNull() as? AVMetadataMachineReadableCodeObject ?: return
         val strValue = firstObj.stringValue
         if (!strValue.isNullOrBlank()) {
+            isHandled = true
             dispatch_async(dispatch_get_main_queue()) {
                 onCodeFound(strValue)
             }
         }
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private class CustomScannerViewController(
+    private val captureSession: AVCaptureSession
+) : UIViewController(nibName = null, bundle = null) {
+
+    var cameraContainerView: UIView? = null
+    var previewLayer: AVCaptureVideoPreviewLayer? = null
+
+    @kotlinx.cinterop.ObjCAction
+    fun dismissScanner() {
+        try {
+            captureSession.stopRunning()
+        } catch (_: Exception) {}
+        dismissViewControllerAnimated(true, null)
+    }
+
+    @kotlinx.cinterop.ObjCAction
+    fun onBackgroundTapped(gesture: UITapGestureRecognizer) {
+        val container = cameraContainerView ?: return
+        val loc = gesture.locationInView(view)
+        val isInside = platform.CoreGraphics.CGRectContainsPoint(container.frame, loc)
+        if (!isInside) {
+            dismissScanner()
+        }
+    }
+
+    override fun viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        val container = cameraContainerView ?: return
+        previewLayer?.frame = container.bounds
     }
 }
 
@@ -109,10 +146,15 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
             return
         }
 
+        val scannerVc = CustomScannerViewController(captureSession)
+        scannerVc.modalPresentationStyle = UIModalPresentationOverFullScreen
+        scannerVc.modalTransitionStyle = UIModalTransitionStyleCrossDissolve
+
         val captureDelegate = QrCaptureDelegate { qrText ->
             captureSession.stopRunning()
-            findRootViewController()?.dismissViewControllerAnimated(true, null)
-            onSuccess(qrText)
+            scannerVc.dismissViewControllerAnimated(true) {
+                onSuccess(qrText)
+            }
         }
 
         val output = AVCaptureMetadataOutput()
@@ -122,17 +164,83 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
             output.metadataObjectTypes = listOf(AVMetadataObjectTypeQRCode)
         }
 
-        val scannerVc = UIViewController()
-        scannerVc.view.backgroundColor = UIColor.blackColor
+        // Screen dimensions
+        val screenBounds = UIScreen.mainScreen.bounds
+        val screenWidth = screenBounds.useContents { size.width }
+        val screenHeight = screenBounds.useContents { size.height }
+
+        // Dark translucent background (#730B101B)
+        scannerVc.view.backgroundColor = UIColor.colorWithRed(11.0 / 255.0, green: 16.0 / 255.0, blue: 27.0 / 255.0, alpha: 0.85)
+
+        // Native blur effect
+        val blurEffect = UIBlurEffect.effectWithStyle(UIBlurEffectStyleDark)
+        val blurView = UIVisualEffectView(effect = blurEffect)
+        blurView.frame = scannerVc.view.bounds
+        blurView.autoresizingMask = UIViewAutoresizingFlexibleWidth or UIViewAutoresizingFlexibleHeight
+        scannerVc.view.addSubview(blurView)
+
+        // Center camera container (260x260 dp square)
+        val boxSize = minOf(260.0, screenWidth - 48.0)
+        val boxX = (screenWidth - boxSize) / 2.0
+        val boxY = (screenHeight - boxSize) / 2.0 - 40.0
+
+        val cameraContainer = UIView(frame = platform.CoreGraphics.CGRectMake(boxX, boxY, boxSize, boxSize))
+        cameraContainer.layer.cornerRadius = 24.0
+        cameraContainer.layer.masksToBounds = true
+        cameraContainer.backgroundColor = UIColor.blackColor
 
         val previewLayer = AVCaptureVideoPreviewLayer(session = captureSession)
         previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill
-        scannerVc.view.layer.addSublayer(previewLayer)
+        previewLayer.frame = cameraContainer.bounds
+        cameraContainer.layer.addSublayer(previewLayer)
+        scannerVc.view.addSubview(cameraContainer)
 
-        val closeButton = UIButton.buttonWithType(UIButtonTypeSystem)
-        closeButton.setTitle("Kapat", forState = UIControlStateNormal)
-        closeButton.setTitleColor(UIColor.whiteColor, forState = UIControlStateNormal)
-        closeButton.setFrame(CGRectMake(20.0, 50.0, 80.0, 40.0))
+        scannerVc.cameraContainerView = cameraContainer
+        scannerVc.previewLayer = previewLayer
+
+        // Frame border overlay with turquoise stroke (#38D5E2)
+        val borderOverlay = UIView(frame = platform.CoreGraphics.CGRectMake(boxX, boxY, boxSize, boxSize))
+        borderOverlay.backgroundColor = UIColor.clearColor
+        borderOverlay.layer.cornerRadius = 24.0
+        borderOverlay.layer.borderWidth = 2.5
+        borderOverlay.layer.borderColor = UIColor.colorWithRed(56.0 / 255.0, green: 213.0 / 255.0, blue: 226.0 / 255.0, alpha: 1.0).CGColor
+        borderOverlay.userInteractionEnabled = false
+        scannerVc.view.addSubview(borderOverlay)
+
+        // SyncSwift white logo below the scanner
+        val logoWidth = minOf(300.0, screenWidth - 40.0)
+        val logoHeight = 70.0
+        val logoX = (screenWidth - logoWidth) / 2.0
+        val logoY = boxY + boxSize + 28.0
+
+        val logoView = UIImageView(frame = platform.CoreGraphics.CGRectMake(logoX, logoY, logoWidth, logoHeight))
+        logoView.contentMode = UIViewContentModeScaleAspectFit
+        val logoImage = UIImage.imageNamed("logo_syncswift")
+            ?: NSBundle.mainBundle.pathForResource("logo_syncswift", "png")?.let { UIImage.imageWithContentsOfFile(it) }
+
+        if (logoImage != null) {
+            logoView.image = logoImage.imageWithRenderingMode(UIImageRenderingModeAlwaysTemplate)
+            logoView.tintColor = UIColor.whiteColor
+        }
+        scannerVc.view.addSubview(logoView)
+
+        // Circular top-left back button (#1A2436 background with #28364D border)
+        val closeButton = UIButton.buttonWithType(UIButtonTypeCustom)
+        closeButton.setFrame(platform.CoreGraphics.CGRectMake(20.0, 50.0, 38.0, 38.0))
+        closeButton.layer.cornerRadius = 19.0
+        closeButton.layer.masksToBounds = true
+        closeButton.backgroundColor = UIColor.colorWithRed(26.0 / 255.0, green: 36.0 / 255.0, blue: 54.0 / 255.0, alpha: 0.95)
+        closeButton.layer.borderWidth = 1.0
+        closeButton.layer.borderColor = UIColor.colorWithRed(40.0 / 255.0, green: 54.0 / 255.0, blue: 77.0 / 255.0, alpha: 1.0).CGColor
+
+        val backIcon = UIImage.systemImageNamed("chevron.left")
+        if (backIcon != null) {
+            closeButton.setImage(backIcon, forState = UIControlStateNormal)
+            closeButton.tintColor = UIColor.whiteColor
+        } else {
+            closeButton.setTitle("✕", forState = UIControlStateNormal)
+            closeButton.setTitleColor(UIColor.whiteColor, forState = UIControlStateNormal)
+        }
         closeButton.addTarget(
             scannerVc,
             platform.objc.sel_registerName("dismissScanner"),
@@ -140,9 +248,12 @@ private fun presentNativeScanner(onSuccess: (String) -> Unit, onError: (String) 
         )
         scannerVc.view.addSubview(closeButton)
 
+        // Tap on background outside to dismiss
+        val bgTapGesture = UITapGestureRecognizer(target = scannerVc, action = platform.objc.sel_registerName("onBackgroundTapped:"))
+        scannerVc.view.addGestureRecognizer(bgTapGesture)
+
         val rootVc = findRootViewController()
         rootVc?.presentViewController(scannerVc, animated = true) {
-            previewLayer.setFrame(scannerVc.view.bounds)
             captureSession.startRunning()
         }
     } catch (e: Exception) {

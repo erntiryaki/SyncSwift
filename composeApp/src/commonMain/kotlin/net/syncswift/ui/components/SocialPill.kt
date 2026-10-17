@@ -32,9 +32,9 @@ fun SocialPill(
 ) {
     Button(
         onClick = action,
-        modifier = modifier.height(52.dp),
+        modifier = modifier.height(54.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(27.dp),
         border = if (light) null else BorderStroke(1.dp, InputBorder.copy(alpha = 0.45f)),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (light) Cloud else InputBg,
@@ -43,15 +43,17 @@ fun SocialPill(
         elevation = null
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            SocialProviderIcon(provider, Modifier.size(19.dp), if (light) DeepInk else Cloud)
-            Spacer(Modifier.width(8.dp))
+            SocialProviderIcon(provider, Modifier.size(24.dp), if (light) DeepInk else Cloud)
+            Spacer(Modifier.width(10.dp))
             Text(
                 text = label,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
+                fontSize = 16.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )

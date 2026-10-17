@@ -338,8 +338,9 @@ actual object ConnectionManager {
                 conn.requestMethod = "GET"
                 conn.connectTimeout = 7000
                 conn.readTimeout = 7000
-                conn.setRequestProperty("apikey", SyncSwiftConfig.SUPABASE_ANON_KEY)
-                conn.setRequestProperty("Authorization", "Bearer ${SyncSwiftConfig.SUPABASE_ANON_KEY}")
+                val key = SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.ifBlank { SyncSwiftConfig.SUPABASE_ANON_KEY }
+                conn.setRequestProperty("apikey", key)
+                conn.setRequestProperty("Authorization", "Bearer $key")
 
                 val responseCode = conn.responseCode
                 if (responseCode in 200..299) {
@@ -347,6 +348,20 @@ actual object ConnectionManager {
                     val array = JSONArray(body)
                     if (array.length() > 0) {
                         val obj = array.getJSONObject(0)
+                        val expiresAtStr = obj.optString("expires_at", "")
+                        val isExpired = try {
+                            if (expiresAtStr.isNotBlank()) {
+                                java.time.Instant.parse(expiresAtStr).isBefore(java.time.Instant.now())
+                            } else false
+                        } catch (_: Exception) { false }
+
+                        if (isExpired) {
+                            withContext(Dispatchers.Main) {
+                                onResult(PairResult.EXPIRED_OR_USED)
+                            }
+                            return@launch
+                        }
+
                         val deviceId = obj.optString("device_id", "remote-$clean")
                         val deviceName = cleanDeviceDisplayName(obj.optString("device_name", "SyncSwift Remote Device"))
                         val deviceType = obj.optString("device_type", "Desktop")
@@ -387,6 +402,18 @@ actual object ConnectionManager {
                             )
                         }
 
+                        // Delete consumed pairing code so it cannot be reused
+                        scope.launch {
+                            try {
+                                val delUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean")
+                                val delConn = delUrl.openConnection() as HttpURLConnection
+                                delConn.requestMethod = "DELETE"
+                                delConn.setRequestProperty("apikey", key)
+                                delConn.setRequestProperty("Authorization", "Bearer $key")
+                                delConn.responseCode
+                            } catch (_: Exception) {}
+                        }
+
                         withContext(Dispatchers.Main) {
                             onResult(PairResult.ACCEPTED)
                         }
@@ -394,7 +421,7 @@ actual object ConnectionManager {
                     }
                 }
                 withContext(Dispatchers.Main) {
-                    onResult(PairResult.UNAVAILABLE)
+                    onResult(PairResult.EXPIRED_OR_USED)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error connecting via pairing code: ${e.message}")

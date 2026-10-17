@@ -454,6 +454,7 @@ fun HomeScreen(
                         when (result) {
                             PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
                             PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                            PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
                             PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
                             PairResult.PENDING_APPROVAL -> { /* OutgoingStatusModal displays approval waiting */ }
                         }

@@ -161,6 +161,15 @@ actual object DeviceDiscoveryManager {
         if (_isScanning.value) return
         _isScanning.value = true
 
+        // Ensure foreground transfer server is listening
+        net.syncswift.transfer.TransferEngine.startForegroundServer()
+
+        // Sync local iOS device presence & push token to Supabase
+        val savedPushToken = net.syncswift.getSavedIosPushToken()
+        if (!savedPushToken.isNullOrBlank()) {
+            net.syncswift.connection.ConnectionManager.syncDeviceWithSupabase(savedPushToken)
+        }
+
         scope.launch(Dispatchers.Main) {
             try {
                 // 1. Publish our own Bonjour service on main runloop
@@ -261,7 +270,8 @@ actual object DeviceDiscoveryManager {
             port = DEFAULT_PORT,
             osType = "iOS",
             isSelf = true,
-            isOnline = true
+            isOnline = true,
+            pushToken = net.syncswift.getSavedIosPushToken()
         )
     }
 
@@ -349,6 +359,9 @@ actual object DeviceDiscoveryManager {
                         val clean = cleanDeviceDisplayName(devName)
                         val portInt = devPort.toIntOrNull() ?: DEFAULT_PORT
 
+                        val pushRegex = Regex(""""id"\s*:\s*"${Regex.escape(devId)}"[^}]*"push_token"\s*:\s*"([^"]*)"""")
+                        val pToken = pushRegex.find(jsonString)?.groupValues?.get(1)?.ifBlank { null }
+
                         val exists = current.indexOfFirst { it.host == devHost && it.port == portInt }
                         if (exists < 0) {
                             current.add(
@@ -359,9 +372,15 @@ actual object DeviceDiscoveryManager {
                                     port = portInt,
                                     osType = devType,
                                     isSelf = false,
-                                    isOnline = false
+                                    isOnline = false,
+                                    pushToken = pToken
                                 )
                             )
+                        } else {
+                            val existing = current[exists]
+                            if (existing.pushToken.isNullOrBlank() && !pToken.isNullOrBlank()) {
+                                current[exists] = existing.copy(pushToken = pToken)
+                            }
                         }
                     }
                     _devices.value = current

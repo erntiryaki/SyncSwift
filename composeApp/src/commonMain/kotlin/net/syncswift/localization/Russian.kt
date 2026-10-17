@@ -236,6 +236,8 @@ val RussianCopy = Copy().apply {
     connecting = "Подключение..."
     offlineSleeping = "Не в сети / В спящем режиме"
     invalidPairingCode = "Неверный или просроченный 6-значный код."
+    codeExpiredOrAlreadyUsed = "Срок действия этого QR-кода или 6-значного кода истек, либо он уже был использован. Пожалуйста, создайте новый код."
+    refreshCode = "Обновить"
     outsideLocalNetwork = "Вне локальной сети"
 
     emailVerifiedBadge = "Email подтвержден"

@@ -262,6 +262,8 @@ val TurkishCopy = Copy().apply {
     connecting = "Bağlanıyor..."
     offlineSleeping = "Kapalı / Uykuda"
     invalidPairingCode = "Geçersiz veya süresi dolmuş kod."
+    codeExpiredOrAlreadyUsed = "Bu QR kod veya 6 haneli kodun kullanım süresi dolmuş ya da daha önce kullanılmış. Lütfen yeni bir kod oluşturun."
+    refreshCode = "Yenile"
     outsideLocalNetwork = "Yerel Ağ Dışı"
 
     ipAddressHint = "192.168.1.xxx:52424"

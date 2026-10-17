@@ -96,20 +96,12 @@ fun ConnectedDevicesScreen(
     val selfHost = selfDevice?.host ?: "127.0.0.1"
     val selfPort = selfDevice?.port ?: 52424
     val selfName = selfDevice?.name ?: "SyncSwift Device"
-    val qrConnectionPayload = "syncswift://remote?code=${activePairingCode.replace(" ", "")}&host=$selfHost&port=$selfPort&name=$selfName&os=Android"
+    val selfOs = selfDevice?.osType ?: "Mobile"
+    val qrConnectionPayload = "syncswift://remote?code=${activePairingCode.replace(" ", "")}&host=$selfHost&port=$selfPort&name=$selfName&os=$selfOs"
 
     fun processConnectionUrl(url: String) {
         try {
             val clean = url.trim()
-
-            val remoteCode = when {
-                clean.startsWith("syncswift://remote") || clean.startsWith("syncdrop://remote") -> {
-                    clean.substringAfter("code=", "").substringBefore("&").trim()
-                }
-                clean.length == 6 && clean.all { it.isDigit() } -> clean
-                clean.length == 7 && clean.contains(" ") -> clean.replace(" ", "")
-                else -> null
-            }
 
             if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
                 showScanModal = false
@@ -119,56 +111,76 @@ fun ConnectedDevicesScreen(
                 return
             }
 
-            if (remoteCode != null) {
+            // 1. Extract 6-digit code if present
+            val remoteCode = when {
+                clean.contains("code=") -> clean.substringAfter("code=", "").substringBefore("&").replace(" ", "").trim()
+                clean.length == 6 && clean.all { it.isDigit() } -> clean
+                clean.length == 7 && clean.contains(" ") -> clean.replace(" ", "")
+                clean.matches(Regex(""".*\b(\d{3}\s?\d{3})\b.*""")) -> {
+                    Regex("""\b(\d{3}\s?\d{3})\b""").find(clean)?.groupValues?.get(1)?.replace(" ", "")
+                }
+                else -> null
+            }
+
+            // 2. Extract direct network host / port / name / os
+            val urlWithoutScheme = clean.removePrefix("syncswift://").removePrefix("syncdrop://")
+            val host = when {
+                clean.contains("host=") -> clean.substringAfter("host=", "").substringBefore("&").trim()
+                urlWithoutScheme.contains(":") -> urlWithoutScheme.substringBefore(":").trim()
+                clean.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$""")) -> clean
+                else -> ""
+            }
+            val port = when {
+                clean.contains("port=") -> clean.substringAfter("port=", "").substringBefore("&").toIntOrNull() ?: 52424
+                urlWithoutScheme.contains(":") -> urlWithoutScheme.substringAfter(":").substringBefore("/").toIntOrNull() ?: 52424
+                else -> 52424
+            }
+            val name = when {
+                clean.contains("name=") -> clean.substringAfter("name=", "").substringBefore("&").replace("%20", " ").trim()
+                else -> "SyncSwift Device"
+            }
+            val os = when {
+                clean.contains("os=") -> clean.substringAfter("os=", "").substringBefore("&").trim()
+                else -> "Remote Device"
+            }
+
+            fun attemptDirectLocalPairing() {
+                if (host.isNotBlank() && host != "127.0.0.1" && host != "0.0.0.0") {
+                    val dev = DeviceDiscoveryManager.addManualDevice(host = host, port = port, name = name, osType = os)
+                    showScanModal = false
+                    showNativeToast(copy.sendingConnectionRequest)
+                    ConnectionManager.requestPairing(dev) { result ->
+                        when (result) {
+                            PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
+                            PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                            PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                            PairResult.UNAVAILABLE -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                            PairResult.PENDING_APPROVAL -> {}
+                        }
+                    }
+                } else {
+                    showScanModal = false
+                    showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                }
+            }
+
+            if (remoteCode != null && remoteCode.length == 6 && remoteCode.all { it.isDigit() }) {
                 showScanModal = false
                 showNativeToast(copy.connecting)
                 ConnectionManager.connectViaPairingCode(remoteCode) { result ->
-                    when (result) {
-                        PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                        else -> showNativeToast(copy.invalidPairingCode)
+                    if (result == PairResult.ACCEPTED) {
+                        showNativeToast(copy.connectionAccepted)
+                    } else {
+                        attemptDirectLocalPairing()
                     }
                 }
                 return
             }
 
-            val (host, port, name) = when {
-                clean.startsWith("syncswift://") || clean.startsWith("syncdrop://") -> {
-                    val query = clean.substringAfter("?", "")
-                    val params = query.split("&").associate {
-                        val parts = it.split("=")
-                        if (parts.size == 2) parts[0] to parts[1] else "" to ""
-                    }
-                    val h = params["host"] ?: ""
-                    val p = params["port"]?.toIntOrNull() ?: 52424
-                    val n = params["name"]?.replace("%20", " ") ?: "SyncSwift Device"
-                    Triple(h, p, n)
-                }
-                clean.contains(":") -> {
-                    val parts = clean.split(":")
-                    val h = parts[0].trim()
-                    val p = parts[1].trim().toIntOrNull() ?: 52424
-                    Triple(h, p, "SyncSwift Device")
-                }
-                else -> Triple(clean, 52424, "SyncSwift Device")
-            }
-
-            if (host.isNotBlank()) {
-                val dev = DeviceDiscoveryManager.addManualDevice(host = host, port = port, name = name)
-                showScanModal = false
-                showNativeToast(copy.sendingConnectionRequest)
-                ConnectionManager.requestPairing(dev) { result ->
-                    when (result) {
-                        PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                        PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
-                        PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
-                        PairResult.PENDING_APPROVAL -> {}
-                    }
-                }
-            } else {
-                showNativeToast(copy.invalidQrCode)
-            }
+            attemptDirectLocalPairing()
         } catch (e: Exception) {
-            showNativeToast(copy.invalidQrCode)
+            showScanModal = false
+            showNativeToast(copy.codeExpiredOrAlreadyUsed)
         }
     }
 
@@ -500,7 +512,7 @@ fun ConnectedDevicesScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
                     )
 
-                    // Rotating Code Showcase Bar
+                    // Rotating Code Showcase Bar with Refresh Action
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -524,6 +536,34 @@ fun ConnectedDevicesScreen(
                                 fontWeight = FontWeight.ExtraBold,
                                 letterSpacing = 3.sp
                             )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "${codeRemainingSeconds}s",
+                                color = Mist,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Surface(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable { ConnectionManager.generateOrRotatePairingCode() },
+                                shape = CircleShape,
+                                color = InputBg,
+                                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    RefreshIcon(Modifier.size(16.dp), color = Cloud)
+                                }
+                            }
                         }
                     }
 
@@ -658,8 +698,10 @@ fun ConnectedDevicesScreen(
                                         if (res == PairResult.ACCEPTED) {
                                             manualCodeInput = ""
                                             showNativeToast(copy.connectionAccepted)
+                                        } else if (res == PairResult.EXPIRED_OR_USED) {
+                                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
                                         } else {
-                                            showNativeToast(copy.invalidPairingCode)
+                                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
                                         }
                                     }
                                 },
@@ -740,7 +782,33 @@ fun ConnectedDevicesScreen(
                         fontWeight = FontWeight.Medium
                     )
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(14.dp))
+
+                    // QR / Code Refresh Button
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { ConnectionManager.generateOrRotatePairingCode() },
+                        shape = RoundedCornerShape(20.dp),
+                        color = InputBg,
+                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            RefreshIcon(Modifier.size(16.dp), color = Cloud)
+                            Text(
+                                text = copy.refreshCode,
+                                color = Cloud,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
 
                     Text(
                         text = selfName,
@@ -858,6 +926,7 @@ fun ConnectedDevicesScreen(
                         when (result) {
                             PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
                             PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                            PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
                             PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
                             PairResult.PENDING_APPROVAL -> {}
                         }

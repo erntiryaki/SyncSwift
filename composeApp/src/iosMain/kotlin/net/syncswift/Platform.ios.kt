@@ -56,6 +56,23 @@ fun requestIosPermissions() {
         val options = platform.UserNotifications.UNAuthorizationOptionAlert or
                 platform.UserNotifications.UNAuthorizationOptionBadge or
                 platform.UserNotifications.UNAuthorizationOptionSound
-        center.requestAuthorizationWithOptions(options) { _, _ -> }
+        center.requestAuthorizationWithOptions(options) { granted, _ ->
+            if (granted) {
+                platform.darwin.dispatch_async(platform.darwin.dispatch_get_main_queue()) {
+                    platform.UIKit.UIApplication.sharedApplication.registerForRemoteNotifications()
+                }
+            }
+        }
     } catch (_: Throwable) {}
+}
+
+fun onIosPushTokenReceived(token: String) {
+    if (token.isBlank()) return
+    println("[SyncSwift iOS] onIosPushTokenReceived: $token")
+    platform.Foundation.NSUserDefaults.standardUserDefaults.setObject(token, forKey = "syncswift_push_token")
+    net.syncswift.connection.ConnectionManager.syncDeviceWithSupabase(token)
+}
+
+fun getSavedIosPushToken(): String? {
+    return platform.Foundation.NSUserDefaults.standardUserDefaults.stringForKey("syncswift_push_token")
 }

@@ -30,6 +30,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>net.syncswift</string>
+				<string>com.googleusercontent.apps.911753763379-r87i6iu84q9v71euhbf882us86g7bs74</string>
 			</array>
 		</dict>
 	</array>
@@ -57,6 +58,10 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

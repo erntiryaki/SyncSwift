@@ -236,6 +236,8 @@ val GermanCopy = Copy().apply {
     connecting = "Verbindung wird hergestellt..."
     offlineSleeping = "Offline / Ruhezustand"
     invalidPairingCode = "Ungültiger oder abgelaufener 6-stelliger Code."
+    codeExpiredOrAlreadyUsed = "Dieser QR-Code oder 6-stellige Code ist abgelaufen oder wurde bereits verwendet. Bitte generieren Sie einen neuen Code."
+    refreshCode = "Aktualisieren"
     outsideLocalNetwork = "Außerhalb des lokalen Netzwerks"
 
     emailVerifiedBadge = "E-Mail verifiziert"

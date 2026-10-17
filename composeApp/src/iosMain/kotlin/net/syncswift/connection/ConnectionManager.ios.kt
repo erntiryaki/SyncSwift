@@ -16,6 +16,9 @@ import platform.darwin.*
 import platform.posix.*
 import kotlin.random.Random
 
+import net.syncswift.currentAppCopy
+import net.syncswift.showNativeToast
+
 private fun htons(s: UShort): UShort = (((s.toInt() and 0xFF) shl 8) or ((s.toInt() ushr 8) and 0xFF)).toUShort()
 
 private fun parseIpv4(ip: String): UInt? {
@@ -59,45 +62,25 @@ private fun buildPairRequestPacket(name: String, host: String, port: Int, os: St
 }
 
 private fun sendPairRequestViaFcm(target: DiscoveredDevice, selfName: String, selfHost: String, selfPort: Int, selfOs: String): Boolean {
-    return try {
-        val url = NSURL.URLWithString("https://api.syncswift.net/api/fcm/send") ?: return false
-        val req = NSMutableURLRequest.requestWithURL(url)
-        req.setHTTPMethod("POST")
-        req.setValue("application/json", forHTTPHeaderField = "Content-Type")
-
-        val jsonBody = """
-            {
-                "targetName": "${target.name}",
-                "targetHost": "${target.host}",
-                "title": "SyncSwift Bağlantı Talebi",
-                "body": "$selfName cihazınızla eşleşmek istiyor.",
-                "data": {
-                    "type": "pair_request",
-                    "senderName": "$selfName",
-                    "senderHost": "$selfHost",
-                    "senderPort": "$selfPort",
-                    "senderOs": "$selfOs"
-                }
-            }
-        """.trimIndent()
-        req.setHTTPBody((jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
-
-        var success = false
-        val sem = dispatch_semaphore_create(0)
-        NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
-            if (err == null && resp != null) {
-                val http = resp as? NSHTTPURLResponse
-                if (http?.statusCode?.toInt() in 200..299) {
-                    success = true
-                }
-            }
-            dispatch_semaphore_signal(sem)
-        }.resume()
-        dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 5_000_000_000L))
-        success
-    } catch (_: Exception) {
-        false
+    var token = target.pushToken
+    if (token.isNullOrBlank() && target.host.isNotBlank()) {
+        token = ConnectionManager.queryPushTokenFromSupabase(target.host, target.name)
     }
+    if (token.isNullOrBlank()) return false
+
+    val copy = currentAppCopy()
+    return ConnectionManager.sendFcmNotification(
+        token = token,
+        title = copy.notificationPairRequestTitle,
+        body = copy.notificationPairRequestBody.replace("%s", selfName),
+        data = mapOf(
+            "type" to "pair_request",
+            "senderName" to selfName,
+            "senderHost" to selfHost,
+            "senderPort" to "$selfPort",
+            "senderOs" to selfOs
+        )
+    )
 }
 
 actual object ConnectionManager {
@@ -172,22 +155,166 @@ actual object ConnectionManager {
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
     }
 
+    fun queryPushTokenFromSupabase(host: String, name: String): String? {
+        return try {
+            val cleanName = cleanDeviceDisplayName(name)
+            val supabaseUrl = PlatformConfig.supabaseUrl
+            val anonKey = PlatformConfig.supabaseAnonKey
+            val encodedName = (cleanName as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: cleanName
+            val queryParam = if (host.isNotBlank() && !host.startsWith("remote-")) {
+                val encodedHost = (host as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: host
+                "or=(local_ip.eq.$encodedHost,device_name.eq.$encodedName)"
+            } else {
+                "device_name=eq.$encodedName"
+            }
+            val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices?select=push_token&$queryParam&limit=1") ?: return null
+            val req = NSMutableURLRequest.requestWithURL(url)
+            req.setHTTPMethod("GET")
+            req.setValue(anonKey, forHTTPHeaderField = "apikey")
+            req.setValue("Bearer $anonKey", forHTTPHeaderField = "Authorization")
+
+            var resultToken: String? = null
+            val sem = dispatch_semaphore_create(0)
+            NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, err ->
+                if (err == null && data != null) {
+                    val body = NSString.create(data, NSUTF8StringEncoding).toString()
+                    val match = Regex(""""push_token"\s*:\s*"([^"]+)"""").find(body)
+                    resultToken = match?.groupValues?.get(1)?.ifBlank { null }
+                }
+                dispatch_semaphore_signal(sem)
+            }.resume()
+            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 4_000_000_000L))
+            resultToken
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun sendFcmNotification(
+        token: String,
+        title: String,
+        body: String,
+        data: Map<String, String> = emptyMap()
+    ): Boolean {
+        if (token.isBlank()) return false
+        return try {
+            val url = NSURL.URLWithString("https://api.syncswift.net/api/fcm/send") ?: return false
+            val req = NSMutableURLRequest.requestWithURL(url)
+            req.setHTTPMethod("POST")
+            req.setValue("application/json", forHTTPHeaderField = "Content-Type")
+
+            val dataPairs = data.entries.joinToString(",") { (k, v) ->
+                "\"$k\": \"${v.replace("\"", "\\\"").replace("\n", "\\n")}\""
+            }
+            val jsonBody = """
+                {
+                    "targetToken": "$token",
+                    "token": "$token",
+                    "title": "${title.replace("\"", "\\\"")}",
+                    "body": "${body.replace("\"", "\\\"")}",
+                    "data": { $dataPairs }
+                }
+            """.trimIndent()
+            req.setHTTPBody((jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
+
+            var success = false
+            val sem = dispatch_semaphore_create(0)
+            NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
+                if (err == null && resp != null) {
+                    val http = resp as? NSHTTPURLResponse
+                    if (http?.statusCode?.toInt() in 200..299) {
+                        success = true
+                    }
+                }
+                dispatch_semaphore_signal(sem)
+            }.resume()
+            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 6_000_000_000L))
+            success
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun syncDeviceWithSupabase(pushToken: String) {
+        if (pushToken.isBlank()) return
+        scope.launch(Dispatchers.Default) {
+            try {
+                val self = DeviceDiscoveryManager.getSelfDevice()
+                val deviceId = UIDevice.currentDevice.identifierForVendor?.UUIDString ?: "ios-${self?.name}"
+                val cleanName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                val localIp = self?.host ?: ""
+                val subnet = if (localIp.contains(".")) localIp.substringBeforeLast(".") else ""
+                val supabaseUrl = PlatformConfig.supabaseUrl
+                val serviceKey = PlatformConfig.supabaseServiceRoleKey
+
+                val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices") ?: return@launch
+                val req = NSMutableURLRequest.requestWithURL(url)
+                req.setHTTPMethod("POST")
+                req.setValue("application/json", forHTTPHeaderField = "Content-Type")
+                req.setValue(serviceKey, forHTTPHeaderField = "apikey")
+                req.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
+                req.setValue("resolution=merge-duplicates", forHTTPHeaderField = "Prefer")
+
+                val jsonBody = """
+                    {
+                        "id": "$deviceId",
+                        "device_name": "$cleanName",
+                        "device_type": "iOS",
+                        "push_token": "$pushToken",
+                        "local_ip": "$localIp",
+                        "port": 52424,
+                        "network_ssid": "$subnet",
+                        "is_online": true
+                    }
+                """.trimIndent()
+                req.setHTTPBody((jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
+
+                NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
+                    if (err == null) {
+                        val code = (resp as? NSHTTPURLResponse)?.statusCode?.toInt() ?: 0
+                        println("[SyncSwift iOS] Registered device and push token in Supabase: HTTP $code")
+                    }
+                }.resume()
+            } catch (e: Exception) {
+                println("[SyncSwift iOS] Failed to sync device with Supabase: ${e.message}")
+            }
+        }
+    }
+
     @OptIn(ExperimentalForeignApi::class)
     actual fun requestPairing(target: DiscoveredDevice, onResult: (PairResult) -> Unit) {
+        val copy = currentAppCopy()
         val self = DeviceDiscoveryManager.getSelfDevice()
         val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
         val selfHost = self?.host ?: ""
         val selfPort = self?.port ?: 52424
         val selfOs = "iOS"
 
+        var activeSocket: Int = -1
+        val cancelPairing: () -> Unit = {
+            if (activeSocket >= 0) {
+                close(activeSocket)
+                activeSocket = -1
+            }
+        }
+
+        OutgoingStatusManager.show(
+            type = OutgoingStatusType.CONNECTION,
+            deviceName = target.name,
+            step = OutgoingStep.WAITING_APPROVAL,
+            message = copy.waitingForRecipientApproval,
+            onCancel = cancelPairing
+        )
+
         scope.launch(Dispatchers.Default) {
             // 1. Try direct local TCP socket pairing
-            if (target.host.isNotBlank() && target.host != "127.0.0.1") {
+            if (target.host.isNotBlank() && target.host != "127.0.0.1" && !target.host.startsWith("remote-")) {
                 val sock = socket(AF_INET, SOCK_STREAM, 0)
                 if (sock >= 0) {
+                    activeSocket = sock
                     val connected = memScoped {
                         val timeout = alloc<timeval>()
-                        timeout.tv_sec = 5
+                        timeout.tv_sec = 30
                         timeout.tv_usec = 0
                         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
                         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
@@ -207,13 +334,16 @@ actual object ConnectionManager {
                                     val resp = ByteArray(1)
                                     val r = resp.usePinned { recv(sock, it.addressOf(0), 1.convert(), 0) }
                                     close(sock)
+                                    activeSocket = -1
                                     if (r > 0 && (resp[0] == 6.toByte() || resp[0] == 7.toByte())) {
                                         val key = deviceKey(target.host, target.port)
                                         markDeviceConnected(key)
                                         markDeviceConnected(target.id)
+                                        OutgoingStatusManager.completeSuccess(copy.connectionAccepted)
                                         withContext(Dispatchers.Main) { onResult(PairResult.ACCEPTED) }
                                         return@memScoped true
                                     } else if (r > 0 && resp[0] == 8.toByte()) {
+                                        OutgoingStatusManager.fail(copy.connectionRequestRejected)
                                         withContext(Dispatchers.Main) { onResult(PairResult.REJECTED) }
                                         return@memScoped true
                                     }
@@ -221,6 +351,7 @@ actual object ConnectionManager {
                             }
                         }
                         close(sock)
+                        activeSocket = -1
                         false
                     }
                     if (connected) return@launch
@@ -228,11 +359,27 @@ actual object ConnectionManager {
             }
 
             // 2. Cross-network FCM Relay fallback
-            sendPairRequestViaFcm(target, selfName, selfHost, selfPort, selfOs)
-            val key = deviceKey(target.host, target.port)
-            markDeviceConnected(key, isRemote = true)
-            markDeviceConnected(target.id, isRemote = true)
-            withContext(Dispatchers.Main) { onResult(PairResult.ACCEPTED) }
+            val fcmSent = sendPairRequestViaFcm(target, selfName, selfHost, selfPort, selfOs)
+            if (fcmSent) {
+                OutgoingStatusManager.show(
+                    type = OutgoingStatusType.CONNECTION,
+                    deviceName = target.name,
+                    step = OutgoingStep.WAITING_APPROVAL,
+                    message = copy.transferNotificationSentWaiting,
+                    onCancel = cancelPairing
+                )
+                withContext(Dispatchers.Main) {
+                    showNativeToast(copy.transferNotificationSentWaiting)
+                    onResult(PairResult.PENDING_APPROVAL)
+                }
+                return@launch
+            }
+
+            // 3. Fallback: Neither direct TCP nor FCM worked
+            OutgoingStatusManager.fail(copy.deviceDidNotRespond)
+            withContext(Dispatchers.Main) {
+                onResult(PairResult.UNAVAILABLE)
+            }
         }
     }
 
@@ -303,9 +450,11 @@ actual object ConnectionManager {
         scope.launch {
             try {
                 val self = DeviceDiscoveryManager.getSelfDevice()
-                val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name).replace("\"", "")
                 val selfHost = self?.host ?: ""
                 val selfPort = self?.port ?: 52424
+                val selfId = UIDevice.currentDevice.identifierForVendor?.UUIDString ?: NSUUID().UUIDString
+                val pushToken = net.syncswift.getSavedIosPushToken() ?: ""
                 val supabaseUrl = PlatformConfig.supabaseUrl
                 val serviceKey = PlatformConfig.supabaseServiceRoleKey.ifBlank { PlatformConfig.supabaseAnonKey }
 
@@ -320,10 +469,10 @@ actual object ConnectionManager {
                 val jsonBody = """
                     {
                         "code": "$code",
-                        "device_id": "ios-${UIDevice.currentDevice.name}",
+                        "device_id": "$selfId",
                         "device_name": "$selfName",
                         "device_type": "iOS",
-                        "push_token": "",
+                        "push_token": "$pushToken",
                         "host": "$selfHost",
                         "port": $selfPort
                     }
@@ -331,7 +480,12 @@ actual object ConnectionManager {
                 val data = (jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding)
                 req.setHTTPBody(data)
 
-                NSURLSession.sharedSession.dataTaskWithRequest(req) { _, _, _ -> }.resume()
+                NSURLSession.sharedSession.dataTaskWithRequest(req) { _, resp, err ->
+                    if (err == null) {
+                        val code = (resp as? NSHTTPURLResponse)?.statusCode?.toInt() ?: 0
+                        println("[SyncSwift iOS] Pairing code $code published to Supabase: HTTP $code")
+                    }
+                }.resume()
             } catch (_: Exception) {}
         }
     }
@@ -346,7 +500,7 @@ actual object ConnectionManager {
         scope.launch {
             try {
                 val supabaseUrl = PlatformConfig.supabaseUrl
-                val anonKey = PlatformConfig.supabaseAnonKey
+                val serviceKey = PlatformConfig.supabaseServiceRoleKey.ifBlank { PlatformConfig.supabaseAnonKey }
                 val url = NSURL.URLWithString("$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean&select=*")
                 if (url == null) {
                     withContext(Dispatchers.Main) { onResult(PairResult.UNAVAILABLE) }
@@ -355,35 +509,81 @@ actual object ConnectionManager {
 
                 val req = NSMutableURLRequest.requestWithURL(url)
                 req.setHTTPMethod("GET")
-                req.setValue(anonKey, forHTTPHeaderField = "apikey")
-                req.setValue("Bearer $anonKey", forHTTPHeaderField = "Authorization")
+                req.setValue(serviceKey, forHTTPHeaderField = "apikey")
+                req.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
 
-                val sem = platform.darwin.dispatch_semaphore_create(0)
-                var result: PairResult = PairResult.UNAVAILABLE
+                val result = suspendCancellableCoroutine<PairResult> { cont ->
+                    val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, error ->
+                        if (error == null && data != null) {
+                            val body = NSString.create(data, NSUTF8StringEncoding).toString()
+                            if (body.contains("\"code\"")) {
+                                val expiresAt = Regex(""""expires_at"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: ""
+                                val isExpired = if (expiresAt.isNotBlank()) {
+                                    val formatter = platform.Foundation.NSISO8601DateFormatter()
+                                    val expDate = formatter.dateFromString(expiresAt)
+                                    if (expDate != null) {
+                                        expDate.timeIntervalSinceNow < 0
+                                    } else false
+                                } else false
 
-                NSURLSession.sharedSession.dataTaskWithRequest(req) { data, _, error ->
-                    if (error == null && data != null) {
-                        val body = NSString.create(data, NSUTF8StringEncoding).toString()
-                        val devId = Regex(""""device_id"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1)
-                        val devName = Regex(""""device_name"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: "Remote Device"
-                        val devHost = Regex(""""host"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: ""
-                        val devPort = Regex(""""port"\s*:\s*(\d+)""").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 52424
-                        val devType = Regex(""""device_type"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: "Desktop"
+                                if (isExpired) {
+                                    if (cont.isActive) cont.resume(PairResult.EXPIRED_OR_USED) {}
+                                    return@dataTaskWithRequest
+                                }
 
-                        if (!devId.isNullOrBlank() || devHost.isNotBlank()) {
-                            val targetDev = DeviceDiscoveryManager.addManualDevice(devHost, devPort, devName, devType)
-                            val key = deviceKey(devHost, devPort)
-                            markDeviceConnected(key, isRemote = true)
-                            if (!devId.isNullOrBlank()) {
-                                markDeviceConnected(devId, isRemote = true)
+                                val devId = Regex(""""device_id"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1)
+                                val devName = Regex(""""device_name"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: "Remote Device"
+                                val devHost = Regex(""""host"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: ""
+                                val devPort = Regex(""""port"\s*:\s*(\d+)""").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 52424
+                                val devType = Regex(""""device_type"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: "Desktop"
+                                val pToken = Regex(""""push_token"\s*:\s*"([^"]*)"""").find(body)?.groupValues?.get(1) ?: ""
+
+                                if (!devId.isNullOrBlank() || devHost.isNotBlank()) {
+                                    val targetHost = devHost.ifBlank { "remote-$clean" }
+                                    DeviceDiscoveryManager.addManualDevice(targetHost, devPort, devName, devType)
+                                    val key = deviceKey(targetHost, devPort)
+                                    markDeviceConnected(key, isRemote = true)
+                                    if (!devId.isNullOrBlank()) {
+                                        markDeviceConnected(devId, isRemote = true)
+                                    }
+
+                                    if (pToken.isNotBlank()) {
+                                        val self = DeviceDiscoveryManager.getSelfDevice()
+                                        val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                                        sendFcmNotification(
+                                            token = pToken,
+                                            title = "SyncSwift Uzaktan Bağlantı",
+                                            body = "$selfName cihazınızla eşleşti.",
+                                            data = mapOf(
+                                                "type" to "pair_request",
+                                                "senderName" to selfName,
+                                                "senderHost" to (self?.host ?: ""),
+                                                "senderPort" to "${self?.port ?: 52424}",
+                                                "senderOs" to "iOS"
+                                            )
+                                        )
+                                    }
+
+                                    // Delete consumed pairing code so it cannot be reused
+                                    val delUrl = NSURL.URLWithString("$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean")
+                                    if (delUrl != null) {
+                                        val delReq = NSMutableURLRequest.requestWithURL(delUrl)
+                                        delReq.setHTTPMethod("DELETE")
+                                        delReq.setValue(serviceKey, forHTTPHeaderField = "apikey")
+                                        delReq.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
+                                        NSURLSession.sharedSession.dataTaskWithRequest(delReq).resume()
+                                    }
+
+                                    if (cont.isActive) cont.resume(PairResult.ACCEPTED) {}
+                                    return@dataTaskWithRequest
+                                }
                             }
-                            result = PairResult.ACCEPTED
                         }
+                        if (cont.isActive) cont.resume(PairResult.EXPIRED_OR_USED) {}
                     }
-                    platform.darwin.dispatch_semaphore_signal(sem)
-                }.resume()
+                    task.resume()
+                }
 
-                platform.darwin.dispatch_semaphore_wait(sem, platform.darwin.dispatch_time(platform.darwin.DISPATCH_TIME_NOW, 7_000_000_000L))
                 withContext(Dispatchers.Main) {
                     onResult(result)
                 }

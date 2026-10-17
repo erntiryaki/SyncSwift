@@ -10,6 +10,7 @@ actual fun currentPlatform(): PlatformFlavor = PlatformFlavor.Android
 actual fun currentTimeMs(): Long = System.currentTimeMillis()
 actual fun getSystemLanguageCode(): String = java.util.Locale.getDefault().language ?: "en"
 actual fun showNativeToast(message: String) {
+    ToastNotifier.show(message)
     SessionManager.getAppContext()?.let { ctx ->
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             android.widget.Toast.makeText(ctx, message, android.widget.Toast.LENGTH_SHORT).show()
