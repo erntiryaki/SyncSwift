@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import net.syncswift.PlatformConfig
 import net.syncswift.SessionManager
+import net.syncswift.currentTimeMs
 import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
