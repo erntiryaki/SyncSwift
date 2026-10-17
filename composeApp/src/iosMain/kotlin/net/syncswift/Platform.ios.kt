@@ -233,14 +233,16 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 (it.host.isNotBlank() && it.host == senderHost) ||
                 it.id == senderId
             }
+            val isLocalIp = senderHost.isNotBlank() &&
+                    !senderHost.startsWith("remote-") &&
+                    (senderHost.startsWith("192.168.") || senderHost.startsWith("10.") || senderHost.startsWith("172.") || senderHost.startsWith("127."))
             val isRemote = when {
                 extractNotificationField(userInfo, "isRemote")?.equals("true", ignoreCase = true) == true -> true
-                matchedDev != null && matchedDev.isOnline && !matchedDev.isRemote -> false
+                isLocalIp -> false
+                matchedDev != null && !matchedDev.isRemote -> false
                 matchedDev != null && matchedDev.isRemote -> true
-                senderPushToken.isNotBlank() -> true
                 senderHost.startsWith("remote-") -> true
                 senderHost.isBlank() || !senderHost.contains(".") -> true
-                net.syncswift.discovery.DeviceDiscoveryManager.devices.value.none { it.host == senderHost && it.isOnline && !it.isRemote } -> true
                 else -> false
             }
             if (senderHost.isNotBlank()) {
@@ -432,5 +434,9 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             )
         }
     }
+}
+
+fun setIosAdBannerProvider(provider: (String) -> platform.UIKit.UIView) {
+    net.syncswift.ui.components.setIosAdBannerProvider(provider)
 }
 

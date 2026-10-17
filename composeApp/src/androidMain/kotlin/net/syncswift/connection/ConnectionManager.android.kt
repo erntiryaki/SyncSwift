@@ -82,14 +82,22 @@ actual object ConnectionManager {
     }
 
     actual fun isRemoteDevice(device: DiscoveredDevice): Boolean {
-        val key = deviceKey(device.host, device.port)
-        val clean = cleanDeviceDisplayName(device.name)
+        // If device has a valid local IPv4 address and is not explicitly a remote- proxy, it is definitely a local device!
+        val host = device.host.trim()
+        val isLocalIp = host.isNotBlank() &&
+                !host.startsWith("remote-") &&
+                (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.") || host.startsWith("127."))
+        if (isLocalIp && !device.id.startsWith("remote-")) {
+            return false
+        }
+        val key = deviceKey(host, device.port)
+        val clean = cleanDeviceDisplayName(device.name).trim()
         return device.isRemote ||
                device.id.startsWith("remote-") ||
-               device.host.startsWith("remote-") ||
+               host.startsWith("remote-") ||
                _remoteConnectedDeviceKeys.value.contains(key) ||
                _remoteConnectedDeviceKeys.value.contains(device.id) ||
-               (device.host.isNotBlank() && _remoteConnectedDeviceKeys.value.contains(device.host)) ||
+               (host.isNotBlank() && _remoteConnectedDeviceKeys.value.contains(host)) ||
                (clean.isNotBlank() && _remoteConnectedDeviceKeys.value.contains(clean))
     }
 
@@ -167,7 +175,7 @@ actual object ConnectionManager {
             matchedDev != null -> matchedDev.isRemote
             request.senderHost.startsWith("remote-") -> true
             request.senderHost.isBlank() || !request.senderHost.contains(".") -> true
-            request.senderPushToken.isNotBlank() && DeviceDiscoveryManager.devices.value.none { it.host == request.senderHost && it.isOnline && !it.isRemote } -> true
+            request.senderHost.startsWith("192.168.") || request.senderHost.startsWith("10.") || request.senderHost.startsWith("172.") -> false
             else -> false
         }
         markDeviceConnected(key, isRemote = isRemote)
@@ -779,29 +787,29 @@ actual object ConnectionManager {
 
     actual fun disconnectDevice(target: DiscoveredDevice, notifyPeer: Boolean) {
         val key = deviceKey(target.host, target.port)
-        val clean = cleanDeviceDisplayName(target.name)
-        val targetHost = target.host
-        val targetName = target.name
-        val targetId = target.id
+        val clean = cleanDeviceDisplayName(target.name).trim()
+        val targetHost = target.host.trim()
+        val targetName = target.name.trim()
+        val targetId = target.id.trim()
 
         // Collect all matching devices from discovery list to ensure every identifier is purged
         val matchingDevices = DeviceDiscoveryManager.devices.value.filter { dev ->
-            dev.id == targetId ||
-            (targetHost.isNotBlank() && dev.host.isNotBlank() && dev.host == targetHost) ||
-            (clean.isNotBlank() && cleanDeviceDisplayName(dev.name) == clean) ||
-            (targetName.isNotBlank() && dev.name == targetName)
+            (targetId.isNotBlank() && dev.id.equals(targetId, ignoreCase = true)) ||
+            (targetHost.isNotBlank() && dev.host.isNotBlank() && dev.host.equals(targetHost, ignoreCase = true)) ||
+            (clean.isNotBlank() && cleanDeviceDisplayName(dev.name).trim().equals(clean, ignoreCase = true)) ||
+            (targetName.isNotBlank() && dev.name.trim().equals(targetName, ignoreCase = true))
         }
 
-        val allHosts = (listOf(targetHost) + matchingDevices.map { it.host }).filter { it.isNotBlank() }.toSet()
-        val allNames = (listOf(targetName, clean) + matchingDevices.flatMap { listOf(it.name, cleanDeviceDisplayName(it.name)) }).filter { it.isNotBlank() }.toSet()
-        val allIds = (listOf(targetId, key, "manual-$targetHost", "remote-$clean") + matchingDevices.flatMap { listOf(it.id, deviceKey(it.host, it.port), "manual-${it.host}") }).filter { it.isNotBlank() }.toSet()
+        val allHosts = (listOf(targetHost) + matchingDevices.map { it.host.trim() }).filter { it.isNotBlank() }.toSet()
+        val allNames = (listOf(targetName, clean) + matchingDevices.flatMap { listOf(it.name.trim(), cleanDeviceDisplayName(it.name).trim()) }).filter { it.isNotBlank() }.toSet()
+        val allIds = (listOf(targetId, key, "manual-$targetHost", "remote-$clean") + matchingDevices.flatMap { listOf(it.id.trim(), deviceKey(it.host, it.port), "manual-${it.host.trim()}") }).filter { it.isNotBlank() }.toSet()
 
         fun isKeyMatchingTarget(existingKey: String): Boolean {
-            if (allIds.contains(existingKey)) return true
-            if (allNames.contains(existingKey)) return true
-            val existingClean = cleanDeviceDisplayName(existingKey)
-            if (allNames.contains(existingClean)) return true
-            if (allHosts.any { host -> host.isNotBlank() && existingKey.contains(host) }) return true
+            val k = existingKey.trim()
+            val kClean = cleanDeviceDisplayName(k).trim()
+            if (allIds.any { it.isNotBlank() && (k.equals(it, ignoreCase = true) || k.contains(it, ignoreCase = true)) }) return true
+            if (allNames.any { it.isNotBlank() && (k.equals(it, ignoreCase = true) || kClean.equals(it, ignoreCase = true)) }) return true
+            if (allHosts.any { host -> host.isNotBlank() && (k.equals(host, ignoreCase = true) || k.contains(host, ignoreCase = true)) }) return true
             return false
         }
 
@@ -817,11 +825,14 @@ actual object ConnectionManager {
         allHosts.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
         allIds.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
         allNames.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+        DeviceDiscoveryManager.removeManualDevice(target.host)
+        DeviceDiscoveryManager.removeManualDevice(target.id)
+        DeviceDiscoveryManager.removeManualDevice(target.name)
+        DeviceDiscoveryManager.removeManualDevice(clean)
         matchingDevices.forEach { dev ->
-            if (dev.isRemote || dev.id.startsWith("manual-") || dev.host.startsWith("remote-")) {
-                DeviceDiscoveryManager.removeManualDevice(dev.host)
-                DeviceDiscoveryManager.removeManualDevice(dev.id)
-            }
+            DeviceDiscoveryManager.removeManualDevice(dev.host)
+            DeviceDiscoveryManager.removeManualDevice(dev.id)
+            DeviceDiscoveryManager.removeManualDevice(dev.name)
         }
 
         if (notifyPeer) {

@@ -131,7 +131,14 @@ fun ConnectedDeviceActionScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                val statusText = if (device.isOnline) copy.connectedStatus else copy.outsideLocalNetwork
+                val isRemote = net.syncswift.connection.ConnectionManager.isRemoteDevice(device)
+                val statusText = if (device.isOnline) {
+                    copy.connectedStatus
+                } else if (isRemote) {
+                    copy.outsideLocalNetwork
+                } else {
+                    copy.offlineSleeping
+                }
                 Text(
                     text = "${device.osType} · $statusText",
                     color = Mist,

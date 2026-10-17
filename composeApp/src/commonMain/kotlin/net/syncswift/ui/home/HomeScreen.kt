@@ -284,15 +284,16 @@ fun HomeScreen(
         val otherDevices = discoveredDevices.filter { dev ->
             !dev.isSelf &&
             (selfDevice == null || (dev.host != selfDevice.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name)))
+        }.distinctBy {
+            if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host else cleanDeviceDisplayName(it.name)
         }
-        // Home screen shows ONLY online local devices (no remote devices, no offline ghosts)
         val connectedList = otherDevices.filter { dev ->
             val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
                          connectedKeys.contains(dev.id) ||
                          connectedKeys.contains(dev.host) ||
                          connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                          ConnectionManager.isDeviceConnected(dev)
-            isConn && !ConnectionManager.isRemoteDevice(dev) && dev.isOnline
+            isConn && !ConnectionManager.isRemoteDevice(dev)
         }
         val availableList = otherDevices.filter { dev ->
             val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
@@ -300,7 +301,7 @@ fun HomeScreen(
                          connectedKeys.contains(dev.host) ||
                          connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                          ConnectionManager.isDeviceConnected(dev)
-            !isConn && !ConnectionManager.isRemoteDevice(dev) && dev.isOnline
+            !isConn && !ConnectionManager.isRemoteDevice(dev)
         }
 
         // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)
@@ -393,7 +394,14 @@ fun HomeScreen(
         Column(modifier = Modifier.fillMaxWidth()) {
             if (availableList.isNotEmpty()) {
                 availableList.forEach { device ->
-                    val statusText = if (device.isOnline) copy.deviceOnline else copy.outsideLocalNetwork
+                    val isRemote = ConnectionManager.isRemoteDevice(device)
+                    val statusText = if (device.isOnline) {
+                        copy.deviceOnline
+                    } else if (isRemote) {
+                        copy.outsideLocalNetwork
+                    } else {
+                        copy.offlineSleeping
+                    }
                     BoxlessDeviceRow(
                         name = cleanDeviceDisplayName(device.name),
                         details = statusText,

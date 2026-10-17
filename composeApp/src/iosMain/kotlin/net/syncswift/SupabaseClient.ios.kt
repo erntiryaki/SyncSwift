@@ -653,15 +653,11 @@ actual object SupabaseNetwork {
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
         try {
-            val clean = cleanEmail(email)
+            val clean = cleanEmail(email).ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val userId = SessionManager.getLoggedInUserId() ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
-            val userFilter = if (!userId.isNullOrBlank()) {
-                "or=(user_email.eq.$clean,user_id.eq.$userId)"
-            } else {
-                "user_email=eq.$clean"
-            }
+            if (userId.isNullOrBlank()) return emptyList()
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/devices?$userFilter&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port",
+                urlString = "$supabaseUrl/rest/v1/devices?user_id=eq.$userId&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -734,7 +730,7 @@ actual object SupabaseNetwork {
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
-            val clean = cleanEmail(email)
+            val clean = cleanEmail(email).ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val cleanName = cleanDeviceDisplayName(deviceName)
             var resolvedUserId = userId?.trim()?.ifBlank { null }
                 ?: SessionManager.getLoggedInUserId()
@@ -747,20 +743,20 @@ actual object SupabaseNetwork {
                 SessionManager.saveLoggedInUserId(resolvedUserId)
             }
 
-            val currentLang = SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()
-            val userField = if (clean.isNotBlank()) "\"user_email\": \"$clean\"," else ""
-            val userIdField = if (!resolvedUserId.isNullOrBlank()) "\"user_id\": \"$resolvedUserId\"," else ""
+            val resolvedToken = pushToken.ifBlank { SessionManager.getMyPushToken() }
+            val subnet = if (localIp.contains(".")) localIp.substringBeforeLast(".") else ""
+            val userIdField = if (!resolvedUserId.isNullOrBlank()) "\"user_id\": \"$resolvedUserId\"," else "\"user_id\": null,"
+            val subnetField = if (subnet.isNotBlank()) "\"network_ssid\": \"$subnet\"," else ""
             val body = """
                 {
                     "id": "$deviceId",
                     "device_name": "$cleanName",
                     "device_type": "$deviceType",
-                    $userField
                     $userIdField
-                    "push_token": "$pushToken",
+                    $subnetField
+                    "push_token": "$resolvedToken",
                     "local_ip": "$localIp",
                     "port": $port,
-                    "language": "$currentLang",
                     "is_online": true
                 }
             """.trimIndent()
@@ -798,15 +794,11 @@ actual object SupabaseNetwork {
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
         try {
-            val clean = cleanEmail(email)
+            val clean = cleanEmail(email).ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val userId = SessionManager.getLoggedInUserId() ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
-            val userFilter = if (!userId.isNullOrBlank()) {
-                "or=(user_email.eq.$clean,user_id.eq.$userId)"
-            } else {
-                "user_email=eq.$clean"
-            }
+            if (userId.isNullOrBlank()) return emptyList()
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/devices?$userFilter&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port",
+                urlString = "$supabaseUrl/rest/v1/devices?user_id=eq.$userId&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -826,15 +818,11 @@ actual object SupabaseNetwork {
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return emptyList()
         try {
-            val clean = cleanEmail(email)
+            val clean = cleanEmail(email).ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val userId = SessionManager.getLoggedInUserId() ?: if (clean.isNotBlank()) getUserIdFromProfile(clean) else null
-            val userFilter = if (!userId.isNullOrBlank()) {
-                "or=(user_email.eq.$clean,user_id.eq.$userId)"
-            } else {
-                "user_email=eq.$clean"
-            }
+            if (userId.isNullOrBlank()) return emptyList()
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/devices?$userFilter&select=id,device_name,device_type,push_token,local_ip,port,is_online",
+                urlString = "$supabaseUrl/rest/v1/devices?user_id=eq.$userId&select=id,device_name,device_type,push_token,local_ip,port,is_online",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -896,7 +884,7 @@ actual object SupabaseNetwork {
                     "Content-Type" to "application/json",
                     "Prefer" to "return=minimal"
                 ),
-                body = """{"user_id":null,"user_email":null}"""
+                body = """{"user_id":null}"""
             )
             return resp.statusCode in 200..299
         } catch (_: Exception) {

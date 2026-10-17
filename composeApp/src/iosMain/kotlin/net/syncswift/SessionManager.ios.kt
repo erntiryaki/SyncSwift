@@ -207,7 +207,7 @@ actual object SessionManager {
     }
 
     actual fun getPlatformDeviceId(): String {
-        return platform.UIKit.UIDevice.currentDevice.identifierForVendor?.UUIDString ?: "ios-${platform.UIKit.UIDevice.currentDevice.name}"
+        return platform.UIKit.UIDevice.currentDevice.identifierForVendor?.UUIDString ?: platform.Foundation.NSUUID().UUIDString
     }
 
     actual fun getMyDeviceName(): String {

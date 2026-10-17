@@ -242,9 +242,11 @@ fun FileDeviceSelectScreen(
                                         }
                                     }
                                     Spacer(Modifier.height(3.dp))
-                                    val devStatus = if (dev.isOnline) copy.deviceOnline else copy.outsideLocalNetwork
+                                    val isDevRemote = net.syncswift.connection.ConnectionManager.isRemoteDevice(dev)
+                                    val devStatus = if (dev.isOnline) copy.deviceOnline else if (isDevRemote) copy.outsideLocalNetwork else copy.offlineSleeping
+                                    val connStatusText = if (dev.isOnline) copy.deviceOnline else if (isDevRemote) copy.outsideLocalNetwork else copy.offlineSleeping
                                     Text(
-                                        text = if (connected) "$connectionBadgeText · ${if (dev.isOnline) copy.deviceOnline else copy.outsideLocalNetwork}" else "${dev.osType} · $devStatus",
+                                        text = if (connected) "$connectionBadgeText · $connStatusText" else "${dev.osType} · $devStatus",
                                         color = if (connected) badgeColor else Mist,
                                         fontSize = 12.sp
                                     )

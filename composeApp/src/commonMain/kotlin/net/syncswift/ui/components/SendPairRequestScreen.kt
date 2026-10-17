@@ -163,7 +163,14 @@ fun SendPairRequestScreen(
                 Spacer(Modifier.height(18.dp))
 
                 // Network Status Badge
-                val statusText = if (device.isOnline) copy.connectedStatus else copy.outsideLocalNetwork
+                val isRemote = net.syncswift.connection.ConnectionManager.isRemoteDevice(device)
+                val statusText = if (device.isOnline) {
+                    copy.connectedStatus
+                } else if (isRemote) {
+                    copy.outsideLocalNetwork
+                } else {
+                    copy.offlineSleeping
+                }
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))

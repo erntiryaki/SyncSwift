@@ -238,6 +238,7 @@ actual object SupabaseNetwork {
     private fun getUserIdFromProfile(cleanEmail: String): String? {
         val cachedId = SessionManager.getLoggedInUserId()
         if (!cachedId.isNullOrBlank()) return cachedId
+        if (cleanEmail.isBlank()) return null
 
         // 1. Check public.profiles table
         try {
@@ -694,14 +695,13 @@ actual object SupabaseNetwork {
     actual suspend fun getActiveMobileDevices(email: String): List<DiscoveredDevice> = withContext(Dispatchers.IO) {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
         try {
-            val cleanEmail = email.lowercase().trim()
+            val cleanEmail = email.lowercase().trim().ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val userId = SessionManager.getLoggedInUserId() ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
-            val userFilter = if (!userId.isNullOrBlank()) {
-                "or=(user_email.eq.$cleanEmail,user_id.eq.$userId)"
-            } else {
-                "user_email=eq.$cleanEmail"
+            if (userId.isNullOrBlank()) {
+                Log.d("SupabaseNetwork", "getActiveMobileDevices: no userId, returning emptyList")
+                return@withContext emptyList()
             }
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?$userFilter&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_id=eq.$userId&or=(device_type.eq.Android,device_type.eq.iOS,device_type.eq.Mobile)&select=id,device_name,device_type,push_token,local_ip,port")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
@@ -723,7 +723,7 @@ actual object SupabaseNetwork {
                             host = obj.optString("local_ip", ""),
                             port = obj.optInt("port", 52424),
                             osType = obj.optString("device_type", "Mobile"),
-                            pushToken = obj.optString("push_token", null),
+                            pushToken = if (obj.isNull("push_token")) null else obj.optString("push_token").ifBlank { null },
                             isRemote = true
                         )
                     )
@@ -753,7 +753,7 @@ actual object SupabaseNetwork {
                 if (body.isNotBlank() && body != "[]") {
                     val arr = org.json.JSONArray(body)
                     if (arr.length() > 0) {
-                        pushToken = arr.getJSONObject(0).optString("push_token", null)
+                        pushToken = if (arr.getJSONObject(0).isNull("push_token")) null else arr.getJSONObject(0).optString("push_token").ifBlank { null }
                     }
                 }
             }
@@ -797,7 +797,7 @@ actual object SupabaseNetwork {
     ): Boolean = withContext(Dispatchers.IO) {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
-            val cleanEmail = email.lowercase().trim()
+            val cleanEmail = email.lowercase().trim().ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val cleanName = cleanDeviceDisplayName(deviceName)
             var resolvedUserId = userId?.trim()?.ifBlank { null }
                 ?: SessionManager.getLoggedInUserId()
@@ -810,17 +810,23 @@ actual object SupabaseNetwork {
                 SessionManager.saveLoggedInUserId(resolvedUserId)
             }
 
+            val resolvedToken = pushToken.ifBlank { SessionManager.getMyPushToken() }
+            val resolvedIp = localIp.ifBlank { getLocalIpAddress() ?: "" }
+            val subnet = if (resolvedIp.contains(".")) resolvedIp.substringBeforeLast(".") else ""
+
             val payload = org.json.JSONObject().apply {
-                val currentLang = SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()
                 put("id", deviceId)
                 put("device_name", cleanName)
                 put("device_type", deviceType)
-                if (cleanEmail.isNotBlank()) put("user_email", cleanEmail)
-                if (!resolvedUserId.isNullOrBlank()) put("user_id", resolvedUserId)
-                if (pushToken.isNotBlank()) put("push_token", pushToken)
-                if (localIp.isNotBlank()) put("local_ip", localIp)
-                put("language", currentLang)
+                if (!resolvedUserId.isNullOrBlank()) {
+                    put("user_id", resolvedUserId)
+                } else {
+                    put("user_id", org.json.JSONObject.NULL)
+                }
+                if (resolvedToken.isNotBlank()) put("push_token", resolvedToken)
+                if (resolvedIp.isNotBlank()) put("local_ip", resolvedIp)
                 put("port", port)
+                if (subnet.isNotBlank()) put("network_ssid", subnet)
                 put("is_online", true)
             }
 
@@ -837,9 +843,10 @@ actual object SupabaseNetwork {
             conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
             conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
             val postCode = conn.responseCode
-            Log.d("SupabaseNetwork", "registerDeviceInSupabase POST code=$postCode")
+            val postErr = if (postCode !in 200..299) conn.errorStream?.bufferedReader()?.readText() ?: "" else ""
+            Log.d("SupabaseNetwork", "registerDeviceInSupabase POST code=$postCode err=$postErr")
 
-            // 2. Also execute PATCH on the specific device row to ensure user_id is set if row already existed
+            // 2. Also execute PATCH on the specific device row to ensure user_id is updated if row already existed
             try {
                 val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId")
                 val patchConn = patchUrl.openConnection() as HttpURLConnection
@@ -867,14 +874,13 @@ actual object SupabaseNetwork {
     actual suspend fun fetchLinkedDesktopDevices(email: String): List<DiscoveredDevice> = withContext(Dispatchers.IO) {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
         try {
-            val cleanEmail = email.lowercase().trim()
+            val cleanEmail = email.lowercase().trim().ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val userId = SessionManager.getLoggedInUserId() ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
-            val userFilter = if (!userId.isNullOrBlank()) {
-                "or=(user_email.eq.$cleanEmail,user_id.eq.$userId)"
-            } else {
-                "user_email=eq.$cleanEmail"
+            if (userId.isNullOrBlank()) {
+                Log.d("SupabaseNetwork", "fetchLinkedDesktopDevices: no userId, returning emptyList")
+                return@withContext emptyList()
             }
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?$userFilter&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_id=eq.$userId&or=(device_type.eq.Windows,device_type.eq.macOS,device_type.eq.Mac,device_type.eq.Desktop)&select=id,device_name,device_type,push_token,local_ip,port")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
@@ -912,14 +918,13 @@ actual object SupabaseNetwork {
     actual suspend fun fetchAllUserDevices(email: String): List<DiscoveredDevice> = withContext(Dispatchers.IO) {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext emptyList()
         try {
-            val cleanEmail = email.lowercase().trim()
+            val cleanEmail = email.lowercase().trim().ifBlank { SessionManager.getLoggedInEmail()?.lowercase()?.trim() ?: "" }
             val userId = SessionManager.getLoggedInUserId() ?: if (cleanEmail.isNotBlank()) getUserIdFromProfile(cleanEmail) else null
-            val userFilter = if (!userId.isNullOrBlank()) {
-                "or=(user_email.eq.$cleanEmail,user_id.eq.$userId)"
-            } else {
-                "user_email=eq.$cleanEmail"
+            if (userId.isNullOrBlank()) {
+                Log.d("SupabaseNetwork", "fetchAllUserDevices: no userId, returning emptyList")
+                return@withContext emptyList()
             }
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?$userFilter&select=id,device_name,device_type,push_token,local_ip,port,is_online")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?user_id=eq.$userId&select=id,device_name,device_type,push_token,local_ip,port,is_online")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
@@ -1005,7 +1010,7 @@ actual object SupabaseNetwork {
             conn.setRequestProperty("apikey", effectiveKey)
             conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
             conn.setRequestProperty("Prefer", "return=minimal")
-            val payload = """{"user_id":null,"user_email":null}"""
+            val payload = """{"user_id":null}"""
             conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
             Log.d("SupabaseNetwork", "clearDeviceUser code=$code")
@@ -1014,6 +1019,24 @@ actual object SupabaseNetwork {
             Log.e("SupabaseNetwork", "clearDeviceUser failed: ${e.message}")
             return@withContext false
         }
+    }
+
+    private fun getLocalIpAddress(): String? {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isLoopback || !networkInterface.isUp) continue
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (!address.isLoopbackAddress && address is java.net.Inet4Address) {
+                        return address.hostAddress
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return null
     }
 }
 

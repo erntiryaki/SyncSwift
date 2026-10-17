@@ -55,45 +55,25 @@ object FcmSyncManager {
         val email = SessionManager.getLoggedInEmail() ?: ""
         val deviceId = java.util.UUID.nameUUIDFromBytes("${Build.MANUFACTURER}_${Build.MODEL}_${Build.ID}".toByteArray()).toString()
         val localIp = getLocalIpAddress() ?: ""
-        val subnet = if (localIp.contains(".")) localIp.substringBeforeLast(".") else ""
         val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
         val cleanName = net.syncswift.discovery.cleanDeviceDisplayName(selfDev?.name ?: Build.MODEL)
+        val userId = SessionManager.getLoggedInUserId()
 
-        Log.w(TAG, "Syncing FCM token for $email (Device ID: $deviceId, Name: $cleanName, IP: $localIp)")
+        Log.w(TAG, "Syncing FCM token for $email (Device ID: $deviceId, Name: $cleanName, IP: $localIp, UserId: $userId)")
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.connectTimeout = 6000
-                conn.readTimeout = 6000
-                conn.doOutput = true
-                conn.setRequestProperty("Content-Type", "application/json")
-                val key = SyncSwiftConfig.SUPABASE_SERVICE_ROLE_KEY.ifBlank { SyncSwiftConfig.SUPABASE_ANON_KEY }
-                conn.setRequestProperty("apikey", key)
-                conn.setRequestProperty("Authorization", "Bearer $key")
-                conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
-
-                val payload = JSONObject().apply {
-                    put("id", deviceId)
-                    put("device_name", cleanName)
-                    put("device_type", "Android")
-                    put("push_token", token)
-                    put("local_ip", localIp)
-                    put("port", 52424)
-                    put("network_ssid", subnet)
-                    put("is_online", true)
-                }
-
-                conn.outputStream.use { it.write(payload.toString().toByteArray()) }
-                val code = conn.responseCode
-                if (code in 200..299) {
-                    Log.w(TAG, "Device registered in Supabase devices table: HTTP $code")
-                } else {
-                    val err = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    Log.e(TAG, "Failed to register device in Supabase: HTTP $code, error: $err")
-                }
+                val resolvedUserId = userId ?: if (email.isNotBlank()) net.syncswift.SupabaseNetwork.getUserId(email) else null
+                net.syncswift.SupabaseNetwork.registerDeviceInSupabase(
+                    email = email,
+                    deviceId = deviceId,
+                    deviceName = cleanName,
+                    deviceType = "Android",
+                    pushToken = token,
+                    localIp = localIp,
+                    port = 52424,
+                    userId = resolvedUserId
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to register device in Supabase: ${e.message}")
             }

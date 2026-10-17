@@ -384,25 +384,22 @@ actual object DeviceDiscoveryManager {
                         ?: 0L
 
                     val age = now - lastSeen
-                    // If seen within 18s -> definitely online
-                    if (lastSeen > 0L && age < 18000L) {
+                    // If seen within 45s -> definitely online
+                    if (lastSeen > 0L && age < 45000L) {
                         if (!dev.isOnline) {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else if (lastSeen > 0L && age >= 18000L) {
+                    } else if (lastSeen > 0L && age >= 45000L) {
+                        if (dev.isOnline) {
+                            iterator.set(dev.copy(isOnline = false))
+                            changed = true
+                        }
                         val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                        if (isConnected) {
-                            if (dev.isOnline) {
-                                iterator.set(dev.copy(isOnline = false))
-                                changed = true
-                            }
-                        } else {
-                            // If dynamically discovered peer has disappeared for over 30s, remove it
-                            if (age >= 30000L && !dev.id.startsWith("manual-")) {
-                                iterator.remove()
-                                changed = true
-                            }
+                        // If dynamically discovered peer has disappeared for over 3 minutes, remove it
+                        if (!isConnected && age >= 180000L && !dev.id.startsWith("manual-")) {
+                            iterator.remove()
+                            changed = true
                         }
                     }
                 }
@@ -615,8 +612,8 @@ actual object DeviceDiscoveryManager {
                     val cleanLost = cleanDeviceDisplayName(lostName)
                     val now = System.currentTimeMillis()
                     val lastSeen = lastSeenTimestamps[lostName] ?: lastSeenTimestamps[cleanLost] ?: 0L
-                    // If UDP heartbeats have seen this device recently (<18s), ignore NSD's false service-lost event!
-                    if (now - lastSeen < 18000L) {
+                    // If UDP heartbeats have seen this device recently (<45s), ignore NSD's false service-lost event!
+                    if (now - lastSeen < 45000L) {
                         Log.d(TAG, "Ignoring NSD service lost for $lostName - UDP heartbeats active")
                         return
                     }
@@ -630,12 +627,7 @@ actual object DeviceDiscoveryManager {
                         val matches = !dev.isRemote && (dev.id == lostName || dev.name == lostName || cleanDevName == cleanLost || lostName.contains(cleanDevName))
                         if (matches) {
                             changed = true
-                            val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                            if (isConnected) {
-                                iterator.set(dev.copy(isOnline = false))
-                            } else {
-                                iterator.remove()
-                            }
+                            iterator.set(dev.copy(isOnline = false))
                         }
                     }
                     if (changed) {

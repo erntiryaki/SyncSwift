@@ -1,6 +1,22 @@
 import SwiftUI
 import UserNotifications
 import ComposeApp
+import GoogleMobileAds
+
+final class ObservableAdMobBannerView: GADBannerView {
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if self.rootViewController == nil {
+            if let window = self.window ?? UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow }) ?? UIApplication.shared.windows.first {
+                self.rootViewController = window.rootViewController
+                self.load(GADRequest())
+            }
+        }
+    }
+}
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
@@ -9,6 +25,24 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     ) -> Bool {
         // Prevent kernel SIGPIPE signal crash when sockets disconnect or reset
         signal(SIGPIPE, SIG_IGN)
+
+        // Initialize Google Mobile Ads SDK
+        GADMobileAds.sharedInstance().start(completionHandler: nil)
+
+        // Wire real AdMob banner provider to Compose Multiplatform
+        Platform_iosKt.setIosAdBannerProvider { (adUnitId: String) -> UIView in
+            let bannerView = ObservableAdMobBannerView(adSize: GADAdSizeBanner)
+            bannerView.adUnitID = adUnitId
+            if let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow }) ?? UIApplication.shared.windows.first,
+               let rootVC = window.rootViewController {
+                bannerView.rootViewController = rootVC
+                bannerView.load(GADRequest())
+            }
+            return bannerView
+        }
 
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound, .provisional]) { granted, error in

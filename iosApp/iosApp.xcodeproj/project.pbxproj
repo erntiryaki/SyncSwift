@@ -10,6 +10,7 @@
 		9B0000012A00000100000001 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B0000022A00000100000001 /* iOSApp.swift */; };
 		9B0000162A00000100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9B0000172A00000100000001 /* Assets.xcassets */; };
 		9B0000182A00000100000001 /* nunito_variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9B0000192A00000100000001 /* nunito_variable.ttf */; };
+		9B0000322A00000100000001 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 9B0000312A00000100000001 /* GoogleMobileAds */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9B0000322A00000100000001 /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,6 +78,9 @@
 			dependencies = (
 			);
 			name = iosApp;
+			packageProductDependencies = (
+				9B0000312A00000100000001 /* GoogleMobileAds */,
+			);
 			productName = iosApp;
 			productReference = 9B0000062A00000100000001 /* iosApp.app */;
 			productType = "com.apple.product-type.application";
@@ -105,6 +110,9 @@
 			);
 			mainGroup = 9B0000082A00000100000001;
 			productRefGroup = 9B00000A2A00000100000001 /* Products */;
+			packageReferences = (
+				9B0000302A00000100000001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -358,6 +366,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9B0000302A00000100000001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9B0000312A00000100000001 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9B0000302A00000100000001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9B0000102A00000100000001 /* Project object */;
 }
