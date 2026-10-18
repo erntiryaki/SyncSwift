@@ -85,6 +85,7 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
