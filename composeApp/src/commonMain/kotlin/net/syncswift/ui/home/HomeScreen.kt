@@ -283,9 +283,9 @@ fun HomeScreen(
 
         val otherDevices = discoveredDevices.filter { dev ->
             !dev.isSelf &&
-            (selfDevice == null || (dev.host != selfDevice.host && cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name)))
+            (selfDevice == null || (dev.id != selfDevice.id && (dev.host.isBlank() || selfDevice.host.isBlank() || dev.host != selfDevice.host || cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name))))
         }.distinctBy {
-            if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host else cleanDeviceDisplayName(it.name)
+            if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host else (if (it.id.isNotBlank()) it.id else cleanDeviceDisplayName(it.name))
         }
         val connectedList = otherDevices.filter { dev ->
             val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||

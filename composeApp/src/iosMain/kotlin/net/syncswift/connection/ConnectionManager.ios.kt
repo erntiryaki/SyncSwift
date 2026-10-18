@@ -573,18 +573,24 @@ actual object ConnectionManager {
         _remoteConnectedDeviceKeys.value = newRemote
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
 
-        // Purge manual devices and remote devices from DeviceDiscoveryManager
-        allHosts.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-        allIds.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-        allNames.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-        DeviceDiscoveryManager.removeManualDevice(target.host)
-        DeviceDiscoveryManager.removeManualDevice(target.id)
-        DeviceDiscoveryManager.removeManualDevice(target.name)
-        DeviceDiscoveryManager.removeManualDevice(clean)
-        matchingDevices.forEach { dev ->
-            DeviceDiscoveryManager.removeManualDevice(dev.host)
-            DeviceDiscoveryManager.removeManualDevice(dev.id)
-            DeviceDiscoveryManager.removeManualDevice(dev.name)
+        // Only purge remote placeholders; keep local devices in DeviceDiscoveryManager so they immediately drop into "Ağdaki Diğer Cihazlar"
+        val hasLocalHost = target.host.isNotBlank() && !target.host.startsWith("remote-")
+        if (target.host.startsWith("remote-") || target.id.startsWith("remote-") || (!hasLocalHost && matchingDevices.isEmpty())) {
+            allHosts.filter { it.startsWith("remote-") }.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+            allIds.filter { it.startsWith("remote-") }.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+            if (target.host.startsWith("remote-")) DeviceDiscoveryManager.removeManualDevice(target.host)
+            if (target.id.startsWith("remote-")) DeviceDiscoveryManager.removeManualDevice(target.id)
+        } else {
+            // Guarantee local device is retained in discovery list with isOnline = true and isRemote = false
+            // so HomeScreen immediately displays it under "Ağdaki Diğer Cihazlar" without restart
+            val localDev = if (hasLocalHost) target else matchingDevices.first()
+            DeviceDiscoveryManager.addOrUpdateConnectedDevice(
+                localDev.copy(
+                    isOnline = true,
+                    isRemote = false
+                )
+            )
+            DeviceDiscoveryManager.triggerDiscoveryPing()
         }
 
         if (notifyPeer) {
@@ -651,6 +657,42 @@ actual object ConnectionManager {
                     }
                 } catch (e: Exception) {
                     println("[SyncSwift iOS] Unpair push error: ${e.message}")
+                }
+            }
+        }
+    }
+
+    @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+    actual fun notifyRemoteLogout(target: DiscoveredDevice) {
+        if (target.host.isBlank() || target.host.startsWith("remote-") || target.port <= 0) return
+        val host = target.host
+        val port = target.port
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT.toLong(), 0u)) {
+            memScoped {
+                val ipNum = parseIpv4(host) ?: return@memScoped
+                val sock = socket(AF_INET, SOCK_STREAM, 0)
+                if (sock < 0) return@memScoped
+                try {
+                    val tv = alloc<timeval>()
+                    tv.tv_sec = 2
+                    tv.tv_usec = 0
+                    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, tv.ptr, sizeOf<timeval>().convert())
+                    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, tv.ptr, sizeOf<timeval>().convert())
+
+                    val serverAddr = alloc<sockaddr_in>()
+                    serverAddr.sin_family = AF_INET.convert()
+                    serverAddr.sin_port = htons(port.toUShort())
+                    serverAddr.sin_addr.s_addr = ipNum
+
+                    if (connect(sock, serverAddr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) == 0) {
+                        val header = byteArrayOf(1 /* PROTOCOL_VERSION */, 10 /* TYPE_REMOTE_LOGOUT */)
+                        header.usePinned { pinned ->
+                            send(sock, pinned.addressOf(0), header.size.convert(), 0)
+                        }
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    close(sock)
                 }
             }
         }

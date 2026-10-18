@@ -677,9 +677,9 @@ actual object SupabaseNetwork {
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
-            // 1. Get token to notify remote logout
+            // 1. Get token and network info to notify remote logout
             val queryResp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId&select=push_token",
+                urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId&select=push_token,local_ip,port",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -688,12 +688,26 @@ actual object SupabaseNetwork {
                 )
             )
             val devices = parseDeviceJsonArray(queryResp.body)
-            val token = devices.firstOrNull()?.pushToken
+            val devObj = devices.firstOrNull()
+            val token = devObj?.pushToken
+            val localIp = devObj?.host
+            val port = devObj?.port ?: 52424
+
+            // A. Direct local socket logout notification if reachable
+            if (!localIp.isNullOrBlank() && !localIp.startsWith("remote-") && port > 0) {
+                try {
+                    val peerDev = net.syncswift.discovery.DiscoveredDevice(id = deviceId, name = "", host = localIp, port = port, osType = "")
+                    ConnectionManager.notifyRemoteLogout(peerDev)
+                } catch (_: Exception) {}
+            }
+
+            // B. Send remote FCM push notification
             if (!token.isNullOrBlank()) {
+                val copy = net.syncswift.currentAppCopy()
                 ConnectionManager.sendFcmNotification(
                     token = token,
-                    title = "",
-                    body = "",
+                    title = "SyncSwift",
+                    body = copy.remoteSignedOut,
                     data = mapOf(
                         "type" to "remote_logout",
                         "deviceId" to deviceId
@@ -743,10 +757,13 @@ actual object SupabaseNetwork {
                 SessionManager.saveLoggedInUserId(resolvedUserId)
             }
 
+            val resolvedIp = localIp.ifBlank { net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()?.host ?: "" }
             val resolvedToken = pushToken.ifBlank { SessionManager.getMyPushToken() }
-            val subnet = if (localIp.contains(".")) localIp.substringBeforeLast(".") else ""
+            val subnet = if (resolvedIp.contains(".")) resolvedIp.substringBeforeLast(".") else ""
             val userIdField = if (!resolvedUserId.isNullOrBlank()) "\"user_id\": \"$resolvedUserId\"," else "\"user_id\": null,"
             val subnetField = if (subnet.isNotBlank()) "\"network_ssid\": \"$subnet\"," else ""
+            val tokenField = if (resolvedToken.isNotBlank()) "\"push_token\": \"$resolvedToken\"," else ""
+            val ipField = if (resolvedIp.isNotBlank()) "\"local_ip\": \"$resolvedIp\"," else ""
             val body = """
                 {
                     "id": "$deviceId",
@@ -754,8 +771,8 @@ actual object SupabaseNetwork {
                     "device_type": "$deviceType",
                     $userIdField
                     $subnetField
-                    "push_token": "$resolvedToken",
-                    "local_ip": "$localIp",
+                    $tokenField
+                    $ipField
                     "port": $port,
                     "is_online": true
                 }
@@ -889,6 +906,38 @@ actual object SupabaseNetwork {
             return resp.statusCode in 200..299
         } catch (_: Exception) {
             return false
+        }
+    }
+
+    actual suspend fun isDeviceActiveInSupabase(deviceId: String, expectedUserId: String?): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank() || deviceId.isBlank()) return true
+        try {
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/devices?id=eq.$deviceId&select=id,user_id",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (resp.statusCode in 200..299) {
+                val body = resp.body.trim()
+                if (body.isBlank() || body == "[]") return false
+                val devices = parseDeviceJsonArray(body)
+                if (devices.isEmpty()) return false
+                if (!body.contains("\"user_id\"") || body.contains("\"user_id\":null")) return false
+                if (!expectedUserId.isNullOrBlank()) {
+                    val cleanExpected = expectedUserId.trim()
+                    if (!body.contains(cleanExpected)) return false
+                }
+                return true
+            }
+            return true
+        } catch (_: Exception) {
+            return true
         }
     }
 }

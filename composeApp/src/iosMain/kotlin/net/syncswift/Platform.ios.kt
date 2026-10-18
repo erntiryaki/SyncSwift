@@ -114,6 +114,7 @@ fun onIosPushTokenReceived(token: String) {
     if (token.isBlank()) return
     println("[SyncSwift iOS] onIosPushTokenReceived: $token")
     platform.Foundation.NSUserDefaults.standardUserDefaults.setObject(token, forKey = "syncswift_push_token")
+    platform.Foundation.NSUserDefaults.standardUserDefaults.setObject(token, forKey = "apns_or_fcm_token")
     net.syncswift.connection.ConnectionManager.syncDeviceWithSupabase(token)
 }
 
@@ -185,6 +186,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
         "remote_logout" -> {
             println("[SyncSwift iOS] Received remote_logout command")
             SessionManager.clearSession()
+            SessionEventBus.emitRemoteLogout("iOS remote_logout")
             showNativeToast(copy.remoteSignedOut)
         }
         "pair_cancelled" -> {

@@ -33,6 +33,7 @@ actual object ConnectionManager {
     private const val TYPE_UNPAIR: Byte = 4
     private const val RESP_ACCEPTED: Byte = 7
     private const val RESP_REJECTED: Byte = 8
+    private const val TYPE_REMOTE_LOGOUT: Byte = 10
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -821,18 +822,24 @@ actual object ConnectionManager {
         _remoteConnectedDeviceKeys.value = newRemote
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
 
-        // Purge manual devices and remote devices from DeviceDiscoveryManager
-        allHosts.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-        allIds.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-        allNames.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-        DeviceDiscoveryManager.removeManualDevice(target.host)
-        DeviceDiscoveryManager.removeManualDevice(target.id)
-        DeviceDiscoveryManager.removeManualDevice(target.name)
-        DeviceDiscoveryManager.removeManualDevice(clean)
-        matchingDevices.forEach { dev ->
-            DeviceDiscoveryManager.removeManualDevice(dev.host)
-            DeviceDiscoveryManager.removeManualDevice(dev.id)
-            DeviceDiscoveryManager.removeManualDevice(dev.name)
+        // Only purge remote placeholders; keep local devices in DeviceDiscoveryManager so they immediately drop into "Ağdaki Diğer Cihazlar"
+        val hasLocalHost = target.host.isNotBlank() && !target.host.startsWith("remote-")
+        if (target.host.startsWith("remote-") || target.id.startsWith("remote-") || (!hasLocalHost && matchingDevices.isEmpty())) {
+            allHosts.filter { it.startsWith("remote-") }.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+            allIds.filter { it.startsWith("remote-") }.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
+            if (target.host.startsWith("remote-")) DeviceDiscoveryManager.removeManualDevice(target.host)
+            if (target.id.startsWith("remote-")) DeviceDiscoveryManager.removeManualDevice(target.id)
+        } else {
+            // Guarantee local device is retained in discovery list with isOnline = true and isRemote = false
+            // so HomeScreen immediately displays it under "Ağdaki Diğer Cihazlar" without restart
+            val localDev = if (hasLocalHost) target else matchingDevices.first()
+            DeviceDiscoveryManager.addOrUpdateConnectedDevice(
+                localDev.copy(
+                    isOnline = true,
+                    isRemote = false
+                )
+            )
+            DeviceDiscoveryManager.triggerDiscoveryPing()
         }
 
         if (notifyPeer) {
@@ -920,6 +927,25 @@ actual object ConnectionManager {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to query push token from Supabase: ${e.message}")
             null
+        }
+    }
+
+    actual fun notifyRemoteLogout(target: DiscoveredDevice) {
+        if (target.host.isBlank() || target.host.startsWith("remote-") || target.port <= 0) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                val socket = Socket()
+                socket.connect(InetSocketAddress(target.host, target.port), 2000)
+                socket.use { s ->
+                    val out = DataOutputStream(s.getOutputStream())
+                    out.writeByte(PROTOCOL_VERSION.toInt())
+                    out.writeByte(TYPE_REMOTE_LOGOUT.toInt())
+                    out.flush()
+                }
+                Log.d(TAG, "Sent TYPE_REMOTE_LOGOUT to ${target.host}:${target.port}")
+            } catch (e: Exception) {
+                Log.d(TAG, "Failed sending local TYPE_REMOTE_LOGOUT: ${e.message}")
+            }
         }
     }
 

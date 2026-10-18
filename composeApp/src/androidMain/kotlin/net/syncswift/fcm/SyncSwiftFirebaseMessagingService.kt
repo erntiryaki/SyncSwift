@@ -64,6 +64,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
             "remote_logout" -> {
                 Log.d(TAG, "Received remote_logout command from account device management")
                 net.syncswift.SessionManager.clearSession()
+                net.syncswift.SessionEventBus.emitRemoteLogout("FCM remote_logout")
                 net.syncswift.showNativeToast(copy.remoteSignedOut)
                 val intent = Intent(applicationContext, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK

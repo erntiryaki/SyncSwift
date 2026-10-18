@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import net.syncswift.PlatformConfig
 import net.syncswift.SessionManager
+import net.syncswift.SessionEventBus
 import net.syncswift.currentTimeMs
 import net.syncswift.connection.ConnectionManager
 import net.syncswift.connection.IncomingPairRequest
@@ -51,6 +52,7 @@ actual object TransferEngine {
     private const val RESP_ACCEPTED: Byte = 7
     private const val RESP_REJECTED: Byte = 8
     private const val TYPE_REQUEST_FILE_DOWNLOAD: Byte = 9
+    private const val TYPE_REMOTE_LOGOUT: Byte = 10
 
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         println("[SyncSwift iOS Transfer] Coroutine error caught: ${throwable.message}")
@@ -313,6 +315,11 @@ actual object TransferEngine {
                                 osType = "Mobile"
                             )
                             ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
+                        }
+
+                        TYPE_REMOTE_LOGOUT -> {
+                            println("[SyncSwift iOS] Direct TYPE_REMOTE_LOGOUT packet received from peer")
+                            SessionEventBus.emitRemoteLogout("Received direct socket TYPE_REMOTE_LOGOUT")
                         }
 
                         TYPE_FILE_HANDSHAKE -> {

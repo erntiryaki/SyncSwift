@@ -88,26 +88,34 @@ fun ConnectDesktopScreen(
 
     val isMobileDevice: (DiscoveredDevice) -> Boolean = { dev ->
         val t = dev.osType.lowercase()
-        t.contains("android") || t.contains("ios") || t.contains("iphone") || t.contains("ipad") || t.contains("mobile")
+        t.contains("android") || t.contains("ios") || t.contains("iphone") || t.contains("ipad") || t.contains("mobile") || !isDesktopDevice(dev)
     }
 
-    // Merge registered remote devices with any locally connected desktop devices
+    // Merge registered remote devices with any locally connected devices (excluding current device)
     val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
-    val allLinkedDevices = remember(registeredDevices, discoveredDevices, currentDeviceId) {
+    val otherLinkedDevices = remember(registeredDevices, discoveredDevices, currentDeviceId) {
         val list = mutableListOf<DiscoveredDevice>()
-        // Remote registered devices from Supabase
+        // Remote registered devices from Supabase (excluding current device)
         registeredDevices.filter { it.id != currentDeviceId }.forEach { list.add(it) }
 
-        // Locally connected desktops
+        // Locally connected/discovered devices (excluding self and current device)
         discoveredDevices.filter { dev ->
-            !dev.isSelf && isDesktopDevice(dev) && list.none { it.id == dev.id || (it.host == dev.host && it.name == dev.name) }
+            !dev.isSelf && dev.id != currentDeviceId && list.none { it.id == dev.id || (it.host == dev.host && it.name == dev.name) }
         }.forEach { list.add(it) }
 
         list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }
     }
 
-    val linkedDesktopCount = remember(allLinkedDevices) {
-        allLinkedDevices.count { isDesktopDevice(it) }
+    val linkedMobileDevices = remember(otherLinkedDevices) {
+        otherLinkedDevices.filter { isMobileDevice(it) }
+    }
+
+    val linkedDesktopDevices = remember(otherLinkedDevices) {
+        otherLinkedDevices.filter { isDesktopDevice(it) }
+    }
+
+    val linkedDesktopCount = remember(linkedDesktopDevices) {
+        linkedDesktopDevices.size
     }
 
     val scanQr = rememberQrScanner(
@@ -204,7 +212,7 @@ fun ConnectDesktopScreen(
             },
             title = copy.removeDeviceConfirmTitle,
             titleIcon = { WarningTriangleIcon(Modifier.size(20.dp), color = ErrorRed) },
-            confirmText = copy.removeDeviceConfirmTitle,
+            confirmText = copy.removeAction,
             confirmColor = ErrorRed,
             confirmTextColor = Color.White,
             confirmLoading = isRemovingDevice,
@@ -212,10 +220,18 @@ fun ConnectDesktopScreen(
                 scope.launch {
                     isRemovingDevice = true
                     try {
-                        if (userEmail.isNotBlank() && targetDev.id.isNotBlank()) {
-                            SupabaseNetwork.removeUserDevice(userEmail, targetDev.id)
+                        val devId = targetDev.id.ifBlank { "manual-${targetDev.host}" }
+                        // 1. Send direct local TCP logout packet to target device if reachable
+                        ConnectionManager.notifyRemoteLogout(targetDev)
+                        // 2. Remove from Supabase (sends FCM push, deletes row, clears user_id)
+                        if (userEmail.isNotBlank()) {
+                            SupabaseNetwork.removeUserDevice(userEmail, devId)
+                            SupabaseNetwork.clearDeviceUser(devId)
                         }
+                        // 3. Disconnect local connection & purge manual device
                         ConnectionManager.disconnectDevice(targetDev, notifyPeer = false)
+                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(targetDev.host)
+                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(devId)
                         showNativeToast(copy.deviceRemovedSuccess)
                         refreshDevices()
                     } finally {
@@ -230,7 +246,7 @@ fun ConnectDesktopScreen(
             }
         ) {
             Text(
-                text = copy.removeDeviceConfirmDesc,
+                text = copy.removeDeviceConfirmDesc.replace("%s", cleanDeviceDisplayName(targetDev.name)),
                 color = Mist,
                 fontSize = 14.sp,
                 lineHeight = 20.sp
@@ -286,104 +302,175 @@ fun ConnectDesktopScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
-                // SECTION 1: CURRENT DEVICE (MEVCUT CİHAZ - PASİF)
-                Text(
-                    text = copy.currentDeviceBadge.uppercase(),
-                    color = Mist,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Spacer(Modifier.height(8.dp))
-
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = CardSurface,
-                    border = BorderStroke(1.2.dp, Blue.copy(alpha = 0.4f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Blue.copy(alpha = 0.16f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (currentDeviceOs.contains("Android", ignoreCase = true) || currentDeviceOs.contains("iOS", ignoreCase = true)) {
-                                MobileDeviceIcon(Modifier.size(20.dp), color = Blue)
-                            } else {
-                                DesktopVectorIcon(Modifier.size(20.dp), color = Blue)
-                            }
-                        }
-
-                        Spacer(Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = cleanDeviceDisplayName(currentDeviceName),
-                                color = Cloud,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(SuccessGreen)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = "$currentDeviceOs · ${copy.connectedStatus}",
-                                    color = Mist,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-
-                        // Passive "Bu Cihaz" Badge (Cannot be removed)
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Blue.copy(alpha = 0.16f))
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Text(
-                                text = copy.currentDeviceBadge,
-                                color = Blue,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(28.dp))
-
-                // SECTION 2: LINKED / REGISTERED DEVICES
+                // ==========================================
+                // SECTION 1: MOBİL CİHAZLARIM (TOP)
+                // ==========================================
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = copy.linkedDesktopDevices,
+                        text = copy.myMobileDevices,
                         color = Cloud,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.3).sp
                     )
 
-                    if (allLinkedDevices.isNotEmpty()) {
+                    Text(
+                        text = copy.formatDeviceCount(1 + linkedMobileDevices.size),
+                        color = Mist,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // Şuanki cihaz: KUTUSUZ şekilde (boxless)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Blue.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        MobileDeviceIcon(Modifier.size(20.dp), color = Blue)
+                    }
+
+                    Spacer(Modifier.width(13.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = copy.formatDeviceCount(allLinkedDevices.size),
+                            text = cleanDeviceDisplayName(currentDeviceName),
+                            color = Cloud,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(SuccessGreen)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "$currentDeviceOs · ${copy.connectedStatus}",
+                                color = Mist,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    // Passive "Bu Cihaz" Badge (Cannot be removed)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Blue.copy(alpha = 0.16f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = copy.currentDeviceBadge,
+                            color = Blue,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Diğer mobil cihazlar (varsa)
+                if (linkedMobileDevices.isNotEmpty()) {
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = InputBorder.copy(alpha = 0.22f),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                    linkedMobileDevices.forEach { dev ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp, horizontal = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Night),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                MobileDeviceIcon(Modifier.size(20.dp), color = Mist)
+                            }
+
+                            Spacer(Modifier.width(13.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = cleanDeviceDisplayName(dev.name),
+                                    color = Cloud,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                val statusText = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
+                                Text(
+                                    text = "${dev.osType} · $statusText",
+                                    color = Mist,
+                                    fontSize = 11.5.sp
+                                )
+                            }
+
+                            Spacer(Modifier.width(8.dp))
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = ErrorRed.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.32f)),
+                                modifier = Modifier.clickable {
+                                    deviceToConfirmRemove = dev
+                                }
+                            ) {
+                                Text(
+                                    text = copy.removeAction,
+                                    color = ErrorRed,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(28.dp))
+
+                // ==========================================
+                // SECTION 2: MASAÜSTÜ CİHAZLARIM (BOTTOM)
+                // ==========================================
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = copy.myDesktopDevices,
+                        color = Cloud,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.3).sp
+                    )
+
+                    if (linkedDesktopDevices.isNotEmpty()) {
+                        Text(
+                            text = copy.formatDeviceCount(linkedDesktopDevices.size),
                             color = Mist,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
@@ -392,7 +479,7 @@ fun ConnectDesktopScreen(
                 }
                 Spacer(Modifier.height(10.dp))
 
-                if (allLinkedDevices.isEmpty()) {
+                if (linkedDesktopDevices.isEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -415,11 +502,7 @@ fun ConnectDesktopScreen(
                         border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            allLinkedDevices.forEachIndexed { index, dev ->
-                                val isDesktop = isDesktopDevice(dev)
-                                val isMobile = isMobileDevice(dev)
-                                val canRemove = isDesktop || (isMobile && isPro)
-
+                            linkedDesktopDevices.forEachIndexed { index, dev ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -430,14 +513,10 @@ fun ConnectDesktopScreen(
                                         modifier = Modifier
                                             .size(38.dp)
                                             .clip(CircleShape)
-                                            .background(if (isDesktop) Blue.copy(alpha = 0.14f) else Night),
+                                            .background(Blue.copy(alpha = 0.14f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (isDesktop) {
-                                            DesktopVectorIcon(Modifier.size(19.dp), color = Blue)
-                                        } else {
-                                            MobileDeviceIcon(Modifier.size(19.dp), color = Mist)
-                                        }
+                                        DesktopVectorIcon(Modifier.size(19.dp), color = Blue)
                                     }
 
                                     Spacer(Modifier.width(12.dp))
@@ -460,51 +539,25 @@ fun ConnectDesktopScreen(
 
                                     Spacer(Modifier.width(8.dp))
 
-                                    if (canRemove) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = ErrorRed.copy(alpha = 0.12f),
-                                            border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.32f)),
-                                            modifier = Modifier.clickable {
-                                                deviceToConfirmRemove = dev
-                                            }
-                                        ) {
-                                            Text(
-                                                text = copy.removeDeviceConfirmTitle,
-                                                color = ErrorRed,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                            )
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = ErrorRed.copy(alpha = 0.12f),
+                                        border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.32f)),
+                                        modifier = Modifier.clickable {
+                                            deviceToConfirmRemove = dev
                                         }
-                                    } else if (isMobile && !isPro) {
-                                        // Mobile removal requires Pro
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = InputBg,
-                                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.3f)),
-                                            modifier = Modifier.clickable {
-                                                SubscriptionManager.triggerPaywall(PaywallReason.DEVICE_LIMIT)
-                                            }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                LockIcon(Modifier.size(12.dp), color = Mist)
-                                                Text(
-                                                    text = copy.proBadge,
-                                                    color = Blue,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.ExtraBold
-                                                )
-                                            }
-                                        }
+                                    ) {
+                                        Text(
+                                            text = copy.removeAction,
+                                            color = ErrorRed,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
                                     }
                                 }
 
-                                if (index < allLinkedDevices.lastIndex) {
+                                if (index < linkedDesktopDevices.size - 1) {
                                     HorizontalDivider(
                                         thickness = 1.dp,
                                         color = InputBorder.copy(alpha = 0.22f)
@@ -749,85 +802,6 @@ fun ConnectDesktopScreen(
             }
         }
 
-        if (deviceToConfirmRemove != null) {
-            val dev = deviceToConfirmRemove!!
-            SyncSwiftModal(
-                onDismissRequest = { if (!isRemovingDevice) deviceToConfirmRemove = null }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = copy.removeDeviceConfirmTitle,
-                        color = Cloud,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = copy.removeDeviceConfirmDesc.replace("%s", cleanDeviceDisplayName(dev.name)),
-                        color = Mist,
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 18.sp
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = { deviceToConfirmRemove = null },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = InputBg,
-                                contentColor = Cloud
-                            )
-                        ) {
-                            Text(text = copy.cancelAction, fontWeight = FontWeight.SemiBold)
-                        }
-                        Button(
-                            onClick = {
-                                if (isRemovingDevice) return@Button
-                                isRemovingDevice = true
-                                scope.launch {
-                                    val devId = dev.id.ifBlank { "manual-${dev.host}" }
-                                    SupabaseNetwork.removeUserDevice(userEmail, devId)
-                                    SupabaseNetwork.clearDeviceUser(devId)
-                                    ConnectionManager.disconnectDevice(dev, notifyPeer = true)
-                                    net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(dev.host)
-                                    deviceToConfirmRemove = null
-                                    isRemovingDevice = false
-                                    refreshDevices()
-                                    showNativeToast(copy.deviceRemovedSuccess)
-                                }
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ErrorRed,
-                                contentColor = Color.White
-                            )
-                        ) {
-                            if (isRemovingDevice) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            } else {
-                                Text(text = copy.removeAction, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

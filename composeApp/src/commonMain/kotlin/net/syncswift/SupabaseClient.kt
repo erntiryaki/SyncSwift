@@ -82,5 +82,8 @@ expect object SupabaseNetwork {
 
     /** Clears the user_id and user_email from the device in Supabase upon logout */
     suspend fun clearDeviceUser(deviceId: String): Boolean
+
+    /** Verifies if this device ID is still active in the Supabase devices table for the user */
+    suspend fun isDeviceActiveInSupabase(deviceId: String, expectedUserId: String? = null): Boolean
 }
 

@@ -1,5 +1,7 @@
 package net.syncswift
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -100,12 +102,14 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         SessionManager.saveLanguage(newLang.code)
         if (email.isNotBlank() && screen == AuthStep.Home) {
             scope.launch {
+                val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
                 SupabaseNetwork.registerDeviceInSupabase(
                     email = email,
                     deviceId = SessionManager.getPlatformDeviceId(),
                     deviceName = SessionManager.getMyDeviceName(),
                     deviceType = SessionManager.getMyPlatformName(),
-                    pushToken = SessionManager.getMyPushToken()
+                    pushToken = SessionManager.getMyPushToken(),
+                    localIp = selfDev?.host ?: ""
                 )
             }
         }
@@ -247,14 +251,60 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 SessionManager.updateUserProfile(firstName, lastName)
             }
             val uid = SupabaseNetwork.getUserId(email) ?: SessionManager.getLoggedInUserId()
+            val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
             SupabaseNetwork.registerDeviceInSupabase(
                 email = email,
                 deviceId = SessionManager.getPlatformDeviceId(),
                 deviceName = SessionManager.getMyDeviceName(),
                 deviceType = SessionManager.getMyPlatformName(),
                 pushToken = SessionManager.getMyPushToken(),
+                localIp = selfDev?.host ?: "",
                 userId = uid
             )
+        }
+    }
+
+    // Listen for remote logout events (via direct TCP socket, FCM/APNs, or background services)
+    LaunchedEffect(Unit) {
+        SessionEventBus.events.collect { event ->
+            when (event) {
+                is SessionEvent.RemoteLoggedOut -> {
+                    SessionManager.clearSession()
+                    net.syncswift.subscription.SubscriptionManager.setProState(false)
+                    email = ""
+                    firstName = ""
+                    lastName = ""
+                    authDraftEmail = ""
+                    authProvider = IdentityProvider.EmailPassword
+                    inSettings = false
+                    inEditProfile = false
+                    inHelpSupport = false
+                    inConnectedDevices = false
+                    inConnectDesktop = false
+                    inNotifications = false
+                    mainTab = net.syncswift.ui.components.MainNavTab.Home
+                    screen = AuthStep.Email
+                    showNativeToast(copy.remoteSignedOut)
+                }
+            }
+        }
+    }
+
+    // Periodic active session verification: verify if this device was removed from Supabase devices table
+    LaunchedEffect(email, screen) {
+        if (email.isNotBlank() && screen == AuthStep.Home) {
+            val devId = SessionManager.getPlatformDeviceId()
+            while (isActive) {
+                delay(12000)
+                if (email.isNotBlank() && screen == AuthStep.Home) {
+                    val uid = SessionManager.getLoggedInUserId() ?: SupabaseNetwork.getUserId(email)
+                    val isActiveInDb = SupabaseNetwork.isDeviceActiveInSupabase(devId, uid)
+                    if (!isActiveInDb) {
+                        SessionEventBus.emitRemoteLogout("Device removed from Supabase devices table")
+                        break
+                    }
+                }
+            }
         }
     }
 
@@ -320,12 +370,14 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 password = password
             )
             val uid = SupabaseNetwork.getUserId(userEmail) ?: SessionManager.getLoggedInUserId()
+            val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
             SupabaseNetwork.registerDeviceInSupabase(
                 email = userEmail,
                 deviceId = SessionManager.getPlatformDeviceId(),
                 deviceName = SessionManager.getMyDeviceName(),
                 deviceType = SessionManager.getMyPlatformName(),
                 pushToken = SessionManager.getMyPushToken(),
+                localIp = selfDev?.host ?: "",
                 userId = uid
             )
             // Check if account has Pro purchased on another device or prior session
@@ -1232,7 +1284,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         scope.launch {
                             isRemovingOldDevice = true
                             try {
+                                net.syncswift.connection.ConnectionManager.notifyRemoteLogout(targetDev)
                                 SupabaseNetwork.removeUserDevice(limitData.email, targetDev.id)
+                                SupabaseNetwork.clearDeviceUser(targetDev.id)
+                                net.syncswift.connection.ConnectionManager.disconnectDevice(targetDev, notifyPeer = false)
                                 showNativeToast(copy.deviceRemovedSuccess)
                                 oldDeviceToConfirmRemove = null
                                 showOldDevicesModal = false

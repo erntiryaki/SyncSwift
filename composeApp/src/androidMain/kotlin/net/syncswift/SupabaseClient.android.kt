@@ -739,8 +739,8 @@ actual object SupabaseNetwork {
     actual suspend fun removeUserDevice(email: String, deviceId: String): Boolean = withContext(Dispatchers.IO) {
         if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
         try {
-            // 1. First get device token to send remote logout notification
-            val queryUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId&select=push_token,device_name")
+            // 1. First get device token and network info to send remote logout notification
+            val queryUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId&select=push_token,device_name,local_ip,port")
             val queryConn = queryUrl.openConnection() as HttpURLConnection
             queryConn.requestMethod = "GET"
             queryConn.connectTimeout = 6000
@@ -748,21 +748,36 @@ actual object SupabaseNetwork {
             queryConn.setRequestProperty("apikey", effectiveKey)
             queryConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
             var pushToken: String? = null
+            var localIp: String? = null
+            var port: Int = 52424
             if (queryConn.responseCode in 200..299) {
                 val body = queryConn.inputStream.bufferedReader().readText()
                 if (body.isNotBlank() && body != "[]") {
                     val arr = org.json.JSONArray(body)
                     if (arr.length() > 0) {
-                        pushToken = if (arr.getJSONObject(0).isNull("push_token")) null else arr.getJSONObject(0).optString("push_token").ifBlank { null }
+                        val obj = arr.getJSONObject(0)
+                        pushToken = if (obj.isNull("push_token")) null else obj.optString("push_token").ifBlank { null }
+                        localIp = if (obj.isNull("local_ip")) null else obj.optString("local_ip").ifBlank { null }
+                        port = obj.optInt("port", 52424)
                     }
                 }
             }
 
+            // A. Direct local socket logout notification if device is reachable on network
+            if (!localIp.isNullOrBlank() && !localIp.startsWith("remote-") && port > 0) {
+                try {
+                    val peerDev = net.syncswift.discovery.DiscoveredDevice(id = deviceId, name = "", host = localIp, port = port, osType = "")
+                    ConnectionManager.notifyRemoteLogout(peerDev)
+                } catch (_: Exception) {}
+            }
+
+            // B. Send remote FCM push notification
             if (!pushToken.isNullOrBlank()) {
+                val copy = net.syncswift.currentAppCopy()
                 ConnectionManager.sendFcmNotification(
                     token = pushToken,
-                    title = "",
-                    body = "",
+                    title = "SyncSwift",
+                    body = copy.remoteSignedOut,
                     data = mapOf(
                         "type" to "remote_logout",
                         "deviceId" to deviceId
@@ -1018,6 +1033,38 @@ actual object SupabaseNetwork {
         } catch (e: Exception) {
             Log.e("SupabaseNetwork", "clearDeviceUser failed: ${e.message}")
             return@withContext false
+        }
+    }
+
+    actual suspend fun isDeviceActiveInSupabase(deviceId: String, expectedUserId: String?): Boolean = withContext(Dispatchers.IO) {
+        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank() || deviceId.isBlank()) return@withContext true
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?id=eq.$deviceId&select=id,user_id")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            val code = conn.responseCode
+            if (code in 200..299) {
+                val body = conn.inputStream.bufferedReader().readText().trim()
+                if (body.isBlank() || body == "[]") {
+                    return@withContext false
+                }
+                val arr = org.json.JSONArray(body)
+                if (arr.length() == 0) return@withContext false
+                val obj = arr.getJSONObject(0)
+                val userIdInDb = if (obj.isNull("user_id")) null else obj.optString("user_id").trim().ifBlank { null }
+                if (userIdInDb == null) return@withContext false
+                if (!expectedUserId.isNullOrBlank() && !userIdInDb.equals(expectedUserId.trim(), ignoreCase = true)) {
+                    return@withContext false
+                }
+                return@withContext true
+            }
+            return@withContext true
+        } catch (_: Exception) {
+            return@withContext true
         }
     }
 

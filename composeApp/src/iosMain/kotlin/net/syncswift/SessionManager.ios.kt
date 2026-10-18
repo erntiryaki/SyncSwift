@@ -217,6 +217,9 @@ actual object SessionManager {
     actual fun getMyPlatformName(): String = "iOS"
 
     actual fun getMyPushToken(): String {
-        return NSUserDefaults.standardUserDefaults.stringForKey("apns_or_fcm_token") ?: ""
+        return NSUserDefaults.standardUserDefaults.stringForKey("syncswift_push_token")
+            ?.ifBlank { null }
+            ?: NSUserDefaults.standardUserDefaults.stringForKey("apns_or_fcm_token")
+            ?: ""
     }
 }

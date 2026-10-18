@@ -71,6 +71,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
         print("[SyncSwift iOS] APNs Device Token registered: \(token)")
         UserDefaults.standard.set(token, forKey: "syncswift_push_token")
+        UserDefaults.standard.set(token, forKey: "apns_or_fcm_token")
         Platform_iosKt.onIosPushTokenReceived(token: token)
     }
 

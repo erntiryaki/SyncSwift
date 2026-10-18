@@ -23,6 +23,7 @@ import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.currentAppCopy
 import net.syncswift.showNativeToast
+import net.syncswift.SessionEventBus
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,7 @@ actual object TransferEngine {
     private const val RESP_ACCEPTED: Byte = 7
     private const val RESP_REJECTED: Byte = 8
     const val TYPE_REQUEST_FILE_DOWNLOAD: Byte = 9
+    const val TYPE_REMOTE_LOGOUT: Byte = 10
 
     data class StagedFileTransfer(
         val fileName: String,
@@ -305,6 +307,11 @@ actual object TransferEngine {
                             osType = "Mobile"
                         )
                         ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
+                    }
+
+                    TYPE_REMOTE_LOGOUT -> {
+                        Log.w(TAG, "Direct TYPE_REMOTE_LOGOUT packet received from peer")
+                        SessionEventBus.emitRemoteLogout("Received direct socket TYPE_REMOTE_LOGOUT")
                     }
 
                     TYPE_CLIPBOARD -> {
