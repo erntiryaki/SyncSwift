@@ -213,8 +213,15 @@ actual object DeviceDiscoveryManager {
                 browser = b
                 val bDelegate = ServiceBrowserDelegate(
                     onFound = { foundService ->
-                        if (foundService.name == selfServiceName) return@ServiceBrowserDelegate
+                        if (foundService.name == selfServiceName || foundService.name.startsWith("self-")) return@ServiceBrowserDelegate
                         val resolverDelegate = ServiceResolverDelegate(foundService) { resolvedDev ->
+                            val selfDev = getSelfDevice()
+                            val selfClean = cleanDeviceDisplayName(selfServiceName)
+                            val devClean = cleanDeviceDisplayName(resolvedDev.name)
+                            if (devClean.equals(selfClean, ignoreCase = true) ||
+                                (selfDev != null && (resolvedDev.host == selfDev.host || devClean.equals(cleanDeviceDisplayName(selfDev.name), ignoreCase = true)))) {
+                                return@ServiceResolverDelegate
+                            }
                             addOrUpdateDevice(resolvedDev)
                         }
                         resolvingServices[foundService.name] = foundService to resolverDelegate

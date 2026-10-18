@@ -83,23 +83,27 @@ actual object ConnectionManager {
     }
 
     actual fun isRemoteDevice(device: DiscoveredDevice): Boolean {
-        // If device has a valid local IPv4 address and is not explicitly a remote- proxy, it is definitely a local device!
-        val host = device.host.trim()
-        val isLocalIp = host.isNotBlank() &&
-                !host.startsWith("remote-") &&
-                (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.") || host.startsWith("127."))
-        if (isLocalIp && !device.id.startsWith("remote-")) {
-            return false
+        if (device.isRemote || device.id.startsWith("remote-") || device.host.startsWith("remote-")) {
+            return true
         }
+        val host = device.host.trim()
         val key = deviceKey(host, device.port)
         val clean = cleanDeviceDisplayName(device.name).trim()
-        return device.isRemote ||
-               device.id.startsWith("remote-") ||
-               host.startsWith("remote-") ||
-               _remoteConnectedDeviceKeys.value.contains(key) ||
-               _remoteConnectedDeviceKeys.value.contains(device.id) ||
-               (host.isNotBlank() && _remoteConnectedDeviceKeys.value.contains(host)) ||
-               (clean.isNotBlank() && _remoteConnectedDeviceKeys.value.contains(clean))
+        val remoteKeys = _remoteConnectedDeviceKeys.value
+        if (remoteKeys.contains(key) ||
+            remoteKeys.contains(device.id) ||
+            (host.isNotBlank() && remoteKeys.contains(host)) ||
+            (clean.isNotBlank() && remoteKeys.contains(clean)) ||
+            (device.name.isNotBlank() && remoteKeys.contains(device.name))) {
+            return true
+        }
+
+        val isLocalIp = host.isNotBlank() &&
+                (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.") || host.startsWith("127."))
+        if (isLocalIp) {
+            return false
+        }
+        return false
     }
 
     private val cancelledRequestIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
@@ -239,7 +243,11 @@ actual object ConnectionManager {
         request.deferredResponse.complete(false)
 
         scope.launch {
-            val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
+            val senderToken = if (request.senderPushToken.isNotBlank()) {
+                request.senderPushToken
+            } else {
+                queryPushTokenFromSupabase(request.senderHost, request.senderName)
+            }
             if (!senderToken.isNullOrBlank()) {
                 val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
                 val self = DeviceDiscoveryManager.getSelfDevice()

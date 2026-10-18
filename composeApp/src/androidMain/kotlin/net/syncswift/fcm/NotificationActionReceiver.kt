@@ -70,6 +70,24 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val pending = ConnectionManager.pendingPairRequest.value
                 if (pending != null) {
                     ConnectionManager.rejectPairRequest(pending)
+                } else {
+                    val senderName = intent.getStringExtra(EXTRA_SENDER_NAME) ?: ""
+                    val senderHost = intent.getStringExtra(EXTRA_SENDER_HOST) ?: ""
+                    val senderPort = intent.getIntExtra(EXTRA_SENDER_PORT, 52424)
+                    val senderId = intent.getStringExtra(EXTRA_SENDER_ID) ?: ""
+                    val senderPushToken = intent.getStringExtra("sender_push_token") ?: ""
+                    val senderLanguage = intent.getStringExtra("sender_language") ?: ""
+                    if (senderName.isNotBlank() || senderPushToken.isNotBlank() || senderHost.isNotBlank()) {
+                        val req = net.syncswift.connection.IncomingPairRequest(
+                            senderId = senderId,
+                            senderName = senderName,
+                            senderHost = senderHost,
+                            senderPort = senderPort,
+                            senderLanguage = senderLanguage,
+                            senderPushToken = senderPushToken
+                        )
+                        ConnectionManager.rejectPairRequest(req)
+                    }
                 }
                 showToast(copy.connectionRequestRejected)
             }

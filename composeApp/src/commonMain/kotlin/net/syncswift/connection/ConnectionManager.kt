@@ -24,7 +24,7 @@ data class IncomingPairRequest(
     val senderName: String,
     val senderHost: String,
     val senderPort: Int,
-    val senderOsType: String,
+    val senderOsType: String = "Mobile",
     val senderLanguage: String = "en",
     val senderPushToken: String = "",
     val isRemote: Boolean = false,

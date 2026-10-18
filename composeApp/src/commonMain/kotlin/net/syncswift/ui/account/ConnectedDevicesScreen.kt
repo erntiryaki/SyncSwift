@@ -137,14 +137,6 @@ fun ConnectedDevicesScreen(
         try {
             val clean = url.trim()
 
-            if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
-                showScanModal = false
-                net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                    net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
-                )
-                return
-            }
-
             // 1. Extract 6-digit code if present
             val remoteCode = when {
                 clean.contains("code=") -> clean.substringAfter("code=", "").substringBefore("&").replace(" ", "").trim()
@@ -699,13 +691,7 @@ fun ConnectedDevicesScreen(
                                 modifier = Modifier
                                     .height(46.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable(enabled = isPro && manualCodeInput.trim().replace(" ", "").length == 6 && !isManualConnecting) {
-                                        if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
-                                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                                                net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
-                                            )
-                                            return@clickable
-                                        }
+                                    .clickable(enabled = manualCodeInput.trim().replace(" ", "").length == 6 && !isManualConnecting) {
                                         isManualConnecting = true
                                         val clean = manualCodeInput.trim().replace(" ", "")
                                         ConnectionManager.connectViaPairingCode(clean) { res ->

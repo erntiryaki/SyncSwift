@@ -279,11 +279,26 @@ fun HomeScreen(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        val myName = cleanDeviceDisplayName(selfDevice?.name ?: SessionManager.getMyDeviceName())
+        val myRawName = selfDevice?.name ?: SessionManager.getMyDeviceName()
+        val myId = SessionManager.getPlatformDeviceId()
+        val myPushToken = SessionManager.getMyPushToken()
+        val myLocalIp = selfDevice?.host ?: ""
+        val isDeviceSelf: (DiscoveredDevice) -> Boolean = { dev ->
+            val devClean = cleanDeviceDisplayName(dev.name)
+            dev.isSelf ||
+            (myId.isNotBlank() && dev.id.equals(myId, ignoreCase = true)) ||
+            (myName.isNotBlank() && devClean.equals(myName, ignoreCase = true)) ||
+            (myRawName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(myRawName), ignoreCase = true) || dev.name.equals(myRawName, ignoreCase = true))) ||
+            (selfDevice != null && dev.id == selfDevice.id) ||
+            (selfDevice != null && dev.id.removePrefix("self-") == selfDevice.id.removePrefix("self-")) ||
+            (myLocalIp.isNotBlank() && myLocalIp != "127.0.0.1" && dev.host == myLocalIp) ||
+            (selfDevice != null && selfDevice.host.isNotBlank() && selfDevice.host != "127.0.0.1" && dev.host == selfDevice.host) ||
+            (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken)
+        }
 
         val otherDevices = discoveredDevices.filter { dev ->
-            !dev.isSelf &&
-            (selfDevice == null || (dev.id != selfDevice.id && (dev.host.isBlank() || selfDevice.host.isBlank() || dev.host != selfDevice.host || cleanDeviceDisplayName(dev.name) != cleanDeviceDisplayName(selfDevice.name))))
+            !isDeviceSelf(dev)
         }.distinctBy {
             if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host else (if (it.id.isNotBlank()) it.id else cleanDeviceDisplayName(it.name))
         }
@@ -293,7 +308,8 @@ fun HomeScreen(
                          connectedKeys.contains(dev.host) ||
                          connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                          ConnectionManager.isDeviceConnected(dev)
-            isConn && !ConnectionManager.isRemoteDevice(dev)
+            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
+            isConn && !isRemote
         }
         val availableList = otherDevices.filter { dev ->
             val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
@@ -301,7 +317,8 @@ fun HomeScreen(
                          connectedKeys.contains(dev.host) ||
                          connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                          ConnectionManager.isDeviceConnected(dev)
-            !isConn && !ConnectionManager.isRemoteDevice(dev)
+            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
+            !isConn && !isRemote
         }
 
         // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)

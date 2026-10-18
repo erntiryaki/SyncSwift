@@ -91,16 +91,31 @@ fun ConnectDesktopScreen(
         t.contains("android") || t.contains("ios") || t.contains("iphone") || t.contains("ipad") || t.contains("mobile") || !isDesktopDevice(dev)
     }
 
+    val selfDevice = remember { net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice() }
+    val myCleanName = remember { cleanDeviceDisplayName(selfDevice?.name ?: currentDeviceName) }
+    val myPushToken = remember { SessionManager.getMyPushToken() }
+    val isCurrentSelfDevice: (DiscoveredDevice) -> Boolean = { dev ->
+        val devClean = cleanDeviceDisplayName(dev.name)
+        dev.isSelf ||
+        (currentDeviceId.isNotBlank() && dev.id.equals(currentDeviceId, ignoreCase = true)) ||
+        (selfDevice != null && dev.id == selfDevice.id) ||
+        (selfDevice != null && dev.id.removePrefix("self-") == selfDevice.id.removePrefix("self-")) ||
+        (selfDevice != null && selfDevice.host.isNotBlank() && selfDevice.host != "127.0.0.1" && dev.host == selfDevice.host) ||
+        (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken) ||
+        (myCleanName.isNotBlank() && devClean.equals(myCleanName, ignoreCase = true)) ||
+        (currentDeviceName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(currentDeviceName), ignoreCase = true) || dev.name.equals(currentDeviceName, ignoreCase = true)))
+    }
+
     // Merge registered remote devices with any locally connected devices (excluding current device)
     val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
-    val otherLinkedDevices = remember(registeredDevices, discoveredDevices, currentDeviceId) {
+    val otherLinkedDevices = remember(registeredDevices, discoveredDevices, currentDeviceId, selfDevice) {
         val list = mutableListOf<DiscoveredDevice>()
         // Remote registered devices from Supabase (excluding current device)
-        registeredDevices.filter { it.id != currentDeviceId }.forEach { list.add(it) }
+        registeredDevices.filter { !isCurrentSelfDevice(it) }.forEach { list.add(it) }
 
         // Locally connected/discovered devices (excluding self and current device)
         discoveredDevices.filter { dev ->
-            !dev.isSelf && dev.id != currentDeviceId && list.none { it.id == dev.id || (it.host == dev.host && it.name == dev.name) }
+            !isCurrentSelfDevice(dev) && list.none { it.id == dev.id || (it.host == dev.host && it.name == dev.name) }
         }.forEach { list.add(it) }
 
         list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }
@@ -348,7 +363,7 @@ fun ConnectDesktopScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = cleanDeviceDisplayName(currentDeviceName),
+                            text = myCleanName,
                             color = Cloud,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold

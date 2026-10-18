@@ -690,15 +690,23 @@ actual object DeviceDiscoveryManager {
                     isResolving = false
                     val hostAddress = serviceInfo.host?.hostAddress ?: ""
                     val localIp = getLocalIpAddress()
-                    if (hostAddress.isNotBlank() && (hostAddress == localIp || hostAddress == "127.0.0.1")) {
-                        Log.d(TAG, "Ignoring self device announcement from $hostAddress")
+                    val port = serviceInfo.port
+                    val rawName = serviceInfo.serviceName
+                    val cleanName = cleanDeviceDisplayName(rawName)
+                    val selfDev = getSelfDevice()
+                    val myClean = cleanDeviceDisplayName(selfDev?.name ?: "")
+                    val selfClean = cleanDeviceDisplayName(selfServiceName)
+                    val isSelfService = rawName == selfServiceName ||
+                            rawName.startsWith("self-") ||
+                            cleanName.equals(selfClean, ignoreCase = true) ||
+                            (myClean.isNotBlank() && cleanName.equals(myClean, ignoreCase = true)) ||
+                            (hostAddress.isNotBlank() && (hostAddress == localIp || hostAddress == "127.0.0.1" || (selfDev != null && hostAddress == selfDev.host)))
+                    if (isSelfService) {
+                        Log.d(TAG, "Ignoring self device announcement: $rawName ($hostAddress)")
                         processNextResolve()
                         return
                     }
 
-                    val port = serviceInfo.port
-                    val rawName = serviceInfo.serviceName
-                    val cleanName = cleanDeviceDisplayName(rawName)
                     val now = System.currentTimeMillis()
                     if (hostAddress.isNotBlank()) lastSeenTimestamps[hostAddress] = now
                     lastSeenTimestamps[rawName] = now

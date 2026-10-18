@@ -527,7 +527,7 @@ fun resolveInitialLanguage(code: String, countryCode: String = ""): AppLanguage 
 }
 
 fun copyForLanguageCode(code: String?): Copy {
-    if (code.isNullOrBlank()) return EnglishCopy
+    if (code.isNullOrBlank()) return currentAppCopy()
     return copyFor(resolveInitialLanguage(code))
 }
 

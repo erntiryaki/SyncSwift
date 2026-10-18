@@ -354,7 +354,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
             val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
             val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
-            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: "en"
+            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: ""
             val timestamp = extractNotificationField(userInfo, "timestamp")?.toLongOrNull() ?: 0L
             val isExpired = timestamp > 0L && (currentTimeMs() - timestamp > 180_000L)
 
@@ -392,7 +392,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
             val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
             val senderOs = extractNotificationField(userInfo, "senderOs") ?: "iOS"
-            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: "en"
+            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: ""
             val senderPushToken = extractNotificationField(userInfo, "senderPushToken") ?: ""
             val timestamp = extractNotificationField(userInfo, "timestamp")?.toLongOrNull() ?: 0L
             val key = "$senderHost:$senderPort"
@@ -432,7 +432,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val mimeType = extractNotificationField(userInfo, "mimeType") ?: "application/octet-stream"
             val downloadUrl = extractNotificationField(userInfo, "downloadUrl") ?: ""
             val isRemote = extractNotificationField(userInfo, "isRemote")?.equals("true", ignoreCase = true) == true || downloadUrl.isNotBlank()
-            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: "en"
+            val senderLanguage = extractNotificationField(userInfo, "senderLanguage") ?: ""
             val timestamp = extractNotificationField(userInfo, "timestamp")?.toLongOrNull() ?: 0L
             val isExpired = timestamp > 0L && (currentTimeMs() - timestamp > 180_000L)
 

@@ -438,6 +438,12 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
             val rejectIntent = Intent(this, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_REJECT_PAIR
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+                putExtra(NotificationActionReceiver.EXTRA_SENDER_NAME, senderName)
+                putExtra(NotificationActionReceiver.EXTRA_SENDER_HOST, senderHost)
+                putExtra(NotificationActionReceiver.EXTRA_SENDER_PORT, senderPort)
+                putExtra(NotificationActionReceiver.EXTRA_SENDER_ID, senderId)
+                putExtra("sender_push_token", data["senderPushToken"] ?: "")
+                putExtra("sender_language", data["senderLanguage"] ?: "")
             }
             val rejectPending = PendingIntent.getBroadcast(
                 this,
