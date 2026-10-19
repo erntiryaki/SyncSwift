@@ -228,18 +228,6 @@ actual object TransferEngine {
 
                         ConnectionManager.dispatchIncomingPairRequest(request)
 
-                        // Launch watcher to monitor client disconnection / cancellation in real time
-                        val watchJob = scope.launch(Dispatchers.IO) {
-                            try {
-                                val b = input.read()
-                                if (b == -1 || b == 10) { // EOF or TYPE_CANCEL
-                                    ConnectionManager.cancelIncomingPairRequest()
-                                }
-                            } catch (_: Exception) {
-                                ConnectionManager.cancelIncomingPairRequest()
-                            }
-                        }
-
                         // Wait for user to accept or reject in UI (max 30 seconds)
                         val accepted = try {
                             withTimeout(30000) {
@@ -248,8 +236,6 @@ actual object TransferEngine {
                         } catch (e: Exception) {
                             ConnectionManager.cancelIncomingPairRequest()
                             false
-                        } finally {
-                            watchJob.cancel()
                         }
 
                         if (accepted) {
@@ -330,18 +316,6 @@ actual object TransferEngine {
 
                         ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
-                        // Launch watcher to monitor client disconnection / cancellation in real time
-                        val watchJob = scope.launch(Dispatchers.IO) {
-                            try {
-                                val b = input.read()
-                                if (b == -1 || b == 10) {
-                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
-                                }
-                            } catch (_: Exception) {
-                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
-                            }
-                        }
-
                         // Wait for recipient to accept or reject in UI (max 35 seconds)
                         val accepted = try {
                             withTimeout(35000) {
@@ -350,8 +324,6 @@ actual object TransferEngine {
                         } catch (e: Exception) {
                             ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                             false
-                        } finally {
-                            watchJob.cancel()
                         }
 
                         if (!accepted) {
@@ -399,18 +371,6 @@ actual object TransferEngine {
 
                         ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
-                        // Launch watcher to monitor client disconnection / cancellation in real time
-                        val watchJob = scope.launch(Dispatchers.IO) {
-                            try {
-                                val b = input.read()
-                                if (b == -1 || b == 10) { // EOF or TYPE_CANCEL
-                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
-                                }
-                            } catch (_: Exception) {
-                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
-                            }
-                        }
-
                         // Wait for user to accept or reject in UI (max 35 seconds)
                         val accepted = try {
                             withTimeout(35000) {
@@ -419,8 +379,6 @@ actual object TransferEngine {
                         } catch (e: Exception) {
                             ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                             false
-                        } finally {
-                            watchJob.cancel()
                         }
 
                         if (!accepted) {

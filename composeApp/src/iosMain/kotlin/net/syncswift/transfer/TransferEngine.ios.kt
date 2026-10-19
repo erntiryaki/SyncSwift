@@ -262,16 +262,6 @@ actual object TransferEngine {
 
                             ConnectionManager.dispatchIncomingPairRequest(request)
 
-                            val watchJob = scope.launch(Dispatchers.Default) {
-                                val buf = ByteArray(1)
-                                val r = buf.usePinned { pinned ->
-                                    recv(clientSock, pinned.addressOf(0), 1.convert(), 0)
-                                }
-                                if (r <= 0 || buf[0] == 10.toByte()) {
-                                    ConnectionManager.cancelIncomingPairRequest()
-                                }
-                            }
-
                             val accepted = try {
                                 withTimeout(30000) {
                                     request.deferredResponse.await()
@@ -279,8 +269,6 @@ actual object TransferEngine {
                             } catch (e: Exception) {
                                 ConnectionManager.cancelIncomingPairRequest()
                                 false
-                            } finally {
-                                watchJob.cancel()
                             }
 
                             val respByte = byteArrayOf(if (accepted) RESP_ACCEPTED else RESP_REJECTED)
@@ -339,16 +327,6 @@ actual object TransferEngine {
 
                             ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
-                            val watchJob = scope.launch(Dispatchers.Default) {
-                                val buf = ByteArray(1)
-                                val r = buf.usePinned { pinned ->
-                                    recv(clientSock, pinned.addressOf(0), 1.convert(), 0)
-                                }
-                                if (r <= 0 || buf[0] == 10.toByte()) {
-                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
-                                }
-                            }
-
                             val accepted = try {
                                 withTimeout(35000) {
                                     transferRequest.deferredResponse.await()
@@ -356,8 +334,6 @@ actual object TransferEngine {
                             } catch (e: Exception) {
                                 ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                                 false
-                            } finally {
-                                watchJob.cancel()
                             }
 
                             if (!accepted) {

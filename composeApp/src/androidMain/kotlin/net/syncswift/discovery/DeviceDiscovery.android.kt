@@ -420,21 +420,21 @@ actual object DeviceDiscoveryManager {
                         ?: 0L
 
                     val age = now - lastSeen
-                    // Heartbeat is sent every 2.8s. If seen within 7.5s -> online
-                    if (lastSeen > 0L && age < 7500L) {
+                    // Heartbeat is sent every 2.8s. If seen within 15s -> online
+                    if (lastSeen > 0L && age < 15000L) {
                         if (!dev.isOnline) {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else if (lastSeen > 0L && age >= 7500L) {
+                    } else if (lastSeen > 0L && age >= 15000L) {
                         val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                        if (isConnected) {
+                        if (isConnected || age < 40000L) {
                             if (dev.isOnline) {
                                 iterator.set(dev.copy(isOnline = false))
                                 changed = true
                             }
                         } else {
-                            // Non-connected nearby device disappeared -> remove immediately
+                            // Non-connected nearby device not seen for 40s -> remove
                             iterator.remove()
                             changed = true
                         }
