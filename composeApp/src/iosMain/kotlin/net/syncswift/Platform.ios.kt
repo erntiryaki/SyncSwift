@@ -59,6 +59,11 @@ actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui
     // Handled by iOS UIViewController preferredStatusBarStyle
 }
 
+@androidx.compose.runtime.Composable
+actual fun SheetSystemBars(active: Boolean, isDark: Boolean) {
+    // Handled by iOS UIViewController preferredStatusBarStyle
+}
+
 actual fun setSystemBarsDirect(isDark: Boolean, statusBarColor: androidx.compose.ui.graphics.Color?) {
     // Handled by iOS UIViewController preferredStatusBarStyle
 }

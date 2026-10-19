@@ -75,13 +75,7 @@ fun ConnectedDeviceActionScreen(
     ) {
         SheetSystemBars(active = isVisible, isDark = isDark)
 
-        val dragState = rememberSheetDragState(onDismiss = {
-            scope.launch {
-                isVisible = false
-                kotlinx.coroutines.delay(140)
-                onDismiss()
-            }
-        })
+        val dragState = rememberSheetDragState(onDismiss = handleDismiss)
 
         AnimatedVisibility(
             visible = isVisible,

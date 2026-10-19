@@ -25,6 +25,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import net.syncswift.SheetSystemBars
 import net.syncswift.ui.auth.components.AuthColors
 import net.syncswift.ui.theme.*
 
@@ -72,13 +73,7 @@ fun SyncSwiftModal(
         // Handles status bar: dark while modal is open, restored to theme (black icons on light theme) on close!
         SheetSystemBars(active = isVisible, isDark = isDark)
 
-        val dragState = rememberSheetDragState(onDismiss = {
-            scope.launch {
-                isVisible = false
-                delay(140)
-                onDismissRequest()
-            }
-        })
+        val dragState = rememberSheetDragState(onDismiss = handleDismiss)
 
         AnimatedVisibility(
             visible = isVisible,
@@ -250,7 +245,7 @@ fun SyncSwiftModal(
                                 }
                             }
 
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(16.dp))
                         }
                     }
                 }

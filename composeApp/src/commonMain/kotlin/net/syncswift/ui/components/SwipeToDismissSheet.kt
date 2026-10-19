@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import net.syncswift.setSystemBarsDirect
 import net.syncswift.ui.theme.LocalSyncSwiftColors
 
 class SheetDragState(
@@ -47,16 +46,12 @@ class SheetDragState(
             onDragEnd = {
                 val releasedOffset = dragOffsetY
                 isDragging = false
-                scope.launch {
-                    animatable.snapTo(releasedOffset)
-                    if (releasedOffset > thresholdPx) {
-                        animatable.animateTo(
-                            targetValue = releasedOffset + 450f,
-                            animationSpec = tween(150, easing = FastOutLinearInEasing)
-                        )
-                        onDismiss()
-                        animatable.snapTo(0f)
-                    } else {
+                if (releasedOffset > thresholdPx) {
+                    onDismiss()
+                } else {
+                    scope.launch {
+                        animatable.snapTo(releasedOffset)
+                        dragOffsetY = 0f
                         animatable.animateTo(
                             targetValue = 0f,
                             animationSpec = spring(
@@ -72,6 +67,7 @@ class SheetDragState(
                 isDragging = false
                 scope.launch {
                     animatable.snapTo(releasedOffset)
+                    dragOffsetY = 0f
                     animatable.animateTo(
                         targetValue = 0f,
                         animationSpec = spring(
@@ -97,33 +93,11 @@ class SheetDragState(
 @Composable
 fun rememberSheetDragState(
     onDismiss: () -> Unit,
-    thresholdPx: Float = 80f
+    thresholdPx: Float = 60f
 ): SheetDragState {
     val scope = rememberCoroutineScope()
 
     return remember(onDismiss) {
         SheetDragState(scope, onDismiss, thresholdPx)
-    }
-}
-
-/**
- * Universal System Bar Controller for Bottom Sheets & Modals:
- * 1. While sheet is active/open: Dims the system notification bar with dark background (Color(0x99000000))
- *    and sets status bar text/icons to WHITE (isDark = true) for clear contrast.
- * 2. When sheet closes/dismisses: ALWAYS immediately restores the status bar background to transparent
- *    and restores icon colors to the active theme (in light theme: BLACK icons).
- */
-@Composable
-fun SheetSystemBars(
-    active: Boolean,
-    isDark: Boolean = LocalSyncSwiftColors.current.isDark
-) {
-    DisposableEffect(active, isDark) {
-        if (active) {
-            setSystemBarsDirect(isDark = true, statusBarColor = Color(0x99000000))
-        }
-        onDispose {
-            setSystemBarsDirect(isDark = isDark, statusBarColor = Color.Transparent)
-        }
     }
 }

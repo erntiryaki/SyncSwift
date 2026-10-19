@@ -31,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.AppLanguage
-import net.syncswift.ui.components.SheetSystemBars
+import net.syncswift.SheetSystemBars
 import net.syncswift.ui.components.rememberSheetDragState
 
 @Composable

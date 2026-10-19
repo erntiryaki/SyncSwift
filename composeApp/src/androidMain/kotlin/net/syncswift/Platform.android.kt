@@ -74,6 +74,64 @@ actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui
     }
 }
 
+@androidx.compose.runtime.Composable
+actual fun SheetSystemBars(active: Boolean, isDark: Boolean) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    if (view.isInEditMode) return
+
+    androidx.compose.runtime.DisposableEffect(active, isDark, view) {
+        val configureDialogWindow: () -> Unit = {
+            var parent = view.parent
+            while (parent != null) {
+                if (parent is androidx.compose.ui.window.DialogWindowProvider) {
+                    val dialogWindow = parent.window
+                    dialogWindow.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                    dialogWindow.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
+                    dialogWindow.statusBarColor = android.graphics.Color.TRANSPARENT
+                    dialogWindow.navigationBarColor = android.graphics.Color.TRANSPARENT
+                    dialogWindow.setLayout(
+                        android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                        android.view.WindowManager.LayoutParams.MATCH_PARENT
+                    )
+                    dialogWindow.setGravity(android.view.Gravity.BOTTOM)
+                    val dialogInsets = androidx.core.view.WindowCompat.getInsetsController(dialogWindow, dialogWindow.decorView)
+                    dialogInsets.isAppearanceLightStatusBars = false
+                    dialogInsets.isAppearanceLightNavigationBars = false
+                    break
+                }
+                parent = parent.parent
+            }
+        }
+
+        if (active) {
+            configureDialogWindow()
+            view.post { configureDialogWindow() }
+
+            val activity = SessionManager.getCurrentActivity()
+            val actWindow = activity?.window
+            if (actWindow != null) {
+                androidx.core.view.WindowCompat.setDecorFitsSystemWindows(actWindow, false)
+                actWindow.statusBarColor = android.graphics.Color.TRANSPARENT
+                val actInsets = androidx.core.view.WindowCompat.getInsetsController(actWindow, actWindow.decorView)
+                actInsets.isAppearanceLightStatusBars = false
+                actInsets.isAppearanceLightNavigationBars = false
+            }
+        }
+
+        onDispose {
+            val activity = SessionManager.getCurrentActivity()
+            val actWindow = activity?.window
+            if (actWindow != null) {
+                actWindow.statusBarColor = android.graphics.Color.TRANSPARENT
+                val actInsets = androidx.core.view.WindowCompat.getInsetsController(actWindow, actWindow.decorView)
+                actInsets.isAppearanceLightStatusBars = !isDark
+                actInsets.isAppearanceLightNavigationBars = !isDark
+            }
+        }
+    }
+}
+
 actual fun setSystemBarsDirect(isDark: Boolean, statusBarColor: androidx.compose.ui.graphics.Color?) {
     val activity = SessionManager.getCurrentActivity() ?: return
     val window = activity.window ?: return

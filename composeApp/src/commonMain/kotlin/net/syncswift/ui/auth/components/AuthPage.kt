@@ -101,30 +101,16 @@ fun AuthPage(
             // Hero Image starts below the top navigation bar with smooth top and bottom transition gradients
             if (showHero) {
                 Spacer(Modifier.statusBarsPadding())
-                Spacer(Modifier.height(52.dp))
+                Spacer(Modifier.height(68.dp))
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(270.dp)
+                        .height(285.dp)
                 ) {
                     AuthHeroImage(
                         isDark = isDark,
                         modifier = Modifier.fillMaxSize()
-                    )
-
-                    // Smooth subtle gradient transition at the very top of hero blending into heroTopColor
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(26.dp)
-                            .align(Alignment.TopCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    0.0f to heroTopColor,
-                                    1.0f to Color.Transparent
-                                )
-                            )
                     )
 
                     // Smooth fade transition at the bottom end of hero blending into the form background

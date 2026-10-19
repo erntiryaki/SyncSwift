@@ -42,7 +42,7 @@ import net.syncswift.transfer.TransferItem
 import net.syncswift.transfer.TransferStatus
 import net.syncswift.ui.components.ConnectedDeviceActionScreen
 import net.syncswift.ui.components.SendPairRequestScreen
-import net.syncswift.ui.components.SheetSystemBars
+import net.syncswift.SheetSystemBars
 import net.syncswift.ui.components.rememberSheetDragState
 import net.syncswift.ui.theme.*
 
@@ -1022,13 +1022,7 @@ private fun DeviceListBottomSheet(
     ) {
         SheetSystemBars(active = isVisible, isDark = isDark)
 
-        val dragState = rememberSheetDragState(onDismiss = {
-            scope.launch {
-                isVisible = false
-                kotlinx.coroutines.delay(140)
-                onDismiss()
-            }
-        })
+        val dragState = rememberSheetDragState(onDismiss = handleDismiss)
 
         AnimatedVisibility(
             visible = isVisible,
