@@ -35,50 +35,7 @@ actual fun AdBannerView(modifier: Modifier) {
         UIKitView(
             factory = {
                 val provided = iosAdBannerProvider?.invoke(adUnit)
-                if (provided != null) {
-                    provided.removeFromSuperview()
-                    provided
-                } else {
-                    // Fallback to reflection if provider not yet wired
-                    try {
-                        val cls = NSClassFromString("GADBannerView")
-                        if (cls != null) {
-                            val alloc = platform.Foundation.NSSelectorFromString("alloc")
-                            val initSel = platform.Foundation.NSSelectorFromString("init")
-                            val rawObj = (cls as? platform.darwin.NSObject)?.performSelector(alloc)
-                            val bannerView = (rawObj as? platform.darwin.NSObject)?.performSelector(initSel) as? UIView
-
-                            if (bannerView != null) {
-                                val bannerObj = bannerView as? platform.darwin.NSObject
-                                val setAdUnitSel = platform.Foundation.NSSelectorFromString("setAdUnitID:")
-                                bannerObj?.performSelector(setAdUnitSel, withObject = adUnit as? platform.darwin.NSObject)
-
-                                val window = UIApplication.sharedApplication.keyWindow
-                                    ?: UIApplication.sharedApplication.windows.firstOrNull() as? platform.UIKit.UIWindow
-                                val rootVC = window?.rootViewController
-                                if (rootVC != null) {
-                                    val setRootVcSel = platform.Foundation.NSSelectorFromString("setRootViewController:")
-                                    bannerObj?.performSelector(setRootVcSel, withObject = rootVC as? platform.darwin.NSObject)
-                                }
-
-                                val reqCls = NSClassFromString("GADRequest")
-                                val reqObj = (reqCls as? platform.darwin.NSObject)?.performSelector(platform.Foundation.NSSelectorFromString("request"))
-                                    ?: (reqCls as? platform.darwin.NSObject)?.performSelector(alloc)?.let { (it as? platform.darwin.NSObject)?.performSelector(initSel) }
-
-                                val loadRequestSel = platform.Foundation.NSSelectorFromString("loadRequest:")
-                                (bannerView as? platform.darwin.NSObject)?.performSelector(loadRequestSel, withObject = reqObj)
-
-                                bannerView
-                            } else {
-                                UIView()
-                            }
-                        } else {
-                            UIView()
-                        }
-                    } catch (_: Throwable) {
-                        UIView()
-                    }
-                }
+                provided ?: UIView()
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
             onRelease = { view ->

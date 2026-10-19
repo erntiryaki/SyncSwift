@@ -61,6 +61,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onResume() {
         super.onResume()
         SessionManager.setCurrentActivity(this)
+        if (net.syncswift.biometric.BiometricAuthManager.isEnabled() && net.syncswift.biometric.BiometricAuthManager.isAppLocked.value) {
+            net.syncswift.biometric.BiometricAuthManager.requestPrompt()
+        }
     }
 
     override fun onStop() {

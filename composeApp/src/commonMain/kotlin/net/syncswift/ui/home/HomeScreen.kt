@@ -872,12 +872,6 @@ fun HomeScreen(
             }
         }
 
-        val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
-        if (!isProUser) {
-            net.syncswift.ui.components.AdBannerView(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
     }
 
     // Pair request dialogs

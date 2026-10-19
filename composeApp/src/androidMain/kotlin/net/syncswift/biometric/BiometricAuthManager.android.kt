@@ -13,6 +13,13 @@ actual object BiometricAuthManager {
     private val _isAppLocked = MutableStateFlow(false)
     actual val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
 
+    private val _promptTrigger = MutableStateFlow(0)
+    actual val promptTrigger: StateFlow<Int> = _promptTrigger.asStateFlow()
+
+    actual fun requestPrompt() {
+        _promptTrigger.value += 1
+    }
+
     actual fun isSupported(): Boolean {
         val activity = SessionManager.getCurrentActivity() ?: return false
         val bm = BiometricManager.from(activity)

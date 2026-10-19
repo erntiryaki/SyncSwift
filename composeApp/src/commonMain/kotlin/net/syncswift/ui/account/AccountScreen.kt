@@ -439,11 +439,6 @@ fun AccountScreen(
             Spacer(Modifier.height(30.dp))
         }
 
-        if (!isPro) {
-            net.syncswift.ui.components.AdBannerView(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
     }
 
     // Logout Confirmation Bottom Sheet

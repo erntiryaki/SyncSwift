@@ -837,6 +837,14 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                 }
                                             }
 
+                                            // Persistent Ad Banner across main tabs
+                                            val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+                                            if (!isProUser) {
+                                                net.syncswift.ui.components.AdBannerView(
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+
                                             // Bottom Navigation Bar
                                                 net.syncswift.ui.components.BottomNavBar(
                                                     modifier = Modifier.fillMaxWidth(),

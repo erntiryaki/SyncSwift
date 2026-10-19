@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,10 +37,11 @@ fun BiometricLockOverlay(
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
+    val promptTrigger by BiometricAuthManager.promptTrigger.collectAsState()
 
-    // Auto-prompt on appearance: prompt directly without requiring button tap
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(250)
+    // Auto-prompt on appearance and every time app returns from background
+    LaunchedEffect(promptTrigger) {
+        kotlinx.coroutines.delay(200)
         BiometricAuthManager.authenticate(
             title = copy.biometricPromptTitle,
             subtitle = copy.biometricPromptSubtitle

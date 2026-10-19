@@ -145,6 +145,9 @@ fun onIosAppDidEnterBackground() {
 fun onIosAppWillEnterForeground() {
     println("[SyncSwift iOS] App will enter foreground - resuming discovery & server")
     try {
+        if (net.syncswift.biometric.BiometricAuthManager.isEnabled() && net.syncswift.biometric.BiometricAuthManager.isAppLocked.value) {
+            net.syncswift.biometric.BiometricAuthManager.requestPrompt()
+        }
         net.syncswift.transfer.TransferEngine.startForegroundServer()
         net.syncswift.discovery.DeviceDiscoveryManager.startDiscovery()
     } catch (_: Throwable) {}

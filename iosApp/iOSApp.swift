@@ -31,7 +31,6 @@ final class ObservableAdMobBannerView: GADBannerView {
 }
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    private var cachedBannerView: ObservableAdMobBannerView?
 
     func application(
         _ application: UIApplication,
@@ -44,11 +43,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         GADMobileAds.sharedInstance().start(completionHandler: nil)
 
         // Wire real AdMob banner provider to Compose Multiplatform
-        Platform_iosKt.setIosAdBannerProvider { [weak self] (adUnitId: String) -> UIView in
-            if let cached = self?.cachedBannerView {
-                cached.removeFromSuperview()
-                return cached
-            }
+        Platform_iosKt.setIosAdBannerProvider { (adUnitId: String) -> UIView in
             let screenWidth = UIScreen.main.bounds.width
             let adSize = GADCurrentOrientationAnchoredAdaptiveBannerAdSizeWithWidth(screenWidth)
             let bannerView = ObservableAdMobBannerView(adSize: adSize)
@@ -61,7 +56,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 bannerView.rootViewController = rootVC
             }
             bannerView.loadIfNeeded()
-            self?.cachedBannerView = bannerView
             return bannerView
         }
 
