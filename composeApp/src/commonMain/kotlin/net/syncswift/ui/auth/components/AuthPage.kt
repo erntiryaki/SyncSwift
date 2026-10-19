@@ -115,11 +115,11 @@ fun AuthPage(
                             .padding(top = 10.dp)
                     )
 
-                    // Hero üstüne solukluk: bildirim tepsisi / üst bar ile hero arasında pürüzsüz geçiş
+                    // Hero üstüne solukluk: bildirim tepsisi / üst bar ile hero arasında pürüzsüz geçiş (kısaltılmış boy)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(36.dp)
+                            .height(16.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
@@ -130,11 +130,11 @@ fun AuthPage(
                             )
                     )
 
-                    // Hero altına solukluk: hero ile form arka planı arasında pürüzsüz geçiş
+                    // Hero altına solukluk: hero ile form arka planı arasında pürüzsüz geçiş (kısaltılmış boy)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(22.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(

@@ -67,8 +67,6 @@ fun ConnectedDeviceActionScreen(
 
     SheetSystemBars(active = isVisible, isDark = isDark)
 
-    val dragState = rememberSheetDragState(visible = isVisible, onDismiss = handleDismiss)
-
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(tween(200)),
@@ -92,7 +90,6 @@ fun ConnectedDeviceActionScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = maxSheetHeight)
-                            .then(dragState.sheetOffsetModifier)
                             .clickable(enabled = false) {}, // Prevent click through
                         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                         color = if (isDark) Color(0xFF161F30) else Color(0xFFFFFFFF),
@@ -107,11 +104,10 @@ fun ConnectedDeviceActionScreen(
                                 .padding(top = 14.dp, bottom = 26.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // Drag Handle (with downward drag gesture support)
+                            // Pill indicator
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .then(dragState.dragHandleModifier)
                                     .padding(top = 4.dp, bottom = 14.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -377,7 +373,7 @@ fun ConnectedDeviceActionScreen(
 
     // Rename Modal Dialog
     if (showRenameDialog) {
-        SyncSwiftModal(
+        SyncSwiftBottomSheet(
             onDismissRequest = { showRenameDialog = false },
             title = copy.editDeviceDialogTitle,
             titleIcon = { EditVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },

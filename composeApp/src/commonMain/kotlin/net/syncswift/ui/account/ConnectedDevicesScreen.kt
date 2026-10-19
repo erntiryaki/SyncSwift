@@ -40,7 +40,7 @@ import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.ui.components.QrCodeView
 import net.syncswift.ui.components.rememberQrImagePicker
 import net.syncswift.ui.components.rememberQrScanner
-import net.syncswift.ui.components.SyncSwiftModal
+import net.syncswift.ui.components.SyncSwiftBottomSheet
 import net.syncswift.ui.components.SendPairRequestScreen
 import net.syncswift.ui.components.ConnectedDeviceActionScreen
 import androidx.compose.animation.core.tween
@@ -745,9 +745,10 @@ fun ConnectedDevicesScreen(
         }
     }
 
-        // MODAL 1: QR Göster Modal
+        // MODAL 1: QR Göster Bottom Sheet
         if (showQrModal) {
-            SyncSwiftModal(
+            SyncSwiftBottomSheet(
+                visible = showQrModal,
                 title = copy.showQrTitle,
                 onDismissRequest = { showQrModal = false }
             ) {
@@ -826,9 +827,10 @@ fun ConnectedDevicesScreen(
             }
         }
 
-        // MODAL 2: QR Okut Modal (Option 1: Kamera ile Okut, Option 2: Dosyalardan Seç. NO manual IP, NO Bağlan button)
+        // MODAL 2: QR Okut Bottom Sheet (Option 1: Kamera ile Okut, Option 2: Dosyalardan Seç. NO manual IP, NO Bağlan button)
         if (showScanModal) {
-            SyncSwiftModal(
+            SyncSwiftBottomSheet(
+                visible = showScanModal,
                 title = copy.scanQrTitle,
                 onDismissRequest = { showScanModal = false }
             ) {

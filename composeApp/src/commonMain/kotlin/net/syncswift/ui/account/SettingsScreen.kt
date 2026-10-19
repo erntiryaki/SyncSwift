@@ -65,12 +65,13 @@ fun SettingsScreen(
 
     val isDeleteEmailMatch = deleteEmailInput.trim().equals(userEmail.trim(), ignoreCase = true)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -584,9 +585,10 @@ fun SettingsScreen(
         }
     }
 
-    // Language Selection Modal (Universal Flat Minimalist SyncSwiftModal)
+    // Language Selection Bottom Sheet
     if (showLanguageDialog) {
-        net.syncswift.ui.components.SyncSwiftModal(
+        net.syncswift.ui.components.SyncSwiftBottomSheet(
+            visible = showLanguageDialog,
             onDismissRequest = { showLanguageDialog = false },
             title = copy.selectLanguage,
             titleIcon = { GlobeVectorIcon(Modifier.size(20.dp), color = Blue) },
@@ -630,9 +632,10 @@ fun SettingsScreen(
         }
     }
 
-    // Theme Selection Modal (Universal Flat Minimalist SyncSwiftModal)
+    // Theme Selection Bottom Sheet
     if (showThemeDialog) {
-        net.syncswift.ui.components.SyncSwiftModal(
+        net.syncswift.ui.components.SyncSwiftBottomSheet(
+            visible = showThemeDialog,
             onDismissRequest = { showThemeDialog = false },
             title = copy.themeSelection,
             titleIcon = {
@@ -712,9 +715,10 @@ fun SettingsScreen(
         }
     }
 
-    // Modal Confirmation Dialog for Account Deletion (Universal Flat Minimalist SyncSwiftModal)
+    // Modal Confirmation Dialog for Account Deletion
     if (showDeleteDialog) {
-        net.syncswift.ui.components.SyncSwiftModal(
+        net.syncswift.ui.components.SyncSwiftBottomSheet(
+            visible = showDeleteDialog,
             onDismissRequest = {
                 if (!deleteLoading) showDeleteDialog = false
             },
@@ -726,7 +730,7 @@ fun SettingsScreen(
             confirmEnabled = isDeleteEmailMatch,
             confirmLoading = deleteLoading,
             onConfirm = {
-                if (!isDeleteEmailMatch) return@SyncSwiftModal
+                if (!isDeleteEmailMatch) return@SyncSwiftBottomSheet
                 deleteLoading = true
                 deleteError = null
                 scope.launch {
@@ -794,6 +798,8 @@ fun SettingsScreen(
         }
     }
 }
+}
+
 
 @Composable
 private fun RuleRow(label: String, valid: Boolean) {

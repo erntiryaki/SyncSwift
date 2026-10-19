@@ -66,11 +66,12 @@ fun AccountScreen(
     val iconColor = if (isDark) softBlue else Color(0xFF1E293B)
     val scrollState = rememberScrollState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+        ) {
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -441,9 +442,10 @@ fun AccountScreen(
         }
     }
 
-    // Logout Confirmation Modal
+    // Logout Confirmation Bottom Sheet
     if (showLogoutDialog) {
-        net.syncswift.ui.components.SyncSwiftModal(
+        net.syncswift.ui.components.SyncSwiftBottomSheet(
+            visible = showLogoutDialog,
             onDismissRequest = { showLogoutDialog = false },
             title = copy.logoutConfirmTitle,
             titleIcon = { LogoutIcon(Modifier.size(20.dp), color = ErrorRed) },
@@ -481,6 +483,8 @@ fun AccountScreen(
         )
     }
 }
+}
+
 
 @Composable
 private fun AccountMenuItemRow(
@@ -536,7 +540,8 @@ private fun AboutModalSheet(
 ) {
     var devClicks by remember { mutableStateOf(0) }
 
-    net.syncswift.ui.components.SyncSwiftModal(
+    net.syncswift.ui.components.SyncSwiftBottomSheet(
+        visible = true,
         onDismissRequest = onDismiss,
         title = copy.aboutTitle,
         titleIcon = { InfoIcon(Modifier.size(22.dp), color = Blue) },

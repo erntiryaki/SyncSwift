@@ -29,7 +29,7 @@ import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.subscription.PaywallReason
 import net.syncswift.subscription.SubscriptionManager
-import net.syncswift.ui.components.SyncSwiftModal
+import net.syncswift.ui.components.SyncSwiftBottomSheet
 import net.syncswift.ui.components.rememberQrScanner
 import net.syncswift.ui.theme.*
 
@@ -217,57 +217,6 @@ fun ConnectDesktopScreen(
             }
         }
     )
-
-    // Remove Device Confirmation Modal
-    if (deviceToConfirmRemove != null) {
-        val targetDev = deviceToConfirmRemove!!
-        SyncSwiftModal(
-            onDismissRequest = {
-                if (!isRemovingDevice) deviceToConfirmRemove = null
-            },
-            title = copy.removeDeviceConfirmTitle,
-            titleIcon = { WarningTriangleIcon(Modifier.size(20.dp), color = ErrorRed) },
-            confirmText = copy.removeAction,
-            confirmColor = ErrorRed,
-            confirmTextColor = Color.White,
-            confirmLoading = isRemovingDevice,
-            onConfirm = {
-                scope.launch {
-                    isRemovingDevice = true
-                    try {
-                        val devId = targetDev.id.ifBlank { "manual-${targetDev.host}" }
-                        // 1. Send direct local TCP logout packet to target device if reachable
-                        ConnectionManager.notifyRemoteLogout(targetDev)
-                        // 2. Remove from Supabase (sends FCM push, deletes row, clears user_id)
-                        if (userEmail.isNotBlank()) {
-                            SupabaseNetwork.removeUserDevice(userEmail, devId)
-                            SupabaseNetwork.clearDeviceUser(devId)
-                        }
-                        // 3. Disconnect local connection & purge manual device
-                        ConnectionManager.disconnectDevice(targetDev, notifyPeer = false)
-                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(targetDev.host)
-                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(devId)
-                        showNativeToast(copy.deviceRemovedSuccess)
-                        refreshDevices()
-                    } finally {
-                        isRemovingDevice = false
-                        deviceToConfirmRemove = null
-                    }
-                }
-            },
-            dismissText = copy.cancelAction,
-            onDismiss = {
-                if (!isRemovingDevice) deviceToConfirmRemove = null
-            }
-        ) {
-            Text(
-                text = copy.removeDeviceConfirmDesc.replace("%s", cleanDeviceDisplayName(targetDev.name)),
-                color = Mist,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -817,6 +766,57 @@ fun ConnectDesktopScreen(
             }
         }
 
+        // Remove Device Confirmation Bottom Sheet
+        if (deviceToConfirmRemove != null) {
+            val targetDev = deviceToConfirmRemove!!
+            SyncSwiftBottomSheet(
+                visible = true,
+                onDismissRequest = {
+                    if (!isRemovingDevice) deviceToConfirmRemove = null
+                },
+                title = copy.removeDeviceConfirmTitle,
+                titleIcon = { WarningTriangleIcon(Modifier.size(20.dp), color = ErrorRed) },
+                confirmText = copy.removeAction,
+                confirmColor = ErrorRed,
+                confirmTextColor = Color.White,
+                confirmLoading = isRemovingDevice,
+                onConfirm = {
+                    scope.launch {
+                        isRemovingDevice = true
+                        try {
+                            val devId = targetDev.id.ifBlank { "manual-${targetDev.host}" }
+                            // 1. Send direct local TCP logout packet to target device if reachable
+                            ConnectionManager.notifyRemoteLogout(targetDev)
+                            // 2. Remove from Supabase (sends FCM push, deletes row, clears user_id)
+                            if (userEmail.isNotBlank()) {
+                                SupabaseNetwork.removeUserDevice(userEmail, devId)
+                                SupabaseNetwork.clearDeviceUser(devId)
+                            }
+                            // 3. Disconnect local connection & purge manual device
+                            ConnectionManager.disconnectDevice(targetDev, notifyPeer = false)
+                            net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(targetDev.host)
+                            net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(devId)
+                            showNativeToast(copy.deviceRemovedSuccess)
+                            refreshDevices()
+                        } finally {
+                            isRemovingDevice = false
+                            deviceToConfirmRemove = null
+                        }
+                    }
+                },
+                dismissText = copy.cancelAction,
+                onDismiss = {
+                    if (!isRemovingDevice) deviceToConfirmRemove = null
+                }
+            ) {
+                Text(
+                    text = copy.removeDeviceConfirmDesc.replace("%s", cleanDeviceDisplayName(targetDev.name)),
+                    color = Mist,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+            }
+        }
     }
 }
 

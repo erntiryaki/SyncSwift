@@ -73,12 +73,13 @@ fun EditProfileScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -253,9 +254,10 @@ fun EditProfileScreen(
         }
     }
 
-    // Modal 1: Confirmation that code will be sent to new email (Universal Flat Minimalist SyncSwiftModal)
+    // Modal 1: Confirmation that code will be sent to new email
     if (showConfirmEmailDialog) {
-        net.syncswift.ui.components.SyncSwiftModal(
+        net.syncswift.ui.components.SyncSwiftBottomSheet(
+            visible = showConfirmEmailDialog,
             onDismissRequest = { showConfirmEmailDialog = false },
             title = copy.emailChangeConfirmTitle,
             titleIcon = { EmailIcon(Modifier.size(20.dp), color = Blue) },
@@ -297,9 +299,10 @@ fun EditProfileScreen(
         }
     }
 
-    // Modal 2: 6-Digit OTP Verification Dialog (Universal Flat Minimalist SyncSwiftModal)
+    // Modal 2: 6-Digit OTP Verification Dialog
     if (showOtpDialog) {
-        net.syncswift.ui.components.SyncSwiftModal(
+        net.syncswift.ui.components.SyncSwiftBottomSheet(
+            visible = showOtpDialog,
             onDismissRequest = {
                 if (!isLoading) showOtpDialog = false
             },
@@ -313,11 +316,11 @@ fun EditProfileScreen(
             onConfirm = {
                 if (otpCountdown <= 0) {
                     otpError = copy.otpExpired
-                    return@SyncSwiftModal
+                    return@SyncSwiftBottomSheet
                 }
                 if (enteredOtpCode.trim() != generatedOtpCode.trim()) {
                     otpError = copy.otpInvalid
-                    return@SyncSwiftModal
+                    return@SyncSwiftBottomSheet
                 }
 
                 isLoading = true
@@ -390,3 +393,5 @@ fun EditProfileScreen(
         }
     }
 }
+}
+

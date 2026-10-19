@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.AppLanguage
 import net.syncswift.SheetSystemBars
-import net.syncswift.ui.components.rememberSheetDragState
 
 @Composable
 private fun CheckMarkIcon(modifier: Modifier = Modifier, color: Color) = Canvas(modifier) {
@@ -58,8 +57,6 @@ fun LanguageBottomSheet(
 ) {
     // Handles system tray: dark while sheet is open, properly restored to black icons on light theme when closed!
     SheetSystemBars(active = visible, isDark = isDark)
-
-    val dragState = rememberSheetDragState(visible = visible, onDismiss = onDismiss)
 
     AnimatedVisibility(
         visible = visible,
@@ -87,7 +84,6 @@ fun LanguageBottomSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = maxSheetHeight)
-                        .then(dragState.sheetOffsetModifier)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -103,11 +99,10 @@ fun LanguageBottomSheet(
                             .navigationBarsPadding()
                             .padding(horizontal = 24.dp, vertical = 14.dp)
                     ) {
-                        // Drag handle (downward drag closes sheet)
+                        // Visual pill indicator
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(dragState.dragHandleModifier)
                                 .padding(top = 4.dp, bottom = 14.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -124,7 +119,6 @@ fun LanguageBottomSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(dragState.dragHandleModifier)
                                 .padding(bottom = 16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically

@@ -1173,10 +1173,11 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
-            // MODAL: Maksimum Cihaz Sınırı Uyarısı & Eski Cihazımı Kaldır
+            // BOTTOM SHEET: Maksimum Cihaz Sınırı Uyarısı & Eski Cihazımı Kaldır
             if (blockedDeviceLimitData != null) {
                 val limitData = blockedDeviceLimitData!!
-                net.syncswift.ui.components.SyncSwiftModal(
+                net.syncswift.ui.components.SyncSwiftBottomSheet(
+                    visible = blockedDeviceLimitData != null,
                     onDismissRequest = {
                         if (!isRemovingOldDevice) blockedDeviceLimitData = null
                     },
@@ -1228,10 +1229,11 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
-            // MODAL: Eski Cihaz Listesi
+            // BOTTOM SHEET: Eski Cihaz Listesi
             if (showOldDevicesModal && blockedDeviceLimitData != null) {
                 val limitData = blockedDeviceLimitData!!
-                net.syncswift.ui.components.SyncSwiftModal(
+                net.syncswift.ui.components.SyncSwiftBottomSheet(
+                    visible = showOldDevicesModal && blockedDeviceLimitData != null,
                     onDismissRequest = {
                         if (!isRemovingOldDevice) showOldDevicesModal = false
                     },
@@ -1299,11 +1301,12 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
-            // MODAL: Eski Cihazı Kaldır Onay
+            // BOTTOM SHEET: Eski Cihazı Kaldır Onay
             if (oldDeviceToConfirmRemove != null && blockedDeviceLimitData != null) {
                 val targetDev = oldDeviceToConfirmRemove!!
                 val limitData = blockedDeviceLimitData!!
-                net.syncswift.ui.components.SyncSwiftModal(
+                net.syncswift.ui.components.SyncSwiftBottomSheet(
+                    visible = oldDeviceToConfirmRemove != null && blockedDeviceLimitData != null,
                     onDismissRequest = {
                         if (!isRemovingOldDevice) oldDeviceToConfirmRemove = null
                     },

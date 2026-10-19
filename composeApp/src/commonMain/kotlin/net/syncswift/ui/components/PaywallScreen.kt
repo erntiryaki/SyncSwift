@@ -60,11 +60,14 @@ fun PaywallScreen(
     val primaryButtonBg = PillButtonBg
     val pageBackground = Night
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(pageBackground)
-    ) {
+    SyncSwiftTheme(themeMode = AppThemeMode.Dark) {
+        net.syncswift.UpdateSystemBars(isDark = true, statusBarColor = Color(0xFF0B101B))
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0B101B))
+        ) {
         // Scrollable content (blurred when Pro active modal is showing)
         Column(
             modifier = Modifier
@@ -574,30 +577,35 @@ fun PaywallScreen(
                     }
                 }
             }
-        }
 
-        if (showLoginRequiredDialog) {
-            SyncSwiftModal(
-                onDismissRequest = { showLoginRequiredDialog = false },
-                title = copy.requireLoginForProTitle,
-                confirmText = copy.signInOrRegister,
-                confirmColor = PillButtonBg,
-                confirmTextColor = PillButtonText,
-                onConfirm = {
-                    showLoginRequiredDialog = false
-                    onDismiss()
-                    onNavigateToAuth?.invoke()
-                },
-                dismissText = copy.cancelAction,
-                onDismiss = { showLoginRequiredDialog = false }
-            ) {
-                Text(
-                    text = copy.requireLoginForProDesc,
-                    color = Mist,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
+            if (showLoginRequiredDialog) {
+                SyncSwiftBottomSheet(
+                    visible = showLoginRequiredDialog,
+                    onDismissRequest = { showLoginRequiredDialog = false },
+                    title = copy.requireLoginForProTitle,
+                    confirmText = copy.signInOrRegister,
+                    confirmColor = PillButtonBg,
+                    confirmTextColor = PillButtonText,
+                    onConfirm = {
+                        showLoginRequiredDialog = false
+                        onDismiss()
+                        onNavigateToAuth?.invoke()
+                    },
+                    dismissText = copy.cancelAction,
+                    onDismiss = { showLoginRequiredDialog = false },
+                    isDark = true
+                ) {
+                    Text(
+                        text = copy.requireLoginForProDesc,
+                        color = Mist,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                }
             }
         }
     }
 }
+}
+
+
