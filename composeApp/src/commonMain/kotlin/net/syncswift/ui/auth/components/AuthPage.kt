@@ -69,8 +69,9 @@ fun AuthPage(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
+    val isIos = net.syncswift.currentPlatform() == net.syncswift.PlatformFlavor.Ios
     val heroTopColor = if (isDark) Color(0xFF051430) else Color(0xFFFFFFFF)
-    net.syncswift.UpdateSystemBars(isDark = isDark, statusBarColor = if (showHero) heroTopColor else null)
+    net.syncswift.UpdateSystemBars(isDark = isDark, statusBarColor = if (showHero) (if (isIos) AuthColors.background(isDark) else heroTopColor) else null)
 
     var showLanguageSheet by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
@@ -85,9 +86,9 @@ fun AuthPage(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(110.dp)
+                    .height(if (isIos) 60.dp else 110.dp)
                     .align(Alignment.TopCenter)
-                    .background(heroTopColor)
+                    .background(if (isIos) AuthColors.background(isDark) else heroTopColor)
             )
         }
 
@@ -99,8 +100,13 @@ fun AuthPage(
                 .imePadding()
                 .navigationBarsPadding()
         ) {
-            // Hero Image starts seamlessly from the top, bringing both hero and form content higher up
+            // Hero Image starts seamlessly, with iOS breathing room and balanced gradients
             if (showHero) {
+                if (isIos) {
+                    Spacer(Modifier.statusBarsPadding())
+                    Spacer(Modifier.height(28.dp))
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -111,15 +117,18 @@ fun AuthPage(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Hero üstüne solukluk: sadece en üst kesik kenarı yumuşatan, logoyu kapatmayan ince geçiş
+                    // Hero üstüne solukluk: üst kesik kenarı ve arka plan geçişini tamamen pürüzsüzleştiren yumuşak degrade
+                    val topFadeColor = if (isIos) AuthColors.background(isDark) else heroTopColor
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
+                            .height(if (isIos) 50.dp else 16.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
-                                    0.0f to heroTopColor,
+                                    0.0f to topFadeColor,
+                                    0.35f to topFadeColor.copy(alpha = 0.85f),
+                                    0.70f to topFadeColor.copy(alpha = 0.35f),
                                     1.0f to Color.Transparent
                                 )
                             )
@@ -129,19 +138,19 @@ fun AuthPage(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(40.dp)
+                            .height(if (isIos) 54.dp else 40.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to Color.Transparent,
-                                    0.35f to AuthColors.background(isDark).copy(alpha = 0.4f),
-                                    0.70f to AuthColors.background(isDark).copy(alpha = 0.85f),
+                                    0.30f to AuthColors.background(isDark).copy(alpha = 0.35f),
+                                    0.65f to AuthColors.background(isDark).copy(alpha = 0.80f),
                                     1.0f to AuthColors.background(isDark)
                                 )
                             )
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(if (isIos) 22.dp else 10.dp))
             } else {
                 // When hero is not shown, provide space below the floating top navigation bar
                 Spacer(Modifier.statusBarsPadding())
