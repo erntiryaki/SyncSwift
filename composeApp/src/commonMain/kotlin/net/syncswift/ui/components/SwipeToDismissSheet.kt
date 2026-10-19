@@ -45,13 +45,21 @@ class SheetDragState(
             },
             onDragEnd = {
                 val releasedOffset = dragOffsetY
-                isDragging = false
                 if (releasedOffset > thresholdPx) {
+                    scope.launch {
+                        animatable.snapTo(releasedOffset)
+                        isDragging = false
+                        animatable.animateTo(
+                            targetValue = releasedOffset + 600f,
+                            animationSpec = tween(180, easing = FastOutLinearInEasing)
+                        )
+                    }
                     onDismiss()
                 } else {
                     scope.launch {
                         animatable.snapTo(releasedOffset)
                         dragOffsetY = 0f
+                        isDragging = false
                         animatable.animateTo(
                             targetValue = 0f,
                             animationSpec = spring(
@@ -64,10 +72,10 @@ class SheetDragState(
             },
             onDragCancel = {
                 val releasedOffset = dragOffsetY
-                isDragging = false
                 scope.launch {
                     animatable.snapTo(releasedOffset)
                     dragOffsetY = 0f
+                    isDragging = false
                     animatable.animateTo(
                         targetValue = 0f,
                         animationSpec = spring(

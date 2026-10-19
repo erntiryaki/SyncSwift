@@ -1040,12 +1040,12 @@ private fun DeviceListBottomSheet(
                     ),
                 contentAlignment = Alignment.BottomCenter
             ) {
-                val maxSheetHeight = maxHeight * 0.86f
+                val maxSheetHeight = maxHeight * 0.92f
 
                 AnimatedVisibility(
                     visible = isVisible,
-                    enter = slideInVertically(tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it },
-                    exit = slideOutVertically(tween(200)) { it }
+                    enter = slideInVertically(tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it } + fadeIn(tween(180)),
+                    exit = slideOutVertically(tween(200)) { it } + fadeOut(tween(140))
                 ) {
                     Surface(
                         modifier = Modifier
@@ -1066,7 +1066,8 @@ private fun DeviceListBottomSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .navigationBarsPadding()
-                                .padding(horizontal = 24.dp, vertical = 14.dp)
+                                .padding(horizontal = 24.dp)
+                                .padding(top = 14.dp, bottom = 26.dp)
                         ) {
                             // Drag handle
                             Box(
