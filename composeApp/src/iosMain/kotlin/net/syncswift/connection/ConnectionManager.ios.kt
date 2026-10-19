@@ -578,25 +578,18 @@ actual object ConnectionManager {
         _remoteConnectedDeviceKeys.value = newRemote
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
 
-        // Only purge remote placeholders; keep local devices in DeviceDiscoveryManager so they immediately drop into "Ağdaki Diğer Cihazlar"
+        // Retain devices in DeviceDiscoveryManager so they drop into "Ağdaki Diğer Cihazlar" or "Uzaktan / Çevrimdışı Cihazlar" without disappearing
         val hasLocalHost = target.host.isNotBlank() && !target.host.startsWith("remote-")
-        if (target.host.startsWith("remote-") || target.id.startsWith("remote-") || (!hasLocalHost && matchingDevices.isEmpty())) {
-            allHosts.filter { it.startsWith("remote-") }.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-            allIds.filter { it.startsWith("remote-") }.forEach { DeviceDiscoveryManager.removeManualDevice(it) }
-            if (target.host.startsWith("remote-")) DeviceDiscoveryManager.removeManualDevice(target.host)
-            if (target.id.startsWith("remote-")) DeviceDiscoveryManager.removeManualDevice(target.id)
-        } else {
-            // Guarantee local device is retained in discovery list with isOnline = true and isRemote = false
-            // so HomeScreen immediately displays it under "Ağdaki Diğer Cihazlar" without restart
-            val localDev = if (hasLocalHost) target else matchingDevices.first()
-            DeviceDiscoveryManager.addOrUpdateConnectedDevice(
-                localDev.copy(
-                    isOnline = true,
-                    isRemote = false
-                )
+        val isRemoteDev = target.isRemote || target.host.startsWith("remote-") || target.id.startsWith("remote-") || isRemoteDevice(target)
+        val devToKeep = (if (hasLocalHost) target else matchingDevices.firstOrNull()) ?: target
+
+        DeviceDiscoveryManager.addOrUpdateConnectedDevice(
+            devToKeep.copy(
+                isOnline = if (isRemoteDev) false else true,
+                isRemote = isRemoteDev
             )
-            DeviceDiscoveryManager.triggerDiscoveryPing()
-        }
+        )
+        DeviceDiscoveryManager.triggerDiscoveryPing()
 
         if (notifyPeer) {
             scope.launch(Dispatchers.Default) {

@@ -143,8 +143,8 @@ fun HomeScreen(
                     connectedKeys.contains(dev.host) ||
                     connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                     ConnectionManager.isDeviceConnected(dev)
-            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
-            !isConn && !isRemote && dev.isOnline
+            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev) || dev.host.startsWith("remote-")
+            !isConn && !isRemote
         }.map { dev ->
             val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
@@ -160,7 +160,13 @@ fun HomeScreen(
 
     val disconnectedDevices = remember(realOtherDevices, connectedKeys) {
         realOtherDevices.filter { dev ->
-            dev.isRemote || ConnectionManager.isRemoteDevice(dev) || dev.host.startsWith("remote-")
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                    connectedKeys.contains(dev.id) ||
+                    connectedKeys.contains(dev.host) ||
+                    connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                    ConnectionManager.isDeviceConnected(dev)
+            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev) || dev.host.startsWith("remote-")
+            isRemote || (!isConn && !dev.isOnline)
         }.map { dev ->
             val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
@@ -516,7 +522,7 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(70.dp)
+                            .height(76.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .clickable(onClick = onSendClick),
                         shape = RoundedCornerShape(18.dp),
@@ -525,39 +531,38 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(30.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.2f)),
+                                    .background(Color.White.copy(alpha = 0.22f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                PaperAirplaneIcon(Modifier.size(15.dp), color = Color.White)
+                                PaperAirplaneIcon(Modifier.size(20.dp), color = Color.White)
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(10.dp))
                             Column(
-                                modifier = Modifier.weight(1f, fill = false),
-                                horizontalAlignment = Alignment.Start,
-                                verticalArrangement = Arrangement.Center
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.Start
                             ) {
                                 Text(
                                     text = copy.send,
                                     color = Color.White,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.height(1.dp))
+                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = copy.transferFilesSubtitle,
                                     color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -569,7 +574,7 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(70.dp)
+                            .height(76.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .clickable(onClick = onClipboardClick),
                         shape = RoundedCornerShape(18.dp),
@@ -579,39 +584,38 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(30.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
                                     .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                ClipboardVectorIcon(Modifier.size(15.dp), color = LocalSyncSwiftColors.current.blue)
+                                ClipboardVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue)
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(10.dp))
                             Column(
-                                modifier = Modifier.weight(1f, fill = false),
-                                horizontalAlignment = Alignment.Start,
-                                verticalArrangement = Arrangement.Center
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.Start
                             ) {
                                 Text(
                                     text = copy.sendClipboardAction,
                                     color = Cloud,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.height(1.dp))
+                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = copy.clipboardShareAndSync,
                                     color = Mist,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -623,8 +627,8 @@ fun HomeScreen(
                 Spacer(Modifier.height(24.dp))
 
                 // SECTION 5: TRANSFER GEÇMİŞİ (Real transfers from TransferEngine - Expandable/Collapsible)
-                val completedTransfers = remember(allTransfers) {
-                    allTransfers.filter { it.status == TransferStatus.COMPLETED }.take(5)
+                val recentTransfers = remember(allTransfers) {
+                    allTransfers.take(5)
                 }
 
                 Row(
@@ -675,12 +679,13 @@ fun HomeScreen(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(Modifier.height(10.dp))
 
-                        if (completedTransfers.isNotEmpty()) {
+                        if (recentTransfers.isNotEmpty()) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                completedTransfers.forEach { item ->
+                                recentTransfers.forEach { item ->
+                                    val isFailed = item.status == TransferStatus.FAILED || item.status == TransferStatus.CANCELLED
                                     val icon: @Composable () -> Unit = when {
                                         item.fileName.endsWith(".pdf", ignoreCase = true) || item.mimeType.contains("pdf", ignoreCase = true) -> {
                                             { FilePdfIcon(Modifier.size(38.dp)) }
@@ -692,15 +697,23 @@ fun HomeScreen(
                                             { FileImageIcon(Modifier.size(38.dp)) }
                                         }
                                     }
-                                    val subtitle = if (item.peerName.isNotBlank()) cleanDeviceDisplayName(item.peerName)
+                                    val peer = if (item.peerName.isNotBlank()) cleanDeviceDisplayName(item.peerName)
                                     else if (item.isSent) copy.transfersSent else copy.transfersReceived
+                                    val subtitle = if (isFailed) "$peer · ${copy.transferFailedStatus}" else peer
+
+                                    val sizeDisplay = when (item.status) {
+                                        TransferStatus.FAILED, TransferStatus.CANCELLED -> copy.transferFailedStatus
+                                        TransferStatus.IN_PROGRESS -> "${(item.progress * 100).toInt()}%"
+                                        else -> item.formattedSize
+                                    }
 
                                     TransferItemRowCard(
                                         icon = icon,
                                         title = item.fileName,
                                         subtitle = subtitle,
                                         time = if (currentTimeMs() - item.timestamp < 86400000L) copy.timeToday else copy.timeYesterday,
-                                        size = item.formattedSize,
+                                        size = sizeDisplay,
+                                        isFailed = isFailed,
                                         onClick = onViewAllTransfers
                                     )
                                 }
@@ -1414,6 +1427,7 @@ private fun TransferItemRowCard(
     subtitle: String,
     time: String,
     size: String,
+    isFailed: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
@@ -1423,7 +1437,7 @@ private fun TransferItemRowCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = CardSurface,
-        border = BorderStroke(1.dp, InputBorder)
+        border = BorderStroke(1.dp, if (isFailed) Color(0xFFEF4444).copy(alpha = 0.45f) else InputBorder)
     ) {
         Row(
             modifier = Modifier
@@ -1436,6 +1450,18 @@ private fun TransferItemRowCard(
                 contentAlignment = Alignment.Center
             ) {
                 icon()
+                if (isFailed) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(14.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFEF4444)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CrossVectorIcon(Modifier.size(8.dp), color = Color.White)
+                    }
+                }
             }
 
             Spacer(Modifier.width(12.dp))
@@ -1453,9 +1479,9 @@ private fun TransferItemRowCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    color = Mist,
+                    color = if (isFailed) Color(0xFFEF4444) else Mist,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Normal,
+                    fontWeight = if (isFailed) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1473,9 +1499,9 @@ private fun TransferItemRowCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = size,
-                    color = Mist,
+                    color = if (isFailed) Color(0xFFEF4444) else Mist,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = if (isFailed) FontWeight.SemiBold else FontWeight.Medium
                 )
             }
 
