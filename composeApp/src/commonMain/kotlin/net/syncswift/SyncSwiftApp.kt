@@ -70,9 +70,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     val initialTheme = remember {
         val saved = SessionManager.getSavedThemeMode()
         if (saved != null) {
-            try { AppThemeMode.valueOf(saved) } catch (e: Exception) { AppThemeMode.Dark }
+            try { AppThemeMode.valueOf(saved) } catch (e: Exception) { AppThemeMode.System }
         } else {
-            AppThemeMode.Dark
+            AppThemeMode.System
         }
     }
 
@@ -1460,6 +1460,16 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         )
                     }
                 }
+            }
+
+            // Biometric App Lock Translucent Screen Overlay
+            val isAppLocked by net.syncswift.biometric.BiometricAuthManager.isAppLocked.collectAsState()
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isAppLocked,
+                enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)),
+                exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
+            ) {
+                net.syncswift.ui.components.BiometricLockOverlay(copy = copy)
             }
         }
     }

@@ -62,6 +62,9 @@ expect object SessionManager {
     fun saveLastShownPaywallSlot(slot: String)
     fun getLastShownPaywallSlot(): String?
 
+    fun saveBiometricEnabled(enabled: Boolean)
+    fun getSavedBiometricEnabled(): Boolean
+
     fun getPlatformDeviceId(): String
     fun getMyDeviceName(): String
     fun getMyPlatformName(): String

@@ -61,15 +61,37 @@ actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui
             }
             val activity = (ctx as? android.app.Activity) ?: SessionManager.getCurrentActivity()
             val window = activity?.window
+
+            var previousLightStatusBars = false
+            var previousLightNavigationBars = false
+            var previousStatusBarColor = 0
+            var hasPreviousState = false
+
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                previousLightStatusBars = insetsController.isAppearanceLightStatusBars
+                previousLightNavigationBars = insetsController.isAppearanceLightNavigationBars
+                previousStatusBarColor = window.statusBarColor
+                hasPreviousState = true
+
                 insetsController.isAppearanceLightStatusBars = !isDark
                 insetsController.isAppearanceLightNavigationBars = !isDark
                 if (colorArgb != null) {
                     window.statusBarColor = colorArgb
                 }
             }
-            onDispose { }
+            onDispose {
+                if (hasPreviousState) {
+                    val act = (ctx as? android.app.Activity) ?: SessionManager.getCurrentActivity()
+                    val win = act?.window
+                    if (win != null) {
+                        val insets = androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)
+                        insets.isAppearanceLightStatusBars = previousLightStatusBars
+                        insets.isAppearanceLightNavigationBars = previousLightNavigationBars
+                        win.statusBarColor = previousStatusBarColor
+                    }
+                }
+            }
         }
     }
 }

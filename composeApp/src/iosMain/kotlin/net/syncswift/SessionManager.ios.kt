@@ -206,6 +206,14 @@ actual object SessionManager {
         return NSUserDefaults.standardUserDefaults.stringForKey("last_shown_paywall_slot")
     }
 
+    actual fun saveBiometricEnabled(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = "biometric_lock_enabled")
+    }
+
+    actual fun getSavedBiometricEnabled(): Boolean {
+        return NSUserDefaults.standardUserDefaults.boolForKey("biometric_lock_enabled")
+    }
+
     actual fun getPlatformDeviceId(): String {
         return platform.UIKit.UIDevice.currentDevice.identifierForVendor?.UUIDString ?: platform.Foundation.NSUUID().UUIDString
     }

@@ -9,6 +9,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 enum class AppThemeMode {
+    System,
     Dark,
     Light
 }
@@ -82,7 +83,7 @@ val LightSyncSwiftColors = SyncSwiftColors(
 )
 
 val LocalSyncSwiftColors = staticCompositionLocalOf { DarkSyncSwiftColors }
-val LocalThemeMode = staticCompositionLocalOf { AppThemeMode.Dark }
+val LocalThemeMode = staticCompositionLocalOf { AppThemeMode.System }
 
 // Dynamic Composable accessors for seamless backward-compatibility across all UI files
 val Night: Color @Composable get() = LocalSyncSwiftColors.current.night
@@ -107,12 +108,18 @@ val IsDarkTheme: Boolean @Composable get() = LocalSyncSwiftColors.current.isDark
 
 @Composable
 fun SyncSwiftTheme(
-    themeMode: AppThemeMode = AppThemeMode.Dark,
+    themeMode: AppThemeMode = AppThemeMode.System,
     content: @Composable () -> Unit
 ) {
-    val colors = if (themeMode == AppThemeMode.Light) LightSyncSwiftColors else DarkSyncSwiftColors
+    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = when (themeMode) {
+        AppThemeMode.System -> isSystemDark
+        AppThemeMode.Dark -> true
+        AppThemeMode.Light -> false
+    }
+    val colors = if (isDark) DarkSyncSwiftColors else LightSyncSwiftColors
     net.syncswift.UpdateSystemBars(isDark = colors.isDark)
-    val colorScheme = if (themeMode == AppThemeMode.Light) {
+    val colorScheme = if (!isDark) {
         lightColorScheme(
             primary = colors.blue,
             onPrimary = Color.White,

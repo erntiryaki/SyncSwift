@@ -248,9 +248,13 @@ fun AccountScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
                     .clickable {
-                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                            net.syncswift.subscription.PaywallReason.UPGRADE_BUTTON
-                        )
+                        if (isPro) {
+                            showProModal = true
+                        } else {
+                            net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                                net.syncswift.subscription.PaywallReason.UPGRADE_BUTTON
+                            )
+                        }
                     },
                 shape = RoundedCornerShape(18.dp),
                 color = CardSurface,
@@ -481,6 +485,64 @@ fun AccountScreen(
             copy = copy,
             onDismiss = { showAboutModal = false }
         )
+    }
+
+    // Pro Subscription Details Bottom Sheet
+    if (showProModal) {
+        val dates = remember(isPro) {
+            net.syncswift.subscription.SubscriptionManager.getProSubscriptionDates()
+        }
+        net.syncswift.ui.components.SyncSwiftBottomSheet(
+            visible = showProModal,
+            onDismissRequest = { showProModal = false },
+            title = copy.alreadyProTitle,
+            titleIcon = { CrownVectorIcon(Modifier.size(22.dp), color = Color(0xFFF59E0B)) },
+            confirmText = copy.close,
+            confirmColor = PillButtonBg,
+            confirmTextColor = PillButtonText,
+            onConfirm = { showProModal = false }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (dates.startDateFormatted.isNotBlank()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            text = copy.proStartDateLabel.replace("%s", dates.startDateFormatted),
+                            color = Mist,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                        )
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = CardSurface,
+                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = copy.proRenewalDateLabel
+                            .replace("%s", dates.renewalDateFormatted)
+                            .replace("%d", dates.daysLeft.toString()),
+                        color = Cloud,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    )
+                }
+            }
+        }
     }
 }
 }

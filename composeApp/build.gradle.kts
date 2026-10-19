@@ -65,6 +65,7 @@ kotlin {
             implementation("com.journeyapps:zxing-android-embedded:4.3.0")
             implementation("com.revenuecat.purchases:purchases:8.12.2")
             implementation("com.google.android.gms:play-services-ads:23.6.0")
+            implementation("androidx.biometric:biometric:1.2.0-alpha05")
         }
     }
 }

@@ -1113,7 +1113,7 @@ fun SunVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(m
     }
 }
 
-/** Vector Moon / Dark Theme Icon */
+/** Vector Moon / Dark Theme Icon - modern sleek crescent moon */
 @Composable
 fun MoonVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
     val strokeWidth = size.minDimension * 0.08f
@@ -1122,20 +1122,88 @@ fun MoonVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(
     val h = size.height
 
     val moonPath = Path().apply {
-        moveTo(w * 0.65f, h * 0.18f)
+        moveTo(w * 0.84f, h * 0.52f)
         cubicTo(
-            w * 0.28f, h * 0.22f,
-            w * 0.22f, h * 0.72f,
-            w * 0.62f, h * 0.85f
+            w * 0.80f, h * 0.72f,
+            w * 0.62f, h * 0.86f,
+            w * 0.40f, h * 0.86f
         )
         cubicTo(
-            w * 0.46f, h * 0.72f,
-            w * 0.48f, h * 0.38f,
-            w * 0.65f, h * 0.18f
+            w * 0.18f, h * 0.86f,
+            w * 0.08f, h * 0.68f,
+            w * 0.12f, h * 0.44f
+        )
+        cubicTo(
+            w * 0.16f, h * 0.26f,
+            w * 0.32f, h * 0.14f,
+            w * 0.52f, h * 0.14f
+        )
+        cubicTo(
+            w * 0.40f, h * 0.24f,
+            w * 0.38f, h * 0.50f,
+            w * 0.52f, h * 0.66f
+        )
+        cubicTo(
+            w * 0.64f, h * 0.76f,
+            w * 0.78f, h * 0.68f,
+            w * 0.84f, h * 0.52f
         )
         close()
     }
     drawPath(moonPath, color = color, style = stroke)
+}
+
+/** Vector System Theme / Auto Icon - monitor with half dark / half light */
+@Composable
+fun SystemThemeVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val strokeWidth = size.minDimension * 0.08f
+    val stroke = Stroke(strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val w = size.width
+    val h = size.height
+
+    // Display Monitor Frame
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(w * 0.12f, h * 0.16f),
+        size = Size(w * 0.76f, h * 0.56f),
+        cornerRadius = CornerRadius(w * 0.08f, h * 0.08f),
+        style = stroke
+    )
+
+    // Monitor Stand
+    drawLine(
+        color = color,
+        start = Offset(w * 0.50f, h * 0.72f),
+        end = Offset(w * 0.50f, h * 0.84f),
+        strokeWidth = strokeWidth,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = color,
+        start = Offset(w * 0.32f, h * 0.84f),
+        end = Offset(w * 0.68f, h * 0.84f),
+        strokeWidth = strokeWidth,
+        cap = StrokeCap.Round
+    )
+
+    // Center divider inside monitor
+    drawLine(
+        color = color,
+        start = Offset(w * 0.50f, h * 0.22f),
+        end = Offset(w * 0.50f, h * 0.66f),
+        strokeWidth = strokeWidth * 0.9f,
+        cap = StrokeCap.Round
+    )
+
+    // Left half filled shading representing dark side
+    val halfPath = Path().apply {
+        moveTo(w * 0.18f, h * 0.24f)
+        lineTo(w * 0.46f, h * 0.24f)
+        lineTo(w * 0.46f, h * 0.64f)
+        lineTo(w * 0.18f, h * 0.64f)
+        close()
+    }
+    drawPath(halfPath, color = color.copy(alpha = 0.35f))
 }
 
 /** Vector Edit / Pencil Icon */

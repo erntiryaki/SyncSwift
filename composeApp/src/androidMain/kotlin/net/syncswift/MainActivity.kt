@@ -18,11 +18,14 @@ import net.syncswift.connection.ConnectionManager
 import net.syncswift.connection.IncomingPairRequest
 import net.syncswift.connection.IncomingTransferRequest
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         SessionManager.init(this)
+        if (net.syncswift.biometric.BiometricAuthManager.isEnabled()) {
+            net.syncswift.biometric.BiometricAuthManager.lockApp()
+        }
         net.syncswift.discovery.DeviceDiscoveryManager.init(this)
         net.syncswift.transfer.TransferEngine.init(this)
         net.syncswift.fcm.FcmSyncManager.init(this)
@@ -63,6 +66,9 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
+        if (net.syncswift.biometric.BiometricAuthManager.isEnabled()) {
+            net.syncswift.biometric.BiometricAuthManager.lockApp()
+        }
     }
 
     override fun onDestroy() {

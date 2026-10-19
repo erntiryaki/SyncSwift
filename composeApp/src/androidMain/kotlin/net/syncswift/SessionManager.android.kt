@@ -244,6 +244,14 @@ actual object SessionManager {
         return getPrefs()?.getString("last_shown_paywall_slot", null)
     }
 
+    actual fun saveBiometricEnabled(enabled: Boolean) {
+        getPrefs()?.edit()?.putBoolean("biometric_lock_enabled", enabled)?.apply()
+    }
+
+    actual fun getSavedBiometricEnabled(): Boolean {
+        return getPrefs()?.getBoolean("biometric_lock_enabled", false) ?: false
+    }
+
     actual fun getPlatformDeviceId(): String {
         return java.util.UUID.nameUUIDFromBytes("${android.os.Build.MANUFACTURER}_${android.os.Build.MODEL}_${android.os.Build.ID}".toByteArray()).toString()
     }

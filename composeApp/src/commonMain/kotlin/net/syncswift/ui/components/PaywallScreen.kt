@@ -68,11 +68,9 @@ fun PaywallScreen(
                 .fillMaxSize()
                 .background(Color(0xFF0B101B))
         ) {
-        // Scrollable content (blurred when Pro active modal is showing)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isPro) Modifier.blur(24.dp) else Modifier)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -86,18 +84,17 @@ fun PaywallScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Smooth gradient overlay to fade into dark theme background
+                // Smooth deep dark gradient overlay to fade into dark theme background
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    pageBackground.copy(alpha = 0.35f),
-                                    pageBackground.copy(alpha = 0.88f),
-                                    pageBackground
-                                )
+                                0.0f to Color.Transparent,
+                                0.35f to Color.Transparent,
+                                0.65f to Color(0xFF0B101B).copy(alpha = 0.65f),
+                                0.85f to Color(0xFF0B101B).copy(alpha = 0.95f),
+                                1.0f to Color(0xFF0B101B)
                             )
                         )
                 )
@@ -484,99 +481,59 @@ fun PaywallScreen(
         // Overlay if user is ALREADY PRO: Frosted layer with active dates
         if (isPro) {
             val dates = remember { net.syncswift.subscription.SubscriptionManager.getProSubscriptionDates() }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xEB060911))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) { /* block background touches */ },
-                contentAlignment = Alignment.Center
+            SyncSwiftBottomSheet(
+                visible = true,
+                onDismissRequest = onDismiss,
+                title = copy.alreadyProTitle,
+                titleIcon = { net.syncswift.CrownVectorIcon(Modifier.size(24.dp), color = SuccessGreen) },
+                confirmText = copy.close,
+                confirmColor = PillButtonBg,
+                confirmTextColor = PillButtonText,
+                onConfirm = onDismiss,
+                isDark = true
             ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = CardSurface,
-                    border = BorderStroke(1.5.dp, SuccessGreen.copy(alpha = 0.45f)),
-                    shadowElevation = 16.dp,
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(SuccessGreen.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            net.syncswift.CrownVectorIcon(Modifier.size(32.dp), color = SuccessGreen)
-                        }
-
-                        Text(
-                            text = copy.alreadyProTitle,
-                            color = Cloud,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            letterSpacing = (-0.3).sp
-                        )
-
-                        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.35f))
-
-                        Column(
+                    if (dates.startDateFormatted.isNotBlank()) {
+                        Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            shape = RoundedCornerShape(12.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
                         ) {
                             Text(
                                 text = copy.proStartDateLabel.replace("%s", dates.startDateFormatted),
                                 color = Mist,
-                                fontSize = 14.sp,
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Text(
-                                text = copy.proRenewalDateLabel
-                                    .replace("%s", dates.renewalDateFormatted)
-                                    .replace("%d", dates.daysLeft.toString()),
-                                color = Cloud,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-
-                        Spacer(Modifier.height(4.dp))
-
-                        Button(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PillButtonBg,
-                                contentColor = PillButtonText
-                            )
-                        ) {
-                            Text(
-                                text = copy.close,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                             )
                         }
                     }
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            text = copy.proRenewalDateLabel
+                                .replace("%s", dates.renewalDateFormatted)
+                                .replace("%d", dates.daysLeft.toString()),
+                            color = Cloud,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                        )
+                    }
                 }
             }
+        }
 
             if (showLoginRequiredDialog) {
                 SyncSwiftBottomSheet(
@@ -606,6 +563,6 @@ fun PaywallScreen(
         }
     }
 }
-}
+
 
 

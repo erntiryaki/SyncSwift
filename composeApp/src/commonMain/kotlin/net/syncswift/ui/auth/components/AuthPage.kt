@@ -98,10 +98,10 @@ fun AuthPage(
                 .verticalScroll(scrollState)
                 .navigationBarsPadding()
         ) {
-            // Hero Image starts below the top navigation bar with smooth top and bottom transition gradients
+            // Hero Image starts below the top navigation bar with subtle edge-softening gradients
             if (showHero) {
                 Spacer(Modifier.statusBarsPadding())
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(14.dp))
 
                 Box(
                     modifier = Modifier
@@ -110,36 +110,32 @@ fun AuthPage(
                 ) {
                     AuthHeroImage(
                         isDark = isDark,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 10.dp)
+                        modifier = Modifier.fillMaxSize()
                     )
 
-                    // Hero üstüne solukluk: bildirim tepsisi / üst bar ile hero arasında pürüzsüz geçiş (kısaltılmış boy)
+                    // Hero üstüne solukluk: sadece üst kesik kenarı gizleyecek kadar ince
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(16.dp)
+                            .height(8.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to heroTopColor,
-                                    0.6f to heroTopColor.copy(alpha = 0.6f),
                                     1.0f to Color.Transparent
                                 )
                             )
                     )
 
-                    // Hero altına solukluk: hero ile form arka planı arasında pürüzsüz geçiş (kısaltılmış boy)
+                    // Hero altına solukluk: sadece alt kesik kenarı gizleyecek kadar ince
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(22.dp)
+                            .height(10.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to Color.Transparent,
-                                    0.5f to AuthColors.background(isDark).copy(alpha = 0.6f),
                                     1.0f to AuthColors.background(isDark)
                                 )
                             )
