@@ -105,38 +105,23 @@ fun AuthPage(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(255.dp)
+                        .height(275.dp)
                 ) {
                     AuthHeroImage(
                         isDark = isDark,
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Smooth subtle gradient transition at the very top of hero matching heroTopColor
+                    // Smooth subtle gradient transition at the very top of hero blending into heroTopColor
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(14.dp)
+                            .height(26.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
-                                    0.0f to heroTopColor.copy(alpha = 0.85f),
+                                    0.0f to heroTopColor,
                                     1.0f to Color.Transparent
-                                )
-                            )
-                    )
-
-                    // Gradient fade pushed down to the very edge of hero, keeping hero bottom clearly visible
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(18.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    0.0f to Color.Transparent,
-                                    0.45f to AuthColors.background(isDark).copy(alpha = 0.35f),
-                                    1.0f to AuthColors.background(isDark)
                                 )
                             )
                     )

@@ -31,7 +31,7 @@ actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui
             val b = (it.blue * 255.0f + 0.5f).toInt()
             (a shl 24) or (r shl 16) or (g shl 8) or b
         }
-        androidx.compose.runtime.SideEffect {
+        androidx.compose.runtime.DisposableEffect(isDark, colorArgb) {
             // Check if we are inside a Dialog and configure its window edge-to-edge
             var parent = view.parent
             while (parent != null) {
@@ -58,14 +58,34 @@ actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui
                 ctx = ctx.baseContext
             }
             val activity = (ctx as? android.app.Activity) ?: SessionManager.getCurrentActivity()
-            val window = activity?.window ?: return@SideEffect
-            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.isAppearanceLightStatusBars = !isDark
-            insetsController.isAppearanceLightNavigationBars = !isDark
-            if (colorArgb != null) {
-                window.statusBarColor = colorArgb
+            val window = activity?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.isAppearanceLightStatusBars = !isDark
+                insetsController.isAppearanceLightNavigationBars = !isDark
+                if (colorArgb != null) {
+                    window.statusBarColor = colorArgb
+                }
             }
+            onDispose { }
         }
+    }
+}
+
+actual fun setSystemBarsDirect(isDark: Boolean, statusBarColor: androidx.compose.ui.graphics.Color?) {
+    val activity = SessionManager.getCurrentActivity() ?: return
+    val window = activity.window ?: return
+    val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+    insetsController.isAppearanceLightStatusBars = !isDark
+    insetsController.isAppearanceLightNavigationBars = !isDark
+    if (statusBarColor != null) {
+        val a = (statusBarColor.alpha * 255.0f + 0.5f).toInt()
+        val r = (statusBarColor.red * 255.0f + 0.5f).toInt()
+        val g = (statusBarColor.green * 255.0f + 0.5f).toInt()
+        val b = (statusBarColor.blue * 255.0f + 0.5f).toInt()
+        window.statusBarColor = (a shl 24) or (r shl 16) or (g shl 8) or b
+    } else {
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
     }
 }
 

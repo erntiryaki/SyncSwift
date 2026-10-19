@@ -52,47 +52,59 @@ fun ConnectedDeviceActionScreen(
             device.name.contains("Phone", ignoreCase = true) ||
             device.name.contains("Mobile", ignoreCase = true)
 
-    net.syncswift.UpdateSystemBars(isDark = true)
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        net.syncswift.UpdateSystemBars(isDark = true)
+        SheetSystemBars(active = true, isDark = isDark)
 
-        Box(
+        val dragState = rememberSheetDragState(onDismiss = onDismiss)
+
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.50f))
+                .background(Color.Black.copy(alpha = 0.55f))
                 .clickable(onClick = onDismiss),
             contentAlignment = Alignment.BottomCenter
         ) {
+            val maxSheetHeight = maxHeight * 0.86f
+
             Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 680.dp)
-                .clickable(enabled = false) {}, // Prevent click through
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            color = if (isDark) Color(0xFF131B28) else Color(0xFFFFFFFF),
-            border = BorderStroke(1.dp, InputBorder)
-        ) {
-            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .heightIn(max = maxSheetHeight)
+                    .then(dragState.sheetOffsetModifier)
+                    .clickable(enabled = false) {}, // Prevent click through
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = if (isDark) Color(0xFF131B28) else Color(0xFFFFFFFF),
+                border = BorderStroke(1.dp, InputBorder),
+                shadowElevation = 0.dp
             ) {
-                // Drag Handle
-                Box(
+                Column(
                     modifier = Modifier
-                        .width(38.dp)
-                        .height(4.dp)
-                        .clip(CircleShape)
-                        .background(Mist.copy(alpha = 0.4f))
-                )
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Drag Handle (with downward drag gesture support)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(dragState.dragHandleModifier)
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(38.dp)
+                                .height(4.dp)
+                                .clip(CircleShape)
+                                .background(Mist.copy(alpha = 0.4f))
+                        )
+                    }
 
-                Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(14.dp))
 
                 AnimatedContent(
                     targetState = showDisconnectConfirmation,

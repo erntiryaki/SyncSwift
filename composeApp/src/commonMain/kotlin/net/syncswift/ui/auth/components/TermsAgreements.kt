@@ -60,9 +60,9 @@ fun TermsSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 420.dp)
+            .heightIn(max = 260.dp)
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         sections.forEach { (heading, body) ->

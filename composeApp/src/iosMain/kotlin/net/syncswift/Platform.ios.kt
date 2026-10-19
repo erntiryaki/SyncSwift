@@ -59,6 +59,10 @@ actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui
     // Handled by iOS UIViewController preferredStatusBarStyle
 }
 
+actual fun setSystemBarsDirect(isDark: Boolean, statusBarColor: androidx.compose.ui.graphics.Color?) {
+    // Handled by iOS UIViewController preferredStatusBarStyle
+}
+
 actual fun openFile(filePathOrUri: String?, fileName: String, mimeType: String) {
     println("[SyncSwift iOS] Opening file $fileName at $filePathOrUri")
     val path = filePathOrUri ?: return

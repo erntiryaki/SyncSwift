@@ -5,9 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -26,6 +26,7 @@ import net.syncswift.ui.theme.*
 /**
  * Universal, ultra-minimalist, flat, elegant SyncSwift Bottom Sheet Modal.
  * Renders anchored to bottom, supports swipe-down to dismiss, never cuts off content or action buttons.
+ * Guarantees proper status bar coloring and restoration on dismiss!
  */
 @Composable
 fun SyncSwiftModal(
@@ -43,18 +44,21 @@ fun SyncSwiftModal(
     properties: DialogProperties = DialogProperties(usePlatformDefaultWidth = false),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    net.syncswift.UpdateSystemBars(isDark = true)
+    val isDark = LocalSyncSwiftColors.current.isDark
 
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties
     ) {
-        net.syncswift.UpdateSystemBars(isDark = true)
+        // Handles status bar: dark while modal is open, restored to theme (black icons on light theme) on close!
+        SheetSystemBars(active = true, isDark = isDark)
+
+        val dragState = rememberSheetDragState(onDismiss = onDismissRequest)
 
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.50f))
+                .background(Color.Black.copy(alpha = 0.55f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -62,12 +66,13 @@ fun SyncSwiftModal(
                 ),
             contentAlignment = Alignment.BottomCenter
         ) {
-            val maxSheetHeight = maxHeight * 0.88f
+            val maxSheetHeight = maxHeight * 0.86f
 
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = maxSheetHeight)
+                    .then(dragState.sheetOffsetModifier)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -85,22 +90,31 @@ fun SyncSwiftModal(
                         .navigationBarsPadding()
                         .padding(horizontal = 22.dp, vertical = 14.dp)
                 ) {
-                    // Sleek centered drag handle
+                    // Sleek centered drag handle (with downward drag gesture support)
                     Box(
                         modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .width(40.dp)
-                            .height(4.dp)
-                            .clip(CircleShape)
-                            .background(Mist.copy(alpha = 0.45f))
-                    )
+                            .fillMaxWidth()
+                            .then(dragState.dragHandleModifier)
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(4.dp)
+                                .clip(CircleShape)
+                                .background(Mist.copy(alpha = 0.45f))
+                        )
+                    }
 
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     // Header (Icon + Title)
                     if (title != null || titleIcon != null) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(dragState.dragHandleModifier),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (titleIcon != null) {
@@ -130,7 +144,7 @@ fun SyncSwiftModal(
                         content()
                     }
 
-                    // Actions Footer (Confirm / Dismiss - ALWAYS pinned at bottom!)
+                    // Actions Footer (Confirm / Dismiss - ALWAYS visible and never pushed below layout!)
                     if (onConfirm != null || onDismiss != null) {
                         Spacer(Modifier.height(16.dp))
                         Row(
@@ -182,7 +196,7 @@ fun SyncSwiftModal(
                         }
                     }
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                 }
             }
         }
