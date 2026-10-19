@@ -8,8 +8,10 @@ import platform.LocalAuthentication.LAPolicyDeviceOwnerAuthenticationWithBiometr
 import platform.LocalAuthentication.LAPolicyDeviceOwnerAuthentication
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+import kotlinx.cinterop.ExperimentalForeignApi
 import net.syncswift.SessionManager
 
+@OptIn(ExperimentalForeignApi::class)
 actual object BiometricAuthManager {
     private val _isAppLocked = MutableStateFlow(false)
     actual val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()

@@ -145,7 +145,8 @@ private fun NavBarItem(
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             letterSpacing = (-0.2).sp,
-            maxLines = 1
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

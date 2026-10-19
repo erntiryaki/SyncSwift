@@ -536,14 +536,18 @@ fun HomeScreen(
                                     text = copy.send,
                                     color = Color.White,
                                     fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = copy.transferFilesSubtitle,
                                     color = Color.White.copy(alpha = 0.85f),
                                     fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Normal
+                                    fontWeight = FontWeight.Normal,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -581,14 +585,18 @@ fun HomeScreen(
                                     text = copy.sendClipboardAction,
                                     color = Cloud,
                                     fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = copy.clipboardShareAndSync,
                                     color = Mist,
                                     fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Normal
+                                    fontWeight = FontWeight.Normal,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -960,16 +968,15 @@ private fun SectionHeaderRow(
         Row(
             modifier = Modifier.weight(1f, fill = false),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Text(
                 text = title,
                 color = Cloud,
-                fontSize = 17.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.3).sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                softWrap = false
             )
 
             Box(
@@ -992,9 +999,8 @@ private fun SectionHeaderRow(
         Text(
             text = copy.viewAll,
             color = blue,
-            fontSize = 13.sp,
+            fontSize = 12.5.sp,
             fontWeight = FontWeight.Bold,
-            maxLines = 1,
             softWrap = false,
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
