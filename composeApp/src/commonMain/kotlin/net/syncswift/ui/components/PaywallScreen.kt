@@ -484,8 +484,6 @@ fun PaywallScreen(
             SyncSwiftBottomSheet(
                 visible = true,
                 onDismissRequest = onDismiss,
-                title = copy.alreadyProTitle,
-                titleIcon = { net.syncswift.CrownVectorIcon(Modifier.size(24.dp), color = Color(0xFFFBBF24)) },
                 confirmText = copy.close,
                 confirmColor = PillButtonBg,
                 confirmTextColor = PillButtonText,

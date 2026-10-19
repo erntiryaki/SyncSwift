@@ -518,24 +518,27 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(36.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.2f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                PaperAirplaneIcon(Modifier.size(20.dp), color = Color.White)
+                                PaperAirplaneIcon(Modifier.size(18.dp), color = Color.White)
                             }
-                            Spacer(Modifier.width(10.dp))
-                            Column(verticalArrangement = Arrangement.Center) {
+                            Spacer(Modifier.width(8.dp))
+                            Column(
+                                modifier = Modifier.weight(1f, fill = false),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Text(
                                     text = copy.send,
                                     color = Color.White,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     softWrap = false
@@ -544,7 +547,7 @@ fun HomeScreen(
                                 Text(
                                     text = copy.transferFilesSubtitle,
                                     color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Normal,
                                     maxLines = 1,
                                     softWrap = false
@@ -567,24 +570,27 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(36.dp)
                                     .clip(CircleShape)
                                     .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                ClipboardVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue)
+                                ClipboardVectorIcon(Modifier.size(18.dp), color = LocalSyncSwiftColors.current.blue)
                             }
-                            Spacer(Modifier.width(10.dp))
-                            Column(verticalArrangement = Arrangement.Center) {
+                            Spacer(Modifier.width(8.dp))
+                            Column(
+                                modifier = Modifier.weight(1f, fill = false),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Text(
                                     text = copy.sendClipboardAction,
                                     color = Cloud,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     softWrap = false
@@ -593,7 +599,7 @@ fun HomeScreen(
                                 Text(
                                     text = copy.clipboardShareAndSync,
                                     color = Mist,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Normal,
                                     maxLines = 1,
                                     softWrap = false

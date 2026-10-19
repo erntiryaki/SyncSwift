@@ -495,8 +495,6 @@ fun AccountScreen(
         net.syncswift.ui.components.SyncSwiftBottomSheet(
             visible = showProModal,
             onDismissRequest = { showProModal = false },
-            title = copy.alreadyProTitle,
-            titleIcon = { CrownVectorIcon(Modifier.size(24.dp), color = Color(0xFFF59E0B)) },
             confirmText = copy.close,
             confirmColor = PillButtonBg,
             confirmTextColor = PillButtonText,

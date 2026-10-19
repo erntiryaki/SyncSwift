@@ -101,7 +101,7 @@ fun AuthPage(
             // Hero Image starts below the top navigation bar with subtle edge-softening gradients
             if (showHero) {
                 Spacer(Modifier.statusBarsPadding())
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(4.dp))
 
                 Box(
                     modifier = Modifier
@@ -113,36 +113,37 @@ fun AuthPage(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Hero üstüne solukluk: üst kesik kenarı pürüzsüzce gizleyen yumuşak geçiş
+                    // Hero üstüne solukluk: sadece en üst kesik kenarı yumuşatan, logoyu kapatmayan ince geçiş
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(22.dp)
+                            .height(8.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to heroTopColor,
-                                    0.5f to heroTopColor.copy(alpha = 0.75f),
                                     1.0f to Color.Transparent
                                 )
                             )
                     )
 
-                    // Hero altına solukluk: hero ile form arasında ferah ve pürüzsüz geçiş (alt çizgiyi gizler)
+                    // Hero altına solukluk: hero ile form arasında ferah ve pürüzsüz geçiş (alt çizgiyi ve kesiği gizler)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(24.dp)
+                            .height(40.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to Color.Transparent,
-                                    0.45f to AuthColors.background(isDark).copy(alpha = 0.5f),
+                                    0.35f to AuthColors.background(isDark).copy(alpha = 0.4f),
+                                    0.70f to AuthColors.background(isDark).copy(alpha = 0.85f),
                                     1.0f to AuthColors.background(isDark)
                                 )
                             )
                     )
                 }
+                Spacer(Modifier.height(14.dp))
             } else {
                 // When hero is not shown, provide space below the floating top navigation bar
                 Spacer(Modifier.statusBarsPadding())

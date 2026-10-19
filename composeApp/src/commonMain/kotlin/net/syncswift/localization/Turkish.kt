@@ -389,9 +389,9 @@ val TurkishCopy = Copy().apply {
     trialPricingMonthlySummary = "2.99 $/ay, dilediğin an iptal et"
     remindBeforeTrialEnds = "Deneme süresi bitmeden bana hatırlat"
     subscriptionTerms = "Abonelik Şartları"
-    alreadyProTitle = "Zaten Pro Abonesiniz."
+    alreadyProTitle = "Zaten Pro Abonesiniz"
     proStartDateLabel = "Başlangıç Tarihi: %s"
-    proRenewalDateLabel = "Bitiş/Yenilenme Tarihi: %s (%d gün kaldı)"
+    proRenewalDateLabel = "Bitiş Tarihi: %s (%d gün kaldı)"
 
     // Tam Sayfa Transfer & Durum Ekranları
     fileTransferScreenTitle = "Dosya Transferi"
