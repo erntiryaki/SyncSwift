@@ -70,6 +70,7 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val isDark = LocalSyncSwiftColors.current.isDark
     val scope = rememberCoroutineScope()
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     val discoveredDevices by DeviceDiscoveryManager.devices.collectAsState()
     val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
@@ -142,7 +143,7 @@ fun HomeScreen(
                     connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                     ConnectionManager.isDeviceConnected(dev)
             val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
-            !isConn && !isRemote
+            !isConn && !isRemote && dev.isOnline
         }.map { dev ->
             val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
@@ -907,16 +908,42 @@ fun HomeScreen(
     ) {
         val target = deviceForAction
         if (target != null) {
+            val isTargetConnected = ConnectionManager.isDeviceConnected(target) ||
+                    connectedKeys.contains("${target.host}:${target.port}") ||
+                    connectedKeys.contains(target.id) ||
+                    connectedKeys.contains(target.host) ||
+                    connectedKeys.contains(cleanDeviceDisplayName(target.name))
             ConnectedDeviceActionScreen(
                 device = target,
                 copy = copy,
+                isConnected = isTargetConnected,
+                onSendConnectionRequest = {
+                    deviceForAction = null
+                    deviceToPair = target
+                },
                 onSendFile = {
                     deviceForAction = null
                     onDeviceClick(target)
                 },
                 onSendClipboard = {
                     deviceForAction = null
-                    onClipboardClick()
+                    if (!net.syncswift.subscription.SubscriptionManager.canSyncClipboard()) {
+                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
+                            net.syncswift.subscription.PaywallReason.CLIPBOARD_SYNC
+                        )
+                    } else {
+                        val clipText = clipboardManager.getText()?.text ?: ""
+                        if (clipText.isBlank()) {
+                            showNativeToast(copy.noTextInClipboard)
+                        } else {
+                            TransferEngine.sendClipboard(
+                                targetHost = target.host,
+                                targetPort = target.port,
+                                targetDeviceName = target.name,
+                                text = clipText
+                            )
+                        }
+                    }
                 },
                 onDisconnect = {
                     deviceForAction = null

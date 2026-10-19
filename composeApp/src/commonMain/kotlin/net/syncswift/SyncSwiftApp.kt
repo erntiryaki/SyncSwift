@@ -1183,18 +1183,14 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                     },
                     title = copy.maxDeviceLimitReached,
                     titleIcon = { WarningTriangleIcon(Modifier.size(20.dp), color = Blue) },
-                    confirmText = copy.unlockWithPro,
+                    confirmText = copy.understandAction,
                     confirmColor = Blue,
                     confirmTextColor = Color.White,
                     onConfirm = {
-                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                            net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
-                        )
-                    },
-                    dismissText = copy.cancelAction,
-                    onDismiss = {
                         if (!isRemovingOldDevice) blockedDeviceLimitData = null
-                    }
+                    },
+                    dismissText = null,
+                    onDismiss = null
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),

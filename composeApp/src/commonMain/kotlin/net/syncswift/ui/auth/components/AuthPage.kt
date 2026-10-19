@@ -96,6 +96,7 @@ fun AuthPage(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
+                .imePadding()
                 .navigationBarsPadding()
         ) {
             // Hero Image starts seamlessly from the top, bringing both hero and form content higher up
@@ -183,7 +184,7 @@ fun AuthPage(
                 // Screen Form Content (inputs, primary button, divider, google button, etc.)
                 content()
 
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(52.dp))
             }
         }
 

@@ -207,14 +207,18 @@ actual object DeviceDiscoveryManager {
         return list
     }
 
-    private fun buildSelfAnnouncement(isPing: Boolean): String {
+    private fun buildSelfAnnouncement(isPing: Boolean, isGoodbye: Boolean = false): String {
         val self = getSelfDevice()
         val id = self?.id ?: "self-${Build.MODEL}"
         val name = self?.name?.replace(":", "-") ?: Build.MODEL
         val port = actualPort
         val os = "Android"
         val model = Build.MODEL
-        val prefix = if (isPing) "SS_DISC:v1" else "SS_BEAT:v1"
+        val prefix = when {
+            isGoodbye -> "SS_BYE:v1"
+            isPing -> "SS_DISC:v1"
+            else -> "SS_BEAT:v1"
+        }
         return "$prefix:$id:$name:$port:$os:$model"
     }
 
@@ -260,6 +264,38 @@ actual object DeviceDiscoveryManager {
         val model = if (parts.size >= 7) parts[6] else ""
 
         val cleanName = cleanDeviceDisplayName(name)
+
+        if (tag == "SS_BYE") {
+            lastSeenTimestamps.remove(senderHost)
+            lastSeenTimestamps.remove(id)
+            lastSeenTimestamps.remove(name)
+            lastSeenTimestamps.remove(cleanName)
+            val current = _devices.value.toMutableList()
+            val iterator = current.listIterator()
+            var changed = false
+            while (iterator.hasNext()) {
+                val dev = iterator.next()
+                val matches = (senderHost.isNotBlank() && dev.host == senderHost) ||
+                        dev.id == id ||
+                        cleanDeviceDisplayName(dev.name) == cleanName
+                if (matches) {
+                    val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
+                    if (isConnected) {
+                        iterator.set(dev.copy(isOnline = false))
+                        changed = true
+                    } else {
+                        iterator.remove()
+                        changed = true
+                    }
+                }
+            }
+            if (changed) {
+                _devices.value = current
+                saveManualDevices()
+            }
+            return
+        }
+
         val now = System.currentTimeMillis()
         lastSeenTimestamps[senderHost] = now
         lastSeenTimestamps[id] = now
@@ -367,7 +403,7 @@ actual object DeviceDiscoveryManager {
         livenessJob?.cancel()
         livenessJob = scope.launch {
             while (isActive) {
-                delay(2500)
+                delay(2000)
                 val now = System.currentTimeMillis()
                 val current = _devices.value.toMutableList()
                 var changed = false
@@ -384,20 +420,21 @@ actual object DeviceDiscoveryManager {
                         ?: 0L
 
                     val age = now - lastSeen
-                    // If seen within 45s -> definitely online
-                    if (lastSeen > 0L && age < 45000L) {
+                    // Heartbeat is sent every 2.8s. If seen within 7.5s -> online
+                    if (lastSeen > 0L && age < 7500L) {
                         if (!dev.isOnline) {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else if (lastSeen > 0L && age >= 45000L) {
-                        if (dev.isOnline) {
-                            iterator.set(dev.copy(isOnline = false))
-                            changed = true
-                        }
+                    } else if (lastSeen > 0L && age >= 7500L) {
                         val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                        // If dynamically discovered peer has disappeared for over 3 minutes, remove it
-                        if (!isConnected && age >= 180000L && !dev.id.startsWith("manual-")) {
+                        if (isConnected) {
+                            if (dev.isOnline) {
+                                iterator.set(dev.copy(isOnline = false))
+                                changed = true
+                            }
+                        } else {
+                            // Non-connected nearby device disappeared -> remove immediately
                             iterator.remove()
                             changed = true
                         }
@@ -442,6 +479,10 @@ actual object DeviceDiscoveryManager {
 
     actual fun stopDiscovery() {
         scope.launch {
+            try {
+                sendUdpPacket(buildSelfAnnouncement(isPing = false, isGoodbye = true))
+                delay(60)
+            } catch (_: Exception) {}
             stopUdpDiscovery()
             stopLivenessCheck()
             stopBrowsing()

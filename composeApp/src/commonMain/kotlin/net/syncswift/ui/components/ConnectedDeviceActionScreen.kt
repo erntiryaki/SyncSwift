@@ -38,9 +38,11 @@ import net.syncswift.ui.theme.*
 fun ConnectedDeviceActionScreen(
     device: DiscoveredDevice,
     copy: Copy,
+    isConnected: Boolean = net.syncswift.connection.ConnectionManager.isDeviceConnected(device),
     onSendFile: () -> Unit,
     onSendClipboard: () -> Unit = {},
-    onDisconnect: () -> Unit,
+    onSendConnectionRequest: () -> Unit = {},
+    onDisconnect: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var showDisconnectConfirmation by remember { mutableStateOf(false) }
@@ -182,8 +184,13 @@ fun ConnectedDeviceActionScreen(
                                                     .clip(CircleShape)
                                                     .background(if (device.isOnline) Color(0xFF10B981) else Color(0xFF94A3B8))
                                             )
+                                            val statusLabel = when {
+                                                isConnected -> copy.statusConnected
+                                                device.isOnline -> copy.nearbyDevicesSection
+                                                else -> copy.statusOffline
+                                            }
                                             Text(
-                                                text = "${if (device.isOnline) copy.statusConnected else copy.statusOffline} • ${device.osType.ifBlank { "SyncSwift" }}",
+                                                text = "$statusLabel • ${device.osType.ifBlank { "SyncSwift" }}",
                                                 color = Mist,
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Normal
@@ -211,50 +218,57 @@ fun ConnectedDeviceActionScreen(
 
                             Spacer(Modifier.height(8.dp))
 
-                            // Action 1: Dosya Gönder
-                            DeviceActionItemRow(
-                                icon = { PaperAirplaneIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
-                                title = copy.sendFileAction,
-                                subtitle = copy.sendFileActionDesc,
-                                isDestructive = false,
-                                onClick = onSendFile
-                            )
+                            if (!isConnected) {
+                                // Yakındaki Cihaz (Henüz bağlanmamış): Bağlantı İsteği Gönder & Dosya Gönder
+                                DeviceActionItemRow(
+                                    icon = { LinkChainIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
+                                    title = copy.sendConnectionRequestAction,
+                                    subtitle = copy.sendConnectionRequestActionDesc,
+                                    isDestructive = false,
+                                    onClick = onSendConnectionRequest
+                                )
 
-                            // Action 2: Ortak Pano
-                            DeviceActionItemRow(
-                                icon = { ClipboardVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
-                                title = copy.sendClipboardAction,
-                                subtitle = copy.sendClipboardActionDesc,
-                                isDestructive = false,
-                                onClick = onSendClipboard
-                            )
+                                DeviceActionItemRow(
+                                    icon = { PaperAirplaneIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
+                                    title = copy.sendFileAction,
+                                    subtitle = copy.sendFileActionDesc,
+                                    isDestructive = false,
+                                    onClick = onSendFile
+                                )
+                            } else {
+                                // Bağlanmış Cihaz: Dosya Gönder, Pano Gönder, Bağlantıyı Kes, Cihazı Düzenle
+                                DeviceActionItemRow(
+                                    icon = { PaperAirplaneIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
+                                    title = copy.sendFileAction,
+                                    subtitle = copy.sendFileActionDesc,
+                                    isDestructive = false,
+                                    onClick = onSendFile
+                                )
 
-                            // Action 3: Bağlantıyı Kes
-                            DeviceActionItemRow(
-                                icon = { LinkChainIcon(Modifier.size(20.dp), color = Cloud) },
-                                title = copy.disconnectDeviceAction,
-                                subtitle = copy.disconnectDeviceActionDesc,
-                                isDestructive = false,
-                                onClick = { showDisconnectConfirmation = true }
-                            )
+                                DeviceActionItemRow(
+                                    icon = { ClipboardVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
+                                    title = copy.sendClipboardActionTitle,
+                                    subtitle = copy.sendClipboardActionDesc,
+                                    isDestructive = false,
+                                    onClick = onSendClipboard
+                                )
 
-                            // Action 4: Cihazı Düzenle
-                            DeviceActionItemRow(
-                                icon = { EditVectorIcon(Modifier.size(20.dp), color = Cloud) },
-                                title = copy.editDeviceAction,
-                                subtitle = copy.editDeviceActionDesc,
-                                isDestructive = false,
-                                onClick = { showRenameDialog = true }
-                            )
+                                DeviceActionItemRow(
+                                    icon = { LinkChainIcon(Modifier.size(20.dp), color = Cloud) },
+                                    title = copy.disconnectDeviceAction,
+                                    subtitle = copy.disconnectDeviceActionDesc,
+                                    isDestructive = false,
+                                    onClick = { showDisconnectConfirmation = true }
+                                )
 
-                            // Action 5: Cihazı Kaldır
-                            DeviceActionItemRow(
-                                icon = { TrashIcon(Modifier.size(20.dp), color = Color(0xFFEF4444)) },
-                                title = copy.removeDeviceAction,
-                                subtitle = copy.removeDeviceActionDesc,
-                                isDestructive = true,
-                                onClick = onDisconnect
-                            )
+                                DeviceActionItemRow(
+                                    icon = { EditVectorIcon(Modifier.size(20.dp), color = Cloud) },
+                                    title = copy.editDeviceAction,
+                                    subtitle = copy.editDeviceActionDesc,
+                                    isDestructive = false,
+                                    onClick = { showRenameDialog = true }
+                                )
+                            }
 
                             Spacer(Modifier.height(14.dp))
                         }
