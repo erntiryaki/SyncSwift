@@ -134,6 +134,9 @@ fun getSavedIosPushToken(): String? {
 fun onIosAppDidEnterBackground() {
     println("[SyncSwift iOS] App entered background - safely stopping discovery & server")
     try {
+        if (net.syncswift.biometric.BiometricAuthManager.isEnabled()) {
+            net.syncswift.biometric.BiometricAuthManager.lockApp()
+        }
         net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
         net.syncswift.transfer.TransferEngine.stopServer()
     } catch (_: Throwable) {}

@@ -36,8 +36,9 @@ fun BiometricLockOverlay(
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
 
-    // Auto-prompt on appearance
+    // Auto-prompt on appearance: prompt directly without requiring button tap
     LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(250)
         BiometricAuthManager.authenticate(
             title = copy.biometricPromptTitle,
             subtitle = copy.biometricPromptSubtitle
@@ -75,6 +76,16 @@ fun BiometricLockOverlay(
                 modifier = Modifier
                     .size(96.dp)
                     .clip(CircleShape)
+                    .clickable {
+                        BiometricAuthManager.authenticate(
+                            title = copy.biometricPromptTitle,
+                            subtitle = copy.biometricPromptSubtitle
+                        ) { success ->
+                            if (success) {
+                                BiometricAuthManager.unlockApp()
+                            }
+                        }
+                    }
                     .background(
                         Brush.radialGradient(
                             colors = listOf(

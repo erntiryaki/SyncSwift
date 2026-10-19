@@ -4,6 +4,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.window.ComposeUIViewController
 
 fun MainViewController() = ComposeUIViewController {
+    if (net.syncswift.biometric.BiometricAuthManager.isEnabled()) {
+        net.syncswift.biometric.BiometricAuthManager.lockApp()
+    }
+
     LaunchedEffect(Unit) {
         requestIosPermissions()
         try {
