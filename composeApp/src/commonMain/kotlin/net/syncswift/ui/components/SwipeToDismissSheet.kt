@@ -1,88 +1,108 @@
 package net.syncswift.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import net.syncswift.setSystemBarsDirect
 import net.syncswift.ui.theme.LocalSyncSwiftColors
-import kotlin.math.roundToInt
 
 class SheetDragState(
-    val offsetY: Animatable<Float, *>,
     val scope: CoroutineScope,
     val onDismiss: () -> Unit,
     val thresholdPx: Float
 ) {
+    val animatable = Animatable(0f)
+    var isDragging by mutableStateOf(false)
+    var dragOffsetY by mutableFloatStateOf(0f)
+
+    val currentOffset: Float
+        get() = if (isDragging) dragOffsetY else animatable.value
+
     /**
-     * Drag detector modifier to attach to sheet headers, drag handles or top areas.
-     * Prevents gesture conflicts with inner vertical scrolls while giving immediate, natural swipe-down to dismiss.
+     * Butter-smooth, zero-latency drag gesture detector.
+     * Updates direct primitive float without per-frame coroutine dispatches.
      */
     val dragHandleModifier: Modifier = Modifier.pointerInput(Unit) {
         detectVerticalDragGestures(
+            onDragStart = {
+                isDragging = true
+                dragOffsetY = animatable.value
+            },
             onVerticalDrag = { change, dragAmount ->
-                if (dragAmount > 0 || offsetY.value > 0) {
+                if (dragAmount > 0f || dragOffsetY > 0f) {
                     change.consume()
-                    scope.launch {
-                        offsetY.snapTo((offsetY.value + dragAmount).coerceAtLeast(0f))
-                    }
+                    dragOffsetY = (dragOffsetY + dragAmount).coerceAtLeast(0f)
                 }
             },
             onDragEnd = {
-                if (offsetY.value > thresholdPx) {
-                    scope.launch {
+                val releasedOffset = dragOffsetY
+                isDragging = false
+                scope.launch {
+                    animatable.snapTo(releasedOffset)
+                    if (releasedOffset > thresholdPx) {
+                        animatable.animateTo(
+                            targetValue = releasedOffset + 450f,
+                            animationSpec = tween(150, easing = FastOutLinearInEasing)
+                        )
                         onDismiss()
-                        offsetY.snapTo(0f)
-                    }
-                } else {
-                    scope.launch {
-                        offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                        animatable.snapTo(0f)
+                    } else {
+                        animatable.animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        )
                     }
                 }
             },
             onDragCancel = {
+                val releasedOffset = dragOffsetY
+                isDragging = false
                 scope.launch {
-                    offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                    animatable.snapTo(releasedOffset)
+                    animatable.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
                 }
             }
         )
     }
 
     /**
-     * Offset modifier to attach to the bottom sheet Surface or container.
+     * GPU Hardware Layer Translation - Zero layout recomputations, butter-smooth 120 FPS!
      */
-    val sheetOffsetModifier: Modifier = Modifier.offset {
-        IntOffset(0, offsetY.value.roundToInt().coerceAtLeast(0))
+    val sheetOffsetModifier: Modifier = Modifier.graphicsLayer {
+        translationY = currentOffset
     }
 
-    /**
-     * Combined modifier for simple sheets without nested scrolling.
-     */
     val modifier: Modifier = sheetOffsetModifier.then(dragHandleModifier)
 }
 
 @Composable
 fun rememberSheetDragState(
     onDismiss: () -> Unit,
-    thresholdPx: Float = 90f
+    thresholdPx: Float = 80f
 ): SheetDragState {
     val scope = rememberCoroutineScope()
-    val offsetY = remember { Animatable(0f) }
-
-    LaunchedEffect(Unit) {
-        offsetY.snapTo(0f)
-    }
 
     return remember(onDismiss) {
-        SheetDragState(offsetY, scope, onDismiss, thresholdPx)
+        SheetDragState(scope, onDismiss, thresholdPx)
     }
 }
 

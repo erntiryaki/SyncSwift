@@ -18,8 +18,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.Copy
@@ -221,11 +224,27 @@ fun PaywallScreen(
                                     )
                                     Spacer(Modifier.height(4.dp))
                                     Text(
-                                        text = copy.trialPricingYearlySummary,
-                                        color = Mist,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        lineHeight = 16.sp
+                                        text = buildAnnotatedString {
+                                            withStyle(
+                                                SpanStyle(
+                                                    color = softGold,
+                                                    fontSize = 13.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            ) {
+                                                append(copy.trialFreeDaysOffer)
+                                            }
+                                            withStyle(
+                                                SpanStyle(
+                                                    color = Mist,
+                                                    fontSize = 12.5.sp,
+                                                    fontWeight = FontWeight.Normal
+                                                )
+                                            ) {
+                                                append(copy.trialThenYearlyPrice)
+                                            }
+                                        },
+                                        lineHeight = 17.sp
                                     )
                                 }
 
@@ -331,15 +350,43 @@ fun PaywallScreen(
                 Spacer(Modifier.height(18.dp))
 
                 // Footnote Summary Text
-                Text(
-                    text = if (selectedPlan == 0) copy.trialPricingYearlySummary else copy.trialPricingMonthlySummary,
-                    color = Mist,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    lineHeight = 18.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
+                if (selectedPlan == 0) {
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    color = softGold,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            ) {
+                                append(copy.trialFreeDaysOffer)
+                            }
+                            withStyle(
+                                SpanStyle(
+                                    color = Mist,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Normal
+                                )
+                            ) {
+                                append(copy.trialThenYearlyPrice)
+                            }
+                        },
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                } else {
+                    Text(
+                        text = copy.trialPricingMonthlySummary,
+                        color = Mist,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                }
 
                 if (errorMessage != null) {
                     Spacer(Modifier.height(10.dp))

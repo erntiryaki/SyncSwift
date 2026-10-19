@@ -1001,150 +1001,187 @@ private fun DeviceListBottomSheet(
     onDismiss: () -> Unit
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
+    val scope = rememberCoroutineScope()
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    val handleDismiss: () -> Unit = {
+        scope.launch {
+            isVisible = false
+            kotlinx.coroutines.delay(180)
+            onDismiss()
+        }
+    }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = handleDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        SheetSystemBars(active = true, isDark = isDark)
+        SheetSystemBars(active = isVisible, isDark = isDark)
 
-        val dragState = rememberSheetDragState(onDismiss = onDismiss)
+        val dragState = rememberSheetDragState(onDismiss = {
+            scope.launch {
+                isVisible = false
+                kotlinx.coroutines.delay(140)
+                onDismiss()
+            }
+        })
 
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                ),
-            contentAlignment = Alignment.BottomCenter
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(160))
         ) {
-            val maxSheetHeight = maxHeight * 0.86f
-
-            Surface(
+            BoxWithConstraints(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = maxSheetHeight)
-                    .then(dragState.sheetOffsetModifier)
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        enabled = false
-                    ) {},
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                color = if (isDark) Color(0xFF131B28) else Color.White,
-                border = BorderStroke(1.dp, InputBorder),
-                shadowElevation = 0.dp
+                        onClick = handleDismiss
+                    ),
+                contentAlignment = Alignment.BottomCenter
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                val maxSheetHeight = maxHeight * 0.86f
+
+                AnimatedVisibility(
+                    visible = isVisible,
+                    enter = slideInVertically(tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it },
+                    exit = slideOutVertically(tween(200)) { it }
                 ) {
-                    // Drag handle (with downward drag gesture support)
-                    Box(
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(dragState.dragHandleModifier)
-                            .padding(vertical = 4.dp),
-                        contentAlignment = Alignment.Center
+                            .heightIn(max = maxSheetHeight)
+                            .then(dragState.sheetOffsetModifier)
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                enabled = false
+                            ) {},
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                        color = if (isDark) Color(0xFF161F30) else Color(0xFFFFFFFF),
+                        border = BorderStroke(1.dp, if (isDark) Color(0x18FFFFFF) else Color(0xFFE2E8F0)),
+                        shadowElevation = 0.dp
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(38.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(Mist.copy(alpha = 0.4f))
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(dragState.dragHandleModifier),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = title,
-                                color = Cloud,
-                                fontSize = 18.5.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = (-0.3).sp
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = devices.size.toString(),
-                                    color = LocalSyncSwiftColors.current.blue,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
-                                .clickable(onClick = onDismiss),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CrossVectorIcon(Modifier.size(12.dp), color = Mist)
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-                    HorizontalDivider(thickness = 0.6.dp, color = InputBorder)
-                    Spacer(Modifier.height(14.dp))
-
-                    if (devices.isNotEmpty()) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f, fill = false)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                .navigationBarsPadding()
+                                .padding(horizontal = 24.dp, vertical = 14.dp)
                         ) {
-                            devices.forEach { dev ->
-                                DeviceListRowCard(
-                                    item = dev,
-                                    onClick = { onDeviceClick(dev) }
+                            // Drag handle
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(dragState.dragHandleModifier)
+                                    .padding(top = 4.dp, bottom = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(42.dp)
+                                        .height(4.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
                                 )
                             }
-                            Spacer(Modifier.height(16.dp))
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = copy.noMatchingDevicesFound,
-                                color = Mist,
-                                fontSize = 14.sp
+
+                            // Header
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(dragState.dragHandleModifier)
+                                    .padding(bottom = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = title,
+                                        color = if (isDark) Color.White else Color(0xFF0F172A),
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = (-0.3).sp
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = devices.size.toString(),
+                                            color = LocalSyncSwiftColors.current.blue,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isDark) Color(0xFF222F43) else Color(0xFFF1F5F9))
+                                        .clickable(onClick = handleDismiss),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CrossVectorIcon(
+                                        Modifier.size(12.dp),
+                                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = if (isDark) Color(0x18FFFFFF) else Color(0xFFE2E8F0)
                             )
+                            Spacer(Modifier.height(14.dp))
+
+                            if (devices.isNotEmpty()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f, fill = false)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    devices.forEach { dev ->
+                                        DeviceListRowCard(
+                                            item = dev,
+                                            onClick = { onDeviceClick(dev) }
+                                        )
+                                    }
+                                    Spacer(Modifier.height(16.dp))
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = copy.noMatchingDevicesFound,
+                                        color = Mist,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
-
-                    Spacer(Modifier.height(6.dp))
                 }
             }
         }

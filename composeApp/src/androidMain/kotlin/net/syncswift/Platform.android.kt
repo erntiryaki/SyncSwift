@@ -37,6 +37,8 @@ actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui
             while (parent != null) {
                 if (parent is androidx.compose.ui.window.DialogWindowProvider) {
                     val dialogWindow = parent.window
+                    dialogWindow.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                    dialogWindow.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
                     androidx.core.view.WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
                     dialogWindow.statusBarColor = android.graphics.Color.TRANSPARENT
                     dialogWindow.navigationBarColor = android.graphics.Color.TRANSPARENT

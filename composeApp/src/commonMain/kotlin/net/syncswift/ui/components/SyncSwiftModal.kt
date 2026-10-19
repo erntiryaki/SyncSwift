@@ -1,5 +1,8 @@
 package net.syncswift.ui.components
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,8 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,12 +23,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import net.syncswift.ui.auth.components.AuthColors
 import net.syncswift.ui.theme.*
 
 /**
  * Universal, ultra-minimalist, flat, elegant SyncSwift Bottom Sheet Modal.
- * Renders anchored to bottom, supports swipe-down to dismiss, never cuts off content or action buttons.
- * Guarantees proper status bar coloring and restoration on dismiss!
+ * Identical to AuthBottomSheet in visual appearance, backdrop darkness, opening/closing animations,
+ * and swipe-to-dismiss mechanics.
  */
 @Composable
 fun SyncSwiftModal(
@@ -45,158 +50,209 @@ fun SyncSwiftModal(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
+    val scope = rememberCoroutineScope()
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    val handleDismiss: () -> Unit = {
+        scope.launch {
+            isVisible = false
+            delay(180)
+            onDismissRequest()
+        }
+    }
 
     Dialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = handleDismiss,
         properties = properties
     ) {
         // Handles status bar: dark while modal is open, restored to theme (black icons on light theme) on close!
-        SheetSystemBars(active = true, isDark = isDark)
+        SheetSystemBars(active = isVisible, isDark = isDark)
 
-        val dragState = rememberSheetDragState(onDismiss = onDismissRequest)
+        val dragState = rememberSheetDragState(onDismiss = {
+            scope.launch {
+                isVisible = false
+                delay(140)
+                onDismissRequest()
+            }
+        })
 
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismissRequest
-                ),
-            contentAlignment = Alignment.BottomCenter
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(160))
         ) {
-            val maxSheetHeight = maxHeight * 0.86f
-
-            Surface(
+            BoxWithConstraints(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = maxSheetHeight)
-                    .then(dragState.sheetOffsetModifier)
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        enabled = false
-                    ) {}, // Prevent backdrop clicks through sheet
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                color = CardSurface,
-                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f)),
-                shadowElevation = 0.dp,
-                tonalElevation = 0.dp
+                        onClick = handleDismiss
+                    ),
+                contentAlignment = Alignment.BottomCenter
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 22.dp, vertical = 14.dp)
+                val maxSheetHeight = maxHeight * 0.86f
+
+                AnimatedVisibility(
+                    visible = isVisible,
+                    enter = slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it },
+                    exit = slideOutVertically(tween(200)) { it }
                 ) {
-                    // Sleek centered drag handle (with downward drag gesture support)
-                    Box(
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(dragState.dragHandleModifier)
-                            .padding(vertical = 4.dp),
-                        contentAlignment = Alignment.Center
+                            .heightIn(max = maxSheetHeight)
+                            .then(dragState.sheetOffsetModifier)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = false
+                            ) {}, // Prevent backdrop clicks through sheet
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                        color = if (isDark) Color(0xFF161F30) else Color(0xFFFFFFFF),
+                        border = BorderStroke(1.dp, if (isDark) Color(0x18FFFFFF) else Color(0xFFE2E8F0)),
+                        shadowElevation = 0.dp
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(Mist.copy(alpha = 0.45f))
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Header (Icon + Title)
-                    if (title != null || titleIcon != null) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(dragState.dragHandleModifier),
-                            verticalAlignment = Alignment.CenterVertically
+                                .navigationBarsPadding()
+                                .padding(horizontal = 24.dp, vertical = 14.dp)
                         ) {
-                            if (titleIcon != null) {
-                                titleIcon()
-                                Spacer(Modifier.width(12.dp))
-                            }
-                            if (title != null) {
-                                Text(
-                                    text = title,
-                                    color = Cloud,
-                                    fontSize = 18.5.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = (-0.3).sp
+                            // Drag handle (identical to AuthBottomSheet with butter-smooth swipe down)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(dragState.dragHandleModifier)
+                                    .padding(top = 4.dp, bottom = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(42.dp)
+                                        .height(4.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
                                 )
                             }
-                        }
-                        Spacer(Modifier.height(14.dp))
-                    }
 
-                    // Body Content (Scrollable so tall modals NEVER get cut off!)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f, fill = false)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        content()
-                    }
-
-                    // Actions Footer (Confirm / Dismiss - ALWAYS visible and never pushed below layout!)
-                    if (onConfirm != null || onDismiss != null) {
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (dismissText != null && onDismiss != null) {
-                                TextButton(
-                                    onClick = onDismiss,
-                                    enabled = !confirmLoading
+                            // Header (Icon + Title + Close X Button)
+                            if (title != null || titleIcon != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(dragState.dragHandleModifier)
+                                        .padding(bottom = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = dismissText,
-                                        color = Mist,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(Modifier.width(8.dp))
-                            }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        if (titleIcon != null) {
+                                            titleIcon()
+                                            Spacer(Modifier.width(10.dp))
+                                        }
+                                        if (title != null) {
+                                            Text(
+                                                text = title,
+                                                color = AuthColors.textPrimary(isDark),
+                                                fontSize = 19.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = (-0.3).sp
+                                            )
+                                        }
+                                    }
 
-                            if (confirmText != null && onConfirm != null) {
-                                Button(
-                                    onClick = onConfirm,
-                                    enabled = confirmEnabled && !confirmLoading,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = confirmColor,
-                                        contentColor = confirmTextColor
-                                    ),
-                                    shape = RoundedCornerShape(14.dp),
-                                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
-                                ) {
-                                    if (confirmLoading) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            color = confirmTextColor,
-                                            strokeWidth = 2.dp
-                                        )
-                                    } else {
-                                        Text(
-                                            text = confirmText,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.ExtraBold
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isDark) Color(0xFF222F43) else Color(0xFFF1F5F9))
+                                            .clickable { handleDismiss() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        net.syncswift.CrossVectorIcon(
+                                            Modifier.size(12.dp),
+                                            color = AuthColors.textSecondary(isDark)
                                         )
                                     }
                                 }
                             }
+
+                            // Body Content (Scrollable so tall modals NEVER get cut off!)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f, fill = false)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                content()
+                            }
+
+                            // Actions Footer (Confirm / Dismiss - ALWAYS visible and never pushed below layout!)
+                            if (onConfirm != null || onDismiss != null) {
+                                Spacer(Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (dismissText != null && (onDismiss != null || onDismissRequest != null)) {
+                                        TextButton(
+                                            onClick = {
+                                                if (onDismiss != null) onDismiss() else handleDismiss()
+                                            },
+                                            enabled = !confirmLoading
+                                        ) {
+                                            Text(
+                                                text = dismissText,
+                                                color = AuthColors.textSecondary(isDark),
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                    }
+
+                                    if (confirmText != null && onConfirm != null) {
+                                        Button(
+                                            onClick = onConfirm,
+                                            enabled = confirmEnabled && !confirmLoading,
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = confirmColor,
+                                                contentColor = confirmTextColor
+                                            ),
+                                            shape = RoundedCornerShape(14.dp),
+                                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                                        ) {
+                                            if (confirmLoading) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    color = confirmTextColor,
+                                                    strokeWidth = 2.dp
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = confirmText,
+                                                    fontSize = 13.5.sp,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
-
-                    Spacer(Modifier.height(6.dp))
                 }
             }
         }

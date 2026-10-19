@@ -18,7 +18,7 @@ actual fun AuthHeroImage(isDark: Boolean, modifier: Modifier) {
         painter = painterResource(res),
         contentDescription = "SyncSwift Seamless Cross-Device Sync",
         modifier = modifier,
-        alignment = Alignment.BottomCenter,
+        alignment = Alignment.Center,
         contentScale = ContentScale.FillWidth
     )
 }
