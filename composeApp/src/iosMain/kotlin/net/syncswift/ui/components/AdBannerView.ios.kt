@@ -27,13 +27,15 @@ actual fun AdBannerView(modifier: Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp),
+            .height(50.dp)
+            .background(net.syncswift.ui.theme.CardSurface),
         contentAlignment = Alignment.Center
     ) {
         UIKitView(
             factory = {
                 val provided = iosAdBannerProvider?.invoke(adUnit)
                 if (provided != null) {
+                    provided.removeFromSuperview()
                     provided
                 } else {
                     // Fallback to reflection if provider not yet wired
@@ -77,7 +79,10 @@ actual fun AdBannerView(modifier: Modifier) {
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(50.dp)
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            onRelease = { view ->
+                view.removeFromSuperview()
+            }
         )
     }
 }

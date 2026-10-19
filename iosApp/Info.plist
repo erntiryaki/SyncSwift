@@ -51,6 +51,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SyncSwift requires camera access to scan QR codes for device pairing.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>SyncSwift uses Face ID to securely unlock your app and protect your transfers.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>SyncSwift uses your local network to discover and transfer files directly between your devices.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

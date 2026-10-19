@@ -4,21 +4,35 @@ import ComposeApp
 import GoogleMobileAds
 
 final class ObservableAdMobBannerView: GADBannerView {
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
+    private var hasLoadedAd = false
+
+    func loadIfNeeded() {
+        guard !hasLoadedAd else { return }
         if self.rootViewController == nil {
             if let window = self.window ?? UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .flatMap({ $0.windows })
                 .first(where: { $0.isKeyWindow }) ?? UIApplication.shared.windows.first {
                 self.rootViewController = window.rootViewController
-                self.load(GADRequest())
             }
+        }
+        if self.rootViewController != nil {
+            hasLoadedAd = true
+            self.load(GADRequest())
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if self.window != nil {
+            loadIfNeeded()
         }
     }
 }
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    private var cachedBannerView: ObservableAdMobBannerView?
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
@@ -30,8 +44,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         GADMobileAds.sharedInstance().start(completionHandler: nil)
 
         // Wire real AdMob banner provider to Compose Multiplatform
-        Platform_iosKt.setIosAdBannerProvider { (adUnitId: String) -> UIView in
-            let bannerView = ObservableAdMobBannerView(adSize: GADAdSizeBanner)
+        Platform_iosKt.setIosAdBannerProvider { [weak self] (adUnitId: String) -> UIView in
+            if let cached = self?.cachedBannerView {
+                cached.removeFromSuperview()
+                return cached
+            }
+            let screenWidth = UIScreen.main.bounds.width
+            let adSize = GADCurrentOrientationAnchoredAdaptiveBannerAdSizeWithWidth(screenWidth)
+            let bannerView = ObservableAdMobBannerView(adSize: adSize)
             bannerView.adUnitID = adUnitId
             if let window = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
@@ -39,8 +59,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 .first(where: { $0.isKeyWindow }) ?? UIApplication.shared.windows.first,
                let rootVC = window.rootViewController {
                 bannerView.rootViewController = rootVC
-                bannerView.load(GADRequest())
             }
+            bannerView.loadIfNeeded()
+            self?.cachedBannerView = bannerView
             return bannerView
         }
 

@@ -90,19 +90,19 @@ fun AuthSocialHalfButton(
 ) {
     Box(
         modifier = modifier
-            .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
+            .height(54.dp)
+            .clip(RoundedCornerShape(27.dp))
             .background(AuthColors.secondary(isDark))
             .border(
                 BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else Color(0xFFE2E8F0)),
-                RoundedCornerShape(26.dp)
+                RoundedCornerShape(27.dp)
             )
             .clickable(enabled = enabled && !isLoading) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         if (isLoading) {
             CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
                 color = AuthColors.button,
                 strokeWidth = 2.dp
             )
@@ -113,7 +113,7 @@ fun AuthSocialHalfButton(
             ) {
                 SocialProviderIcon(
                     provider = provider,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(24.dp),
                     tint = if (provider == IdentityProvider.Apple) {
                         if (isDark) Color.White else Color(0xFF121829)
                     } else {
@@ -121,13 +121,13 @@ fun AuthSocialHalfButton(
                     }
                 )
 
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
 
                 Text(
                     text = text,
                     color = AuthColors.textPrimary(isDark),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     softWrap = false
                 )

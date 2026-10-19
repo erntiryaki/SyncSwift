@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -401,14 +402,19 @@ fun HomeScreen(
                                 Text(
                                     text = copy.scanningNetworkDevices,
                                     color = Cloud,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    lineHeight = 18.sp
                                 )
+                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = copy.openSyncSwiftOnOtherDevice,
                                     color = Mist,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 2,
+                                    lineHeight = 16.sp
                                 )
                             }
                         }
@@ -533,7 +539,8 @@ fun HomeScreen(
                             }
                             Spacer(Modifier.width(8.dp))
                             Column(
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
                                 Text(
@@ -541,6 +548,7 @@ fun HomeScreen(
                                     color = Color.White,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false
                                 )
@@ -550,6 +558,7 @@ fun HomeScreen(
                                     color = Color.White.copy(alpha = 0.85f),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false
                                 )
@@ -585,7 +594,8 @@ fun HomeScreen(
                             }
                             Spacer(Modifier.width(8.dp))
                             Column(
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
                                 Text(
@@ -593,6 +603,7 @@ fun HomeScreen(
                                     color = Cloud,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false
                                 )
@@ -602,6 +613,7 @@ fun HomeScreen(
                                     color = Mist,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false
                                 )

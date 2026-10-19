@@ -244,6 +244,9 @@ fun SettingsScreen(
                         icon = { KeyVectorIcon(Modifier.size(22.dp), color = Mist.copy(alpha = 0.4f)) },
                         title = copy.changePassword,
                         subtitle = copy.featureDisabledForLocal,
+                        titleColor = Mist.copy(alpha = 0.45f),
+                        subtitleColor = Mist.copy(alpha = 0.35f),
+                        trailing = { ChevronRightIcon(Modifier.size(16.dp), color = Mist.copy(alpha = 0.4f)) },
                         onClick = { showNativeToast(copy.featureDisabledForLocal) }
                     )
                 } else if (isEmailAuth) {
@@ -760,6 +763,8 @@ private fun AccountMenuItemRow(
     icon: @Composable () -> Unit,
     title: String,
     subtitle: String,
+    titleColor: Color = Cloud,
+    subtitleColor: Color = Mist,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
@@ -783,7 +788,7 @@ private fun AccountMenuItemRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                color = Cloud,
+                color = titleColor,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = (-0.2).sp
@@ -791,7 +796,7 @@ private fun AccountMenuItemRow(
             Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
-                color = Mist,
+                color = subtitleColor,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Normal
             )
