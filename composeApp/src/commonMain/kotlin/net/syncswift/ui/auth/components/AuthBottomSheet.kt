@@ -33,6 +33,7 @@ fun AuthBottomSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
     title: String = "",
+    titleIcon: (@Composable () -> Unit)? = null,
     isDark: Boolean = LocalSyncSwiftColors.current.isDark,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -49,7 +50,7 @@ fun AuthBottomSheet(
     // Handles system tray: dark while sheet is open, properly restored to black icons on light theme when closed!
     SheetSystemBars(active = visible, isDark = isDark)
 
-    val dragState = rememberSheetDragState(onDismiss = onDismiss)
+    val dragState = rememberSheetDragState(visible = visible, onDismiss = onDismiss)
 
     AnimatedVisibility(
         visible = visible,
@@ -66,7 +67,7 @@ fun AuthBottomSheet(
                 ) { onDismiss() },
             contentAlignment = Alignment.BottomCenter
         ) {
-            val maxSheetHeight = maxHeight * 0.86f
+            val maxSheetHeight = maxHeight * 0.92f
 
             AnimatedVisibility(
                 visible = visible,
@@ -91,7 +92,8 @@ fun AuthBottomSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 24.dp, vertical = 14.dp)
+                            .padding(horizontal = 24.dp)
+                            .padding(top = 14.dp, bottom = 24.dp)
                     ) {
                         // Drag handle (with downward drag gesture support)
                         Box(
@@ -110,8 +112,8 @@ fun AuthBottomSheet(
                             )
                         }
 
-                        // Optional Header Row: Title & Close Button
-                        if (title.isNotEmpty()) {
+                        // Header Row: Title & Close Button
+                        if (title.isNotEmpty() || titleIcon != null) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -120,13 +122,26 @@ fun AuthBottomSheet(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = title,
-                                    color = AuthColors.textPrimary(isDark),
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-0.3).sp
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (titleIcon != null) {
+                                        titleIcon()
+                                        if (title.isNotEmpty()) {
+                                            Spacer(Modifier.width(10.dp))
+                                        }
+                                    }
+                                    if (title.isNotEmpty()) {
+                                        Text(
+                                            text = title,
+                                            color = AuthColors.textPrimary(isDark),
+                                            fontSize = 19.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = (-0.3).sp
+                                        )
+                                    }
+                                }
 
                                 Box(
                                     modifier = Modifier

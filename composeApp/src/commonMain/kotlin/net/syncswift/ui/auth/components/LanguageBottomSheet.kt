@@ -59,7 +59,7 @@ fun LanguageBottomSheet(
     // Handles system tray: dark while sheet is open, properly restored to black icons on light theme when closed!
     SheetSystemBars(active = visible, isDark = isDark)
 
-    val dragState = rememberSheetDragState(onDismiss = onDismiss)
+    val dragState = rememberSheetDragState(visible = visible, onDismiss = onDismiss)
 
     AnimatedVisibility(
         visible = visible,

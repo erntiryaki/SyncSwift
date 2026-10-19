@@ -69,7 +69,7 @@ fun AuthPage(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
-    val heroTopColor = if (isDark) Color(0xFF041637) else Color(0xFFFDFDFE)
+    val heroTopColor = if (isDark) Color(0xFF051430) else Color(0xFFFFFFFF)
     net.syncswift.UpdateSystemBars(isDark = isDark, statusBarColor = if (showHero) heroTopColor else null)
 
     var showLanguageSheet by remember { mutableStateOf(false) }
@@ -101,45 +101,45 @@ fun AuthPage(
             // Hero Image starts below the top navigation bar with smooth top and bottom transition gradients
             if (showHero) {
                 Spacer(Modifier.statusBarsPadding())
-                Spacer(Modifier.height(38.dp))
+                Spacer(Modifier.height(32.dp))
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(290.dp)
+                        .height(295.dp)
                 ) {
                     AuthHeroImage(
                         isDark = isDark,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 8.dp)
+                            .padding(top = 10.dp)
                     )
 
-                    // Smooth fade transition at the top end of hero blending into top background (logo remains crisp)
+                    // Hero üstüne solukluk: bildirim tepsisi / üst bar ile hero arasında pürüzsüz geçiş
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(28.dp)
+                            .height(36.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
-                                    0.0f to AuthColors.background(isDark),
-                                    0.5f to AuthColors.background(isDark).copy(alpha = 0.5f),
+                                    0.0f to heroTopColor,
+                                    0.6f to heroTopColor.copy(alpha = 0.6f),
                                     1.0f to Color.Transparent
                                 )
                             )
                     )
 
-                    // Smooth fade transition at the bottom end of hero blending into the form background
+                    // Hero altına solukluk: hero ile form arka planı arasında pürüzsüz geçiş
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
+                            .height(48.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to Color.Transparent,
-                                    0.45f to AuthColors.background(isDark).copy(alpha = 0.5f),
+                                    0.5f to AuthColors.background(isDark).copy(alpha = 0.6f),
                                     1.0f to AuthColors.background(isDark)
                                 )
                             )

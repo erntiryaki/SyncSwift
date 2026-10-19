@@ -8,12 +8,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import net.syncswift.ui.theme.LocalSyncSwiftColors
 
 class SheetDragState(
     val scope: CoroutineScope,
@@ -27,15 +25,21 @@ class SheetDragState(
     val currentOffset: Float
         get() = if (isDragging) dragOffsetY else animatable.value
 
-    /**
-     * Butter-smooth, zero-latency drag gesture detector.
-     * Updates direct primitive float without per-frame coroutine dispatches.
-     */
+    fun reset() {
+        isDragging = false
+        dragOffsetY = 0f
+        scope.launch {
+            try {
+                animatable.snapTo(0f)
+            } catch (_: Exception) {}
+        }
+    }
+
     val dragHandleModifier: Modifier = Modifier.pointerInput(Unit) {
         detectVerticalDragGestures(
             onDragStart = {
                 isDragging = true
-                dragOffsetY = animatable.value
+                dragOffsetY = 0f
             },
             onVerticalDrag = { change, dragAmount ->
                 if (dragAmount > 0f || dragOffsetY > 0f) {
@@ -47,19 +51,48 @@ class SheetDragState(
                 val releasedOffset = dragOffsetY
                 if (releasedOffset > thresholdPx) {
                     scope.launch {
-                        animatable.snapTo(releasedOffset)
-                        isDragging = false
-                        animatable.animateTo(
-                            targetValue = releasedOffset + 600f,
-                            animationSpec = tween(180, easing = FastOutLinearInEasing)
-                        )
+                        try {
+                            animatable.snapTo(releasedOffset)
+                            isDragging = false
+                            // Glide smoothly down offscreen (160ms, butter-smooth)
+                            animatable.animateTo(
+                                targetValue = 1000f,
+                                animationSpec = tween(durationMillis = 160, easing = FastOutLinearInEasing)
+                            )
+                        } catch (_: Exception) {
+                        } finally {
+                            onDismiss()
+                            dragOffsetY = 0f
+                            animatable.snapTo(0f)
+                        }
                     }
-                    onDismiss()
                 } else {
                     scope.launch {
+                        try {
+                            animatable.snapTo(releasedOffset)
+                            isDragging = false
+                            dragOffsetY = 0f
+                            animatable.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            )
+                        } catch (_: Exception) {
+                            dragOffsetY = 0f
+                            animatable.snapTo(0f)
+                        }
+                    }
+                }
+            },
+            onDragCancel = {
+                val releasedOffset = dragOffsetY
+                scope.launch {
+                    try {
                         animatable.snapTo(releasedOffset)
-                        dragOffsetY = 0f
                         isDragging = false
+                        dragOffsetY = 0f
                         animatable.animateTo(
                             targetValue = 0f,
                             animationSpec = spring(
@@ -67,22 +100,10 @@ class SheetDragState(
                                 stiffness = Spring.StiffnessMedium
                             )
                         )
+                    } catch (_: Exception) {
+                        dragOffsetY = 0f
+                        animatable.snapTo(0f)
                     }
-                }
-            },
-            onDragCancel = {
-                val releasedOffset = dragOffsetY
-                scope.launch {
-                    animatable.snapTo(releasedOffset)
-                    dragOffsetY = 0f
-                    isDragging = false
-                    animatable.animateTo(
-                        targetValue = 0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    )
                 }
             }
         )
@@ -100,12 +121,26 @@ class SheetDragState(
 
 @Composable
 fun rememberSheetDragState(
+    visible: Boolean = true,
     onDismiss: () -> Unit,
     thresholdPx: Float = 60f
 ): SheetDragState {
     val scope = rememberCoroutineScope()
-
-    return remember(onDismiss) {
+    val state = remember(onDismiss) {
         SheetDragState(scope, onDismiss, thresholdPx)
     }
+
+    // Reset offsets on every open/close cycle so the sheet NEVER shrinks or accumulates offset
+    LaunchedEffect(visible) {
+        state.reset()
+    }
+
+    DisposableEffect(Unit) {
+        state.reset()
+        onDispose {
+            state.reset()
+        }
+    }
+
+    return state
 }

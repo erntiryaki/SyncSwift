@@ -52,11 +52,7 @@ fun SyncSwiftModal(
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
     val scope = rememberCoroutineScope()
-    var isVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        isVisible = true
-    }
+    var isVisible by remember { mutableStateOf(true) }
 
     val handleDismiss: () -> Unit = {
         scope.launch {
@@ -73,7 +69,7 @@ fun SyncSwiftModal(
         // Handles status bar: dark while modal is open, restored to theme (black icons on light theme) on close!
         SheetSystemBars(active = isVisible, isDark = isDark)
 
-        val dragState = rememberSheetDragState(onDismiss = handleDismiss)
+        val dragState = rememberSheetDragState(visible = isVisible, onDismiss = handleDismiss)
 
         AnimatedVisibility(
             visible = isVisible,

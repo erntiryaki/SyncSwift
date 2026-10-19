@@ -55,11 +55,7 @@ fun ConnectedDeviceActionScreen(
             device.name.contains("Mobile", ignoreCase = true)
 
     val scope = rememberCoroutineScope()
-    var isVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        isVisible = true
-    }
+    var isVisible by remember { mutableStateOf(true) }
 
     val handleDismiss: () -> Unit = {
         scope.launch {
@@ -69,20 +65,16 @@ fun ConnectedDeviceActionScreen(
         }
     }
 
-    Dialog(
-        onDismissRequest = handleDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    SheetSystemBars(active = isVisible, isDark = isDark)
+
+    val dragState = rememberSheetDragState(visible = isVisible, onDismiss = handleDismiss)
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(tween(200)),
+        exit = fadeOut(tween(160))
     ) {
-        SheetSystemBars(active = isVisible, isDark = isDark)
-
-        val dragState = rememberSheetDragState(onDismiss = handleDismiss)
-
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(160))
-        ) {
-            BoxWithConstraints(
+        BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.55f))
@@ -374,16 +366,14 @@ fun ConnectedDeviceActionScreen(
                                 }
                             }
 
-                            Spacer(Modifier.height(14.dp))
-                        }
-                    }
-                }
                         }
                     }
                 }
             }
         }
     }
+}
+}
 
     // Rename Modal Dialog
     if (showRenameDialog) {
