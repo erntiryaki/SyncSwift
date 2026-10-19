@@ -126,4 +126,12 @@ object NotificationHistoryManager {
         _notifications.value = current
         saveNotifications()
     }
+
+    fun markAsRead(id: String) {
+        val current = _notifications.value.map {
+            if (it.id == id) it.copy(isRead = true) else it
+        }
+        _notifications.value = current
+        saveNotifications()
+    }
 }

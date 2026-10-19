@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,11 +43,6 @@ fun NotificationsScreen(
     BackHandler { onBack() }
 
     val notifications by NotificationHistoryManager.notifications.collectAsState()
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        NotificationHistoryManager.markAllRead()
-    }
 
     Column(
         modifier = Modifier
@@ -55,43 +51,39 @@ fun NotificationsScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // Top Header
+        // Top Header matching AccountScreen & SettingsScreen design
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(InputBg)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(InputBg.copy(alpha = 0.8f))
-                        .clickable(onClick = onBack),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ChevronLeftIcon(Modifier.size(18.dp), color = Cloud)
-                }
-                Text(
-                    text = copy.notificationsTitle,
-                    color = Cloud,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.4).sp
-                )
+                ChevronLeftIcon(Modifier.size(18.dp), color = Cloud)
             }
+            Spacer(Modifier.width(14.dp))
+            Text(
+                text = copy.notificationsTitle,
+                color = Cloud,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-0.6).sp,
+                modifier = Modifier.weight(1f)
+            )
 
             if (notifications.isNotEmpty()) {
                 Text(
                     text = copy.clearAllNotifications,
                     color = ErrorRed,
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
@@ -103,7 +95,7 @@ fun NotificationsScreen(
             }
         }
 
-        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+        Spacer(Modifier.height(4.dp))
 
         if (notifications.isEmpty()) {
             // Empty State
@@ -138,7 +130,7 @@ fun NotificationsScreen(
             // Notifications List
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(
@@ -172,6 +164,9 @@ private fun SwipeableNotificationCard(
     val pendingTransfer by net.syncswift.connection.ConnectionManager.pendingTransferRequest.collectAsState()
 
     val handleItemClick = {
+        // Mark as read on click without deleting
+        NotificationHistoryManager.markAsRead(item.id)
+
         when (item.type.lowercase()) {
             "pair" -> {
                 if (pendingPair == null || (item.senderName.isNotBlank() && pendingPair?.senderName != item.senderName)) {
@@ -200,7 +195,7 @@ private fun SwipeableNotificationCard(
         "clipboard" -> Blue
         "file" -> SuccessGreen
         "pair" -> Color(0xFF8B5CF6)
-        else -> Cloud
+        else -> Blue
     }
 
     Box(
@@ -223,7 +218,10 @@ private fun SwipeableNotificationCard(
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = CardSurface,
-            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f)),
+            border = BorderStroke(
+                1.dp,
+                if (!item.isRead) Blue.copy(alpha = 0.35f) else InputBorder.copy(alpha = 0.35f)
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { cardWidthPx = it.width.toFloat().coerceAtLeast(100f) }
@@ -255,7 +253,6 @@ private fun SwipeableNotificationCard(
                             }
                         },
                         onHorizontalDrag = { _, dragAmount ->
-                            // Only allow dragging to the left (negative offset)
                             coroutineScope.launch {
                                 val current = offsetXAnim.value
                                 if (dragAmount < 0 || current < 0) {
@@ -274,12 +271,12 @@ private fun SwipeableNotificationCard(
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Circular icon
+                // Rounded icon box matching account design
                 Box(
                     modifier = Modifier
                         .size(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(iconColor.copy(alpha = 0.15f)),
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(iconColor.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     when (item.type.lowercase()) {
@@ -299,17 +296,33 @@ private fun SwipeableNotificationCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = item.title,
-                            color = Cloud,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            if (!item.isRead) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Blue)
+                                )
+                            }
+                            Text(
+                                text = item.title,
+                                color = Cloud,
+                                fontSize = 14.5.sp,
+                                fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
                         Text(
                             text = formatRelativeTime(item.timestampMs, copy),
                             color = Mist.copy(alpha = 0.7f),
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -320,7 +333,8 @@ private fun SwipeableNotificationCard(
                             color = Mist,
                             fontSize = 12.sp,
                             lineHeight = 16.sp,
-                            maxLines = 2
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 

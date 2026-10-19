@@ -169,14 +169,61 @@ fun CheckIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modif
 
 @Composable
 fun FingerprintIcon(modifier: Modifier = Modifier, color: Color = Cloud) = Canvas(modifier) {
-    val strokeWidth = size.minDimension * 0.065f
-    val s = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-    val cx = size.width / 2f
-    val cy = size.height / 2f
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.065f
+    val stroke = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
-    drawArc(color, 200f, 140f, false, topLeft = Offset(cx - size.width * 0.18f, cy - size.height * 0.22f), size = Size(size.width * 0.36f, size.height * 0.36f), style = s)
-    drawArc(color, 190f, 160f, false, topLeft = Offset(cx - size.width * 0.28f, cy - size.height * 0.32f), size = Size(size.width * 0.56f, size.height * 0.56f), style = s)
-    drawArc(color, 180f, 180f, false, topLeft = Offset(cx - size.width * 0.38f, cy - size.height * 0.40f), size = Size(size.width * 0.76f, size.height * 0.72f), style = s)
+    // Ridge 1: Core center loop
+    val pathCore = Path().apply {
+        moveTo(w * 0.44f, h * 0.58f)
+        lineTo(w * 0.44f, h * 0.46f)
+        cubicTo(w * 0.44f, h * 0.38f, w * 0.56f, h * 0.38f, w * 0.56f, h * 0.46f)
+        lineTo(w * 0.56f, h * 0.62f)
+        cubicTo(w * 0.56f, h * 0.70f, w * 0.48f, h * 0.75f, w * 0.42f, h * 0.78f)
+    }
+    drawPath(pathCore, color, style = stroke)
+
+    // Ridge 2: Inner loop
+    val pathInner = Path().apply {
+        moveTo(w * 0.34f, h * 0.66f)
+        cubicTo(w * 0.33f, h * 0.52f, w * 0.34f, h * 0.38f, w * 0.42f, h * 0.28f)
+        cubicTo(w * 0.46f, h * 0.22f, w * 0.54f, h * 0.22f, w * 0.58f, h * 0.28f)
+        cubicTo(w * 0.66f, h * 0.38f, w * 0.67f, h * 0.52f, w * 0.66f, h * 0.68f)
+    }
+    drawPath(pathInner, color, style = stroke)
+
+    // Ridge 3: Mid loop
+    val pathMid = Path().apply {
+        moveTo(w * 0.24f, h * 0.74f)
+        cubicTo(w * 0.23f, h * 0.48f, w * 0.25f, h * 0.30f, w * 0.35f, h * 0.18f)
+        cubicTo(w * 0.43f, h * 0.10f, w * 0.57f, h * 0.10f, w * 0.65f, h * 0.18f)
+        cubicTo(w * 0.75f, h * 0.30f, w * 0.77f, h * 0.48f, w * 0.76f, h * 0.74f)
+    }
+    drawPath(pathMid, color, style = stroke)
+
+    // Ridge 4: Outer top & sides
+    val pathOuter = Path().apply {
+        moveTo(w * 0.15f, h * 0.60f)
+        cubicTo(w * 0.14f, h * 0.40f, w * 0.17f, h * 0.22f, w * 0.29f, h * 0.10f)
+        cubicTo(w * 0.40f, h * 0.02f, w * 0.60f, h * 0.02f, w * 0.71f, h * 0.10f)
+        cubicTo(w * 0.83f, h * 0.22f, w * 0.86f, h * 0.40f, w * 0.85f, h * 0.60f)
+    }
+    drawPath(pathOuter, color, style = stroke)
+
+    // Ridge 5: Bottom left whorl curve
+    val pathBottomLeft = Path().apply {
+        moveTo(w * 0.20f, h * 0.82f)
+        cubicTo(w * 0.26f, h * 0.87f, w * 0.36f, h * 0.89f, w * 0.44f, h * 0.88f)
+    }
+    drawPath(pathBottomLeft, color, style = stroke)
+
+    // Ridge 6: Bottom right whorl curve
+    val pathBottomRight = Path().apply {
+        moveTo(w * 0.56f, h * 0.88f)
+        cubicTo(w * 0.64f, h * 0.89f, w * 0.74f, h * 0.87f, w * 0.80f, h * 0.82f)
+    }
+    drawPath(pathBottomRight, color, style = stroke)
 }
 
 @Composable

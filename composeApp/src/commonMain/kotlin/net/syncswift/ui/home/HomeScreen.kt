@@ -196,6 +196,8 @@ fun HomeScreen(
     }
 
     val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+    val notifications by net.syncswift.notification.NotificationHistoryManager.notifications.collectAsState()
+    val hasUnreadNotifications = remember(notifications) { notifications.any { !it.isRead } }
 
     Column(
         modifier = Modifier
@@ -208,13 +210,13 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp)
+                    .height(64.dp)
                     .padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 BrandLogo(
-                    modifier = Modifier.height(64.dp)
+                    modifier = Modifier.height(50.dp)
                 )
 
                 Row(
@@ -239,15 +241,17 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         BellIcon(Modifier.size(22.dp), color = Cloud)
-                        // Blue Badge Dot
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 4.dp, end = 4.dp)
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(LocalSyncSwiftColors.current.blue)
-                        )
+                        // Blue Badge Dot (Only shown if unread notifications exist)
+                        if (hasUnreadNotifications) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 4.dp, end = 4.dp)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(LocalSyncSwiftColors.current.blue)
+                            )
+                        }
                     }
                 }
             }
@@ -505,7 +509,7 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(60.dp)
+                            .height(72.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .clickable(onClick = onSendClick),
                         shape = RoundedCornerShape(18.dp),
@@ -514,30 +518,31 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp),
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.2f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                PaperAirplaneIcon(Modifier.size(18.dp), color = Color.White)
+                                PaperAirplaneIcon(Modifier.size(20.dp), color = Color.White)
                             }
                             Spacer(Modifier.width(10.dp))
-                            Column {
+                            Column(verticalArrangement = Arrangement.Center) {
                                 Text(
                                     text = copy.send,
                                     color = Color.White,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = copy.transferFilesSubtitle,
                                     color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Normal
                                 )
                             }
@@ -548,7 +553,7 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(60.dp)
+                            .height(72.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .clickable(onClick = onClipboardClick),
                         shape = RoundedCornerShape(18.dp),
@@ -558,30 +563,31 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp),
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
                                     .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                ClipboardVectorIcon(Modifier.size(18.dp), color = LocalSyncSwiftColors.current.blue)
+                                ClipboardVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue)
                             }
                             Spacer(Modifier.width(10.dp))
-                            Column {
+                            Column(verticalArrangement = Arrangement.Center) {
                                 Text(
                                     text = copy.sendClipboardAction,
                                     color = Cloud,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = copy.clipboardShareAndSync,
                                     color = Mist,
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Normal
                                 )
                             }
@@ -952,15 +958,18 @@ private fun SectionHeaderRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
+            modifier = Modifier.weight(1f, fill = false),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = title,
                 color = Cloud,
-                fontSize = 17.5.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.3).sp
+                letterSpacing = (-0.3).sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             Box(
@@ -978,15 +987,19 @@ private fun SectionHeaderRow(
             }
         }
 
+        Spacer(Modifier.width(8.dp))
+
         Text(
             text = copy.viewAll,
             color = blue,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
                 .clickable(onClick = onViewAllClick)
-                .padding(4.dp)
+                .padding(horizontal = 4.dp, vertical = 4.dp)
         )
     }
 }

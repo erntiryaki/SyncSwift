@@ -109,9 +109,9 @@ fun PaywallScreen(
                 ) {
                     Text(
                         text = copy.cancelAction,
-                        color = Mist,
+                        color = primaryButtonBg,
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .clickable(
                                 indication = null,
@@ -485,53 +485,17 @@ fun PaywallScreen(
                 visible = true,
                 onDismissRequest = onDismiss,
                 title = copy.alreadyProTitle,
-                titleIcon = { net.syncswift.CrownVectorIcon(Modifier.size(24.dp), color = SuccessGreen) },
+                titleIcon = { net.syncswift.CrownVectorIcon(Modifier.size(24.dp), color = Color(0xFFFBBF24)) },
                 confirmText = copy.close,
                 confirmColor = PillButtonBg,
                 confirmTextColor = PillButtonText,
                 onConfirm = onDismiss,
                 isDark = true
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (dates.startDateFormatted.isNotBlank()) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = CardSurface,
-                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
-                        ) {
-                            Text(
-                                text = copy.proStartDateLabel.replace("%s", dates.startDateFormatted),
-                                color = Mist,
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = CardSurface,
-                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
-                    ) {
-                        Text(
-                            text = copy.proRenewalDateLabel
-                                .replace("%s", dates.renewalDateFormatted)
-                                .replace("%d", dates.daysLeft.toString()),
-                            color = Cloud,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                        )
-                    }
-                }
+                ProActiveSheetContent(
+                    dates = dates,
+                    copy = copy
+                )
             }
         }
 

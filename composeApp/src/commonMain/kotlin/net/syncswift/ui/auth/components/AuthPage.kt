@@ -113,29 +113,31 @@ fun AuthPage(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Hero üstüne solukluk: sadece üst kesik kenarı gizleyecek kadar ince
+                    // Hero üstüne solukluk: üst kesik kenarı pürüzsüzce gizleyen yumuşak geçiş
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp)
+                            .height(22.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to heroTopColor,
+                                    0.5f to heroTopColor.copy(alpha = 0.75f),
                                     1.0f to Color.Transparent
                                 )
                             )
                     )
 
-                    // Hero altına solukluk: sadece alt kesik kenarı gizleyecek kadar ince
+                    // Hero altına solukluk: hero ile form arasında ferah ve pürüzsüz geçiş (alt çizgiyi gizler)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(10.dp)
+                            .height(24.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to Color.Transparent,
+                                    0.45f to AuthColors.background(isDark).copy(alpha = 0.5f),
                                     1.0f to AuthColors.background(isDark)
                                 )
                             )
