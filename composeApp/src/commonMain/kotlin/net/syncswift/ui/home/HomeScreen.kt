@@ -510,13 +510,13 @@ fun HomeScreen(
                 // SECTION 4: TWO LARGE ACTION BUTTONS (GÖNDER & ORTAK PANO)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Button 1: Gönder (Solid Blue)
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(72.dp)
+                            .height(70.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .clickable(onClick = onSendClick),
                         shape = RoundedCornerShape(18.dp),
@@ -525,19 +525,19 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(32.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.2f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                PaperAirplaneIcon(Modifier.size(18.dp), color = Color.White)
+                                PaperAirplaneIcon(Modifier.size(16.dp), color = Color.White)
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(6.dp))
                             Column(
                                 modifier = Modifier.weight(1f),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -546,21 +546,21 @@ fun HomeScreen(
                                 Text(
                                     text = copy.send,
                                     color = Color.White,
-                                    fontSize = 14.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
-                                    softWrap = false
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(1.dp))
                                 Text(
                                     text = copy.transferFilesSubtitle,
                                     color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 11.sp,
+                                    fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Normal,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
-                                    softWrap = false
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -570,7 +570,7 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(72.dp)
+                            .height(70.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .clickable(onClick = onClipboardClick),
                         shape = RoundedCornerShape(18.dp),
@@ -580,19 +580,19 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(32.dp)
                                     .clip(CircleShape)
                                     .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                ClipboardVectorIcon(Modifier.size(18.dp), color = LocalSyncSwiftColors.current.blue)
+                                ClipboardVectorIcon(Modifier.size(16.dp), color = LocalSyncSwiftColors.current.blue)
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(6.dp))
                             Column(
                                 modifier = Modifier.weight(1f),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -601,21 +601,21 @@ fun HomeScreen(
                                 Text(
                                     text = copy.sendClipboardAction,
                                     color = Cloud,
-                                    fontSize = 14.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
-                                    softWrap = false
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(1.dp))
                                 Text(
                                     text = copy.clipboardShareAndSync,
                                     color = Mist,
-                                    fontSize = 11.sp,
+                                    fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Normal,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
-                                    softWrap = false
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
