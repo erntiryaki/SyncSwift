@@ -98,15 +98,12 @@ fun AuthPage(
                 .verticalScroll(scrollState)
                 .navigationBarsPadding()
         ) {
-            // Hero Image starts below the top navigation bar with subtle edge-softening gradients
+            // Hero Image starts seamlessly from the top, bringing both hero and form content higher up
             if (showHero) {
-                Spacer(Modifier.statusBarsPadding())
-                Spacer(Modifier.height(4.dp))
-
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(295.dp)
+                        .height(280.dp)
                 ) {
                     AuthHeroImage(
                         isDark = isDark,
@@ -117,7 +114,7 @@ fun AuthPage(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp)
+                            .height(6.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
@@ -143,7 +140,7 @@ fun AuthPage(
                             )
                     )
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
             } else {
                 // When hero is not shown, provide space below the floating top navigation bar
                 Spacer(Modifier.statusBarsPadding())

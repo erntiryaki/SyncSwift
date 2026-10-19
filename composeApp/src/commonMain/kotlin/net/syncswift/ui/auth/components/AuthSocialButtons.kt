@@ -79,6 +79,64 @@ fun AuthGoogleWideButton(
 }
 
 @Composable
+fun AuthSocialHalfButton(
+    provider: IdentityProvider,
+    text: String,
+    onClick: () -> Unit,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isLoading: Boolean = false
+) {
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(AuthColors.secondary(isDark))
+            .border(
+                BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else Color(0xFFE2E8F0)),
+                RoundedCornerShape(26.dp)
+            )
+            .clickable(enabled = enabled && !isLoading) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = AuthColors.button,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                SocialProviderIcon(
+                    provider = provider,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (provider == IdentityProvider.Apple) {
+                        if (isDark) Color.White else Color(0xFF121829)
+                    } else {
+                        Color.Unspecified
+                    }
+                )
+
+                Spacer(Modifier.width(10.dp))
+
+                Text(
+                    text = text,
+                    color = AuthColors.textPrimary(isDark),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun AuthTermsDisclaimer(
     copy: Copy,
     isDark: Boolean,

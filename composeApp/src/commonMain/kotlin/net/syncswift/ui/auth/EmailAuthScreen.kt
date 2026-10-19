@@ -276,7 +276,7 @@ fun EmailAuthScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            // Google Button (Wide on Android with "Google ile devam et", Circular on iOS)
+            // Google & Apple Buttons (Wide Google on Android; Side-by-side equal-width Google & Apple on iOS)
             if (isAndroid) {
                 AuthGoogleWideButton(
                     text = copy.google,
@@ -291,25 +291,33 @@ fun EmailAuthScreen(
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(AuthColors.secondary(isDark))
-                            .border(
-                                BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else AuthColors.border(isDark)),
-                                CircleShape
-                            )
-                            .clickable(enabled = !isAnyLoading) {
-                                isGoogleLoading = true
-                                launchNativeGoogleAuth()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        SocialProviderIcon(IdentityProvider.Google, Modifier.size(22.dp), Color.Unspecified)
-                    }
+                    AuthSocialHalfButton(
+                        provider = IdentityProvider.Google,
+                        text = "Google",
+                        onClick = {
+                            isGoogleLoading = true
+                            launchNativeGoogleAuth()
+                        },
+                        isDark = isDark,
+                        enabled = !isAnyLoading,
+                        isLoading = isGoogleLoading,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    AuthSocialHalfButton(
+                        provider = IdentityProvider.Apple,
+                        text = "Apple",
+                        onClick = {
+                            isAppleLoading = true
+                            launchNativeAppleAuth()
+                        },
+                        isDark = isDark,
+                        enabled = !isAnyLoading,
+                        isLoading = isAppleLoading,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 
@@ -454,7 +462,7 @@ fun EmailAuthScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            // Social Buttons: On Android, wide Google button only (NO Apple button on Android). On iOS, side-by-side Google & Apple.
+            // Social Buttons: On Android, wide Google button only. On iOS, side-by-side equal-width Google & Apple.
             if (isAndroid) {
                 AuthGoogleWideButton(
                     text = copy.google,
@@ -469,49 +477,33 @@ fun EmailAuthScreen(
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Google
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(AuthColors.secondary(isDark))
-                            .border(
-                                BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else AuthColors.border(isDark)),
-                                CircleShape
-                            )
-                            .clickable(enabled = !isAnyLoading) {
-                                isGoogleLoading = true
-                                launchNativeGoogleAuth()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        SocialProviderIcon(IdentityProvider.Google, Modifier.size(22.dp), Color.Unspecified)
-                    }
+                    AuthSocialHalfButton(
+                        provider = IdentityProvider.Google,
+                        text = "Google",
+                        onClick = {
+                            isGoogleLoading = true
+                            launchNativeGoogleAuth()
+                        },
+                        isDark = isDark,
+                        enabled = !isAnyLoading,
+                        isLoading = isGoogleLoading,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    // Apple
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(AuthColors.secondary(isDark))
-                            .border(
-                                BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else AuthColors.border(isDark)),
-                                CircleShape
-                            )
-                            .clickable(enabled = !isAnyLoading) {
-                                isAppleLoading = true
-                                launchNativeAppleAuth()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        SocialProviderIcon(
-                            IdentityProvider.Apple,
-                            Modifier.size(22.dp),
-                            if (isDark) Color.White else Color(0xFF121829)
-                        )
-                    }
+                    AuthSocialHalfButton(
+                        provider = IdentityProvider.Apple,
+                        text = "Apple",
+                        onClick = {
+                            isAppleLoading = true
+                            launchNativeAppleAuth()
+                        },
+                        isDark = isDark,
+                        enabled = !isAnyLoading,
+                        isLoading = isAppleLoading,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 
