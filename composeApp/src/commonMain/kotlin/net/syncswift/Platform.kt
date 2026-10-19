@@ -29,7 +29,7 @@ expect fun getSystemLanguageCode(): String
 expect fun getSystemCountryCode(): String
 expect fun showNativeToast(message: String)
 @androidx.compose.runtime.Composable
-expect fun UpdateSystemBars(isDark: Boolean)
+expect fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui.graphics.Color? = null)
 expect fun openFile(filePathOrUri: String?, fileName: String, mimeType: String)
 expect fun showFileLocation(filePathOrUri: String?, fileName: String)
 expect fun formatEpochToDate(epochMillis: Long): String

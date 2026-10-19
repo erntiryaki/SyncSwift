@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import net.syncswift.ui.theme.*
 
 import androidx.compose.foundation.BorderStroke
@@ -23,16 +24,21 @@ import androidx.compose.ui.draw.clip
 @Composable
 fun OtpCodeInput(
     code: String,
-    onCodeChange: (String) -> Unit
+    onCodeChange: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    val isDark = LocalSyncSwiftColors.current.isDark
+
+    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         BasicTextField(
             value = code,
             onValueChange = onCodeChange,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth(),
             decorationBox = {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     repeat(6) { index ->
@@ -40,21 +46,23 @@ fun OtpCodeInput(
                         val isFocused = code.length == index || (code.length == 6 && index == 5)
                         val isFilled = char.isNotEmpty()
 
+                        val borderColor = when {
+                            isFocused -> AuthColors.button
+                            isFilled -> AuthColors.button.copy(alpha = 0.55f)
+                            else -> if (isDark) Color(0x2EFFFFFF) else Color(0xFFE2E8F0)
+                        }
+
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .width(44.dp)
+                                .weight(1f)
                                 .height(54.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(InputBg)
+                                .background(AuthColors.secondary(isDark))
                                 .border(
                                     BorderStroke(
                                         width = if (isFocused) 2.dp else 1.dp,
-                                        color = when {
-                                            isFocused -> Blue
-                                            isFilled -> Blue.copy(alpha = 0.45f)
-                                            else -> InputBorder.copy(alpha = 0.35f)
-                                        }
+                                        color = borderColor
                                     ),
                                     RoundedCornerShape(12.dp)
                                 )
@@ -62,21 +70,21 @@ fun OtpCodeInput(
                             if (isFilled) {
                                 Text(
                                     text = char,
-                                    color = Cloud,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.ExtraBold
+                                    color = AuthColors.textPrimary(isDark),
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             } else if (isFocused) {
                                 Box(
                                     modifier = Modifier
                                         .width(2.dp)
                                         .height(20.dp)
-                                        .background(Blue)
+                                        .background(AuthColors.button)
                                 )
                             } else {
                                 Text(
                                     text = "•",
-                                    color = Mist.copy(alpha = 0.3f),
+                                    color = AuthColors.textSecondary(isDark).copy(alpha = 0.35f),
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold
                                 )

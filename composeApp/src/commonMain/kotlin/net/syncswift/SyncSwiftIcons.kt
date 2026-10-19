@@ -249,6 +249,16 @@ fun TransferVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Can
 }
 
 @Composable
+fun ClockHistoryVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val s = Stroke(size.minDimension * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    drawCircle(color, radius = size.minDimension * 0.40f, center = Offset(w * 0.5f, h * 0.5f), style = s)
+    drawLine(color, Offset(w * 0.5f, h * 0.5f), Offset(w * 0.5f, h * 0.26f), strokeWidth = s.width, cap = s.cap)
+    drawLine(color, Offset(w * 0.5f, h * 0.5f), Offset(w * 0.70f, h * 0.5f), strokeWidth = s.width, cap = s.cap)
+}
+
+@Composable
 fun HomeVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
     val w = size.width
     val h = size.height
@@ -270,24 +280,47 @@ fun HomeVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(
 
 @Composable
 fun SettingsIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
-    val w = size.width; val h = size.height
-    val s = Stroke(size.minDimension * 0.06f, cap = StrokeCap.Round)
-    drawCircle(color, radius = w * 0.22f, center = Offset(w * 0.5f, h * 0.5f), style = s)
-    val teeth = 6
+    val w = size.width
+    val h = size.height
+    val s = Stroke(size.minDimension * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val cx = w * 0.5f
+    val cy = h * 0.5f
+
+    // Center circular cut-out
+    drawCircle(color, radius = w * 0.16f, center = Offset(cx, cy), style = s)
+
+    // Sleek outer 8-teeth gear path
+    val path = Path()
+    val teeth = 8
     val rOuter = w * 0.42f
     val rInner = w * 0.32f
+    val angleStep = 360.0 / teeth
+    val toothWidthAngle = angleStep * 0.28
+
     for (i in 0 until teeth) {
-        val angle = (i * 360f / teeth) * (kotlin.math.PI / 180f)
-        val cos = kotlin.math.cos(angle).toFloat()
-        val sin = kotlin.math.sin(angle).toFloat()
-        drawLine(
-            color,
-            Offset(w * 0.5f + cos * rInner, h * 0.5f + sin * rInner),
-            Offset(w * 0.5f + cos * rOuter, h * 0.5f + sin * rOuter),
-            strokeWidth = s.width,
-            cap = StrokeCap.Round
-        )
+        val midAngle = i * angleStep
+        val a1 = (midAngle - toothWidthAngle) * (kotlin.math.PI / 180.0)
+        val a2 = (midAngle + toothWidthAngle) * (kotlin.math.PI / 180.0)
+        val a3 = (midAngle + angleStep * 0.38) * (kotlin.math.PI / 180.0)
+        val nextMidAngle = (i + 1) * angleStep
+        val a4 = (nextMidAngle - angleStep * 0.38) * (kotlin.math.PI / 180.0)
+
+        val x1 = cx + kotlin.math.cos(a1).toFloat() * rOuter
+        val y1 = cy + kotlin.math.sin(a1).toFloat() * rOuter
+        val x2 = cx + kotlin.math.cos(a2).toFloat() * rOuter
+        val y2 = cy + kotlin.math.sin(a2).toFloat() * rOuter
+        val x3 = cx + kotlin.math.cos(a3).toFloat() * rInner
+        val y3 = cy + kotlin.math.sin(a3).toFloat() * rInner
+        val x4 = cx + kotlin.math.cos(a4).toFloat() * rInner
+        val y4 = cy + kotlin.math.sin(a4).toFloat() * rInner
+
+        if (i == 0) path.moveTo(x1, y1) else path.lineTo(x1, y1)
+        path.lineTo(x2, y2)
+        path.lineTo(x3, y3)
+        path.lineTo(x4, y4)
     }
+    path.close()
+    drawPath(path, color, style = s)
 }
 
 @Composable
@@ -405,6 +438,20 @@ fun HelpIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifi
 }
 
 @Composable
+fun SlidersVectorIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val s = Stroke(size.minDimension * 0.08f, cap = StrokeCap.Round)
+    val r = size.minDimension * 0.12f
+    drawLine(color, Offset(w * 0.18f, h * 0.28f), Offset(w * 0.82f, h * 0.28f), strokeWidth = s.width, cap = s.cap)
+    drawCircle(color, radius = r, center = Offset(w * 0.38f, h * 0.28f))
+    drawLine(color, Offset(w * 0.18f, h * 0.50f), Offset(w * 0.82f, h * 0.50f), strokeWidth = s.width, cap = s.cap)
+    drawCircle(color, radius = r, center = Offset(w * 0.65f, h * 0.50f))
+    drawLine(color, Offset(w * 0.18f, h * 0.72f), Offset(w * 0.82f, h * 0.72f), strokeWidth = s.width, cap = s.cap)
+    drawCircle(color, radius = r, center = Offset(w * 0.42f, h * 0.72f))
+}
+
+@Composable
 fun InfoIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
     val w = size.width; val h = size.height
     val s = Stroke(size.minDimension * 0.06f, cap = StrokeCap.Round)
@@ -471,13 +518,30 @@ fun IncomingArrowIcon(modifier: Modifier = Modifier, color: Color = SuccessGreen
 }
 
 @Composable
-fun RadarIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
-    val w = size.width; val h = size.height
-    val s = Stroke(size.minDimension * 0.065f, cap = StrokeCap.Round)
-    drawCircle(color, radius = w * 0.12f, center = Offset(w * 0.5f, h * 0.5f))
-    drawArc(color, 210f, 120f, false, topLeft = Offset(w * 0.22f, h * 0.22f), size = Size(w * 0.56f, h * 0.56f), style = s)
-    drawArc(color, 210f, 120f, false, topLeft = Offset(w * 0.08f, h * 0.08f), size = Size(w * 0.84f, h * 0.84f), style = s)
+fun NearbyDiscoveryIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val minD = size.minDimension
+    val cx = w * 0.5f
+    val cy = h * 0.5f
+    val s = Stroke(minD * 0.085f, cap = StrokeCap.Round)
+
+    // Center emitting dot
+    drawCircle(color, radius = minD * 0.13f, center = Offset(cx, cy))
+
+    // Inner symmetrical broadcast waves (AirDrop / Nearby discovery style)
+    val r1 = minD * 0.28f
+    drawArc(color, 135f, 90f, false, topLeft = Offset(cx - r1, cy - r1), size = Size(r1 * 2f, r1 * 2f), style = s)
+    drawArc(color, -45f, 90f, false, topLeft = Offset(cx - r1, cy - r1), size = Size(r1 * 2f, r1 * 2f), style = s)
+
+    // Outer symmetrical broadcast waves
+    val r2 = minD * 0.44f
+    drawArc(color, 135f, 90f, false, topLeft = Offset(cx - r2, cy - r2), size = Size(r2 * 2f, r2 * 2f), style = s)
+    drawArc(color, -45f, 90f, false, topLeft = Offset(cx - r2, cy - r2), size = Size(r2 * 2f, r2 * 2f), style = s)
 }
+
+@Composable
+fun RadarIcon(modifier: Modifier = Modifier, color: Color = Blue) = NearbyDiscoveryIcon(modifier, color)
 
 
 /** 3D Half-Open Folder illustration with White Oval Icon Container */
@@ -1587,4 +1651,181 @@ fun SearchVectorIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canva
     )
 }
 
+@Composable
+fun PaperAirplaneIcon(modifier: Modifier = Modifier, color: Color = Color.White) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.08f
+    val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val path = Path().apply {
+        moveTo(w * 0.18f, h * 0.50f)
+        lineTo(w * 0.86f, h * 0.14f)
+        lineTo(w * 0.50f, h * 0.86f)
+        lineTo(w * 0.40f, h * 0.60f)
+        close()
+    }
+    drawPath(path, color = color, style = s)
+    drawLine(
+        color = color,
+        start = Offset(w * 0.40f, h * 0.60f),
+        end = Offset(w * 0.86f, h * 0.14f),
+        strokeWidth = sw,
+        cap = StrokeCap.Round
+    )
+}
+
+@Composable
+fun TabletVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val sw = size.minDimension * 0.08f
+    val stroke = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val w = size.width
+    val h = size.height
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(w * 0.22f, h * 0.14f),
+        size = Size(w * 0.56f, h * 0.72f),
+        cornerRadius = CornerRadius(w * 0.07f, h * 0.07f),
+        style = stroke
+    )
+    drawCircle(
+        color = color,
+        radius = w * 0.025f,
+        center = Offset(w * 0.5f, h * 0.79f)
+    )
+}
+
+@Composable
+fun WindowsLogoIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val gap = w * 0.08f
+    val pW = (w * 0.7f - gap) / 2f
+    val pH = (h * 0.7f - gap) / 2f
+    val startX = w * 0.15f
+    val startY = h * 0.15f
+    drawRect(color, Offset(startX, startY), Size(pW, pH))
+    drawRect(color, Offset(startX + pW + gap, startY), Size(pW, pH))
+    drawRect(color, Offset(startX, startY + pH + gap), Size(pW, pH))
+    drawRect(color, Offset(startX + pW + gap, startY + pH + gap), Size(pW, pH))
+}
+
+@Composable
+fun FileImageIcon(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF3B82F6).copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(16.dp)) {
+            val w = size.width
+            val h = size.height
+            val s = Stroke(width = w * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            drawRoundRect(
+                color = Color(0xFF3B82F6),
+                topLeft = Offset(w * 0.1f, h * 0.1f),
+                size = Size(w * 0.8f, h * 0.8f),
+                cornerRadius = CornerRadius(w * 0.15f),
+                style = s
+            )
+            drawCircle(
+                color = Color(0xFF3B82F6),
+                radius = w * 0.1f,
+                center = Offset(w * 0.35f, h * 0.38f)
+            )
+            val mountain = Path().apply {
+                moveTo(w * 0.2f, h * 0.72f)
+                lineTo(w * 0.45f, h * 0.5f)
+                lineTo(w * 0.6f, h * 0.62f)
+                lineTo(w * 0.75f, h * 0.45f)
+                lineTo(w * 0.85f, h * 0.72f)
+            }
+            drawPath(mountain, color = Color(0xFF3B82F6), style = s)
+        }
+    }
+}
+
+@Composable
+fun FilePdfIcon(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFFEF4444).copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "PDF",
+            color = Color(0xFFEF4444),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
+@Composable
+fun FileZipIcon(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF64748B).copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "ZIP",
+            color = Color(0xFF64748B),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
+@Composable
+fun LinkChainIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.09f
+    val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    // Left-up chain loop
+    val path1 = Path().apply {
+        moveTo(w * 0.44f, h * 0.30f)
+        lineTo(w * 0.54f, h * 0.20f)
+        cubicTo(w * 0.68f, h * 0.06f, w * 0.88f, h * 0.26f, w * 0.74f, h * 0.40f)
+        lineTo(w * 0.64f, h * 0.50f)
+    }
+    drawPath(path1, color = color, style = s)
+    // Right-down chain loop
+    val path2 = Path().apply {
+        moveTo(w * 0.56f, h * 0.70f)
+        lineTo(w * 0.46f, h * 0.80f)
+        cubicTo(w * 0.32f, h * 0.94f, w * 0.12f, h * 0.74f, w * 0.26f, h * 0.60f)
+        lineTo(w * 0.36f, h * 0.50f)
+    }
+    drawPath(path2, color = color, style = s)
+    // Interlocking center bar
+    drawLine(color, Offset(w * 0.38f, h * 0.62f), Offset(w * 0.62f, h * 0.38f), strokeWidth = sw, cap = StrokeCap.Round)
+}
+
+@Composable
+fun BrokenLinkIcon(modifier: Modifier = Modifier, color: Color = Color(0xFFEF4444)) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.09f
+    val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val path1 = Path().apply {
+        moveTo(w * 0.48f, h * 0.26f)
+        lineTo(w * 0.58f, h * 0.16f)
+        cubicTo(w * 0.72f, h * 0.02f, w * 0.92f, h * 0.22f, w * 0.78f, h * 0.36f)
+        lineTo(w * 0.68f, h * 0.46f)
+    }
+    drawPath(path1, color = color, style = s)
+    val path2 = Path().apply {
+        moveTo(w * 0.52f, h * 0.74f)
+        lineTo(w * 0.42f, h * 0.84f)
+        cubicTo(w * 0.28f, h * 0.98f, w * 0.08f, h * 0.78f, w * 0.22f, h * 0.64f)
+        lineTo(w * 0.32f, h * 0.54f)
+    }
+    drawPath(path2, color = color, style = s)
+    // Break slash
+    drawLine(color, Offset(w * 0.32f, h * 0.32f), Offset(w * 0.68f, h * 0.68f), strokeWidth = sw * 1.2f, cap = StrokeCap.Round)
+}
 

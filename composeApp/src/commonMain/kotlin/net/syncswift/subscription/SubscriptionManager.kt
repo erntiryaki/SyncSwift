@@ -147,6 +147,9 @@ object SubscriptionManager {
     }
 
     fun triggerPaywall(reason: PaywallReason) {
+        if (isProActive() || _isPro.value || SessionManager.getSavedProStatus()) {
+            return
+        }
         _paywallReason.value = reason
         _showPaywall.value = true
     }

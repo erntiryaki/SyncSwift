@@ -12,7 +12,7 @@ object SyncSwiftConfig {
 
 /** A provider is permanently attached to an account after its first successful sign-in. */
 enum class IdentityProvider { EmailPassword, Google, Apple, Local }
-enum class AuthStep { Onboarding, Email, Password, Otp, Profile, Home }
+enum class AuthStep { Onboarding, Email, Password, Otp, Profile, ResetPassword, Home }
 
 data class AuthSession(
     val email: String,

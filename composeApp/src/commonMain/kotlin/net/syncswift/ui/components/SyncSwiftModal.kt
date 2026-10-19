@@ -1,12 +1,20 @@
 package net.syncswift.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -16,8 +24,8 @@ import androidx.compose.ui.window.DialogProperties
 import net.syncswift.ui.theme.*
 
 /**
- * Universal, ultra-minimalist, flat, elegant SyncSwift Modal Dialog.
- * Zero neon glow, zero heavy shadows, perfectly adapted to Dark & Light themes.
+ * Universal, ultra-minimalist, flat, elegant SyncSwift Bottom Sheet Modal.
+ * Renders anchored to bottom, supports swipe-down to dismiss, never cuts off content or action buttons.
  */
 @Composable
 fun SyncSwiftModal(
@@ -35,101 +43,146 @@ fun SyncSwiftModal(
     properties: DialogProperties = DialogProperties(usePlatformDefaultWidth = false),
     content: @Composable ColumnScope.() -> Unit
 ) {
+    net.syncswift.UpdateSystemBars(isDark = true)
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties
     ) {
-        Surface(
+        net.syncswift.UpdateSystemBars(isDark = true)
+
+        BoxWithConstraints(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(22.dp),
-            color = CardSurface,
-            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f)),
-            shadowElevation = 0.dp,
-            tonalElevation = 0.dp
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.50f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismissRequest
+                ),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Column(
+            val maxSheetHeight = maxHeight * 0.88f
+
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(22.dp)
+                    .heightIn(max = maxSheetHeight)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = false
+                    ) {}, // Prevent backdrop clicks through sheet
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = CardSurface,
+                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f)),
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp
             ) {
-                // Header (Icon + Title)
-                if (title != null || titleIcon != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (titleIcon != null) {
-                            titleIcon()
-                            Spacer(Modifier.width(12.dp))
-                        }
-                        if (title != null) {
-                            Text(
-                                text = title,
-                                color = Cloud,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.3).sp
-                            )
-                        }
-                    }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 22.dp, vertical = 14.dp)
+                ) {
+                    // Sleek centered drag handle
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .width(40.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(Mist.copy(alpha = 0.45f))
+                    )
+
                     Spacer(Modifier.height(14.dp))
-                }
 
-                // Body Content
-                content()
-
-                // Actions Footer (Confirm / Dismiss)
-                if (onConfirm != null || onDismiss != null) {
-                    Spacer(Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (dismissText != null && onDismiss != null) {
-                            TextButton(
-                                onClick = onDismiss,
-                                enabled = !confirmLoading
-                            ) {
+                    // Header (Icon + Title)
+                    if (title != null || titleIcon != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (titleIcon != null) {
+                                titleIcon()
+                                Spacer(Modifier.width(12.dp))
+                            }
+                            if (title != null) {
                                 Text(
-                                    text = dismissText,
-                                    color = Mist,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
+                                    text = title,
+                                    color = Cloud,
+                                    fontSize = 18.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = (-0.3).sp
                                 )
                             }
-                            Spacer(Modifier.width(8.dp))
                         }
+                        Spacer(Modifier.height(14.dp))
+                    }
 
-                        if (confirmText != null && onConfirm != null) {
-                            Button(
-                                onClick = onConfirm,
-                                enabled = confirmEnabled && !confirmLoading,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = confirmColor,
-                                    contentColor = confirmTextColor
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
-                            ) {
-                                if (confirmLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        color = confirmTextColor,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
+                    // Body Content (Scrollable so tall modals NEVER get cut off!)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        content()
+                    }
+
+                    // Actions Footer (Confirm / Dismiss - ALWAYS pinned at bottom!)
+                    if (onConfirm != null || onDismiss != null) {
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (dismissText != null && onDismiss != null) {
+                                TextButton(
+                                    onClick = onDismiss,
+                                    enabled = !confirmLoading
+                                ) {
                                     Text(
-                                        text = confirmText,
-                                        fontSize = 13.sp,
+                                        text = dismissText,
+                                        color = Mist,
+                                        fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
                                     )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                            }
+
+                            if (confirmText != null && onConfirm != null) {
+                                Button(
+                                    onClick = onConfirm,
+                                    enabled = confirmEnabled && !confirmLoading,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = confirmColor,
+                                        contentColor = confirmTextColor
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                                ) {
+                                    if (confirmLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = confirmTextColor,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text(
+                                            text = confirmText,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+
+                    Spacer(Modifier.height(4.dp))
                 }
             }
         }

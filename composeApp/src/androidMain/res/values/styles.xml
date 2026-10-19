@@ -5,8 +5,8 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:colorAccent">#38BDF8</item>
-        <item name="android:statusBarColor">#13192B</item>
-        <item name="android:navigationBarColor">#13192B</item>
+        <item name="android:statusBarColor">#0B101B</item>
+        <item name="android:navigationBarColor">#0B101B</item>
     </style>
     <style name="TransparentScannerTheme" parent="android:style/Theme.DeviceDefault.NoActionBar">
         <item name="android:windowBackground">@android:color/transparent</item>

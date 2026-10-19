@@ -1,30 +1,36 @@
 package net.syncswift.ui.home
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
 import net.syncswift.*
 import net.syncswift.connection.ConnectionManager
 import net.syncswift.connection.PairResult
@@ -34,13 +40,22 @@ import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.transfer.TransferEngine
 import net.syncswift.transfer.TransferItem
 import net.syncswift.transfer.TransferStatus
-import net.syncswift.ui.components.SyncSwiftModal
-import net.syncswift.ui.components.SendPairRequestScreen
 import net.syncswift.ui.components.ConnectedDeviceActionScreen
-import androidx.compose.animation.core.tween
+import net.syncswift.ui.components.SendPairRequestScreen
 import net.syncswift.ui.theme.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+
+enum class DeviceSectionType {
+    NEARBY, CONNECTED, DISCONNECTED
+}
+
+data class UiDeviceItem(
+    val id: String,
+    val name: String,
+    val os: String,
+    val isOnline: Boolean,
+    val section: DeviceSectionType,
+    val realDevice: DiscoveredDevice? = null
+)
 
 @Composable
 fun HomeScreen(
@@ -52,519 +67,777 @@ fun HomeScreen(
     onOpenNotifications: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
+    val isDark = LocalSyncSwiftColors.current.isDark
+    val scope = rememberCoroutineScope()
+
     val discoveredDevices by DeviceDiscoveryManager.devices.collectAsState()
     val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
-    val isScanning by DeviceDiscoveryManager.isScanning.collectAsState()
-    val selfDevice = remember(discoveredDevices) { DeviceDiscoveryManager.getSelfDevice() }
-    val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
     val allTransfers by TransferEngine.transfers.collectAsState()
-    val recentTransfers = remember(allTransfers) {
-        allTransfers.filter { it.status == TransferStatus.COMPLETED }
-    }
-    val scope = rememberCoroutineScope()
+
+    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilterChip by remember { mutableStateOf(0) } // 0: Tümü, 1: Yakındaki, 2: Bağlı, 3: Bağlı Olmayan
+    val searchFocusRequester = remember { FocusRequester() }
 
     var deviceToPair by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var deviceForAction by remember { mutableStateOf<DiscoveredDevice?>(null) }
+    var viewAllSection by remember { mutableStateOf<DeviceSectionType?>(null) }
+    var isTransfersExpanded by remember { mutableStateOf(true) }
 
-    val pendingPairRequest by ConnectionManager.pendingPairRequest.collectAsState()
-    LaunchedEffect(pendingPairRequest) {
-        if (pendingPairRequest != null) {
-            deviceToPair = null
-            deviceForAction = null
+    val selfDevice = remember(discoveredDevices) { DeviceDiscoveryManager.getSelfDevice() }
+    val myName = cleanDeviceDisplayName(selfDevice?.name ?: SessionManager.getMyDeviceName())
+    val myRawName = selfDevice?.name ?: SessionManager.getMyDeviceName()
+    val myId = SessionManager.getPlatformDeviceId()
+    val myPushToken = SessionManager.getMyPushToken()
+    val myLocalIp = selfDevice?.host ?: ""
+
+    val isDeviceSelf: (DiscoveredDevice) -> Boolean = { dev ->
+        val devClean = cleanDeviceDisplayName(dev.name)
+        dev.isSelf ||
+                (myId.isNotBlank() && dev.id.equals(myId, ignoreCase = true)) ||
+                (myName.isNotBlank() && devClean.equals(myName, ignoreCase = true)) ||
+                (myRawName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(myRawName), ignoreCase = true) || dev.name.equals(myRawName, ignoreCase = true))) ||
+                (selfDevice != null && dev.id == selfDevice.id) ||
+                (selfDevice != null && dev.id.removePrefix("self-") == selfDevice.id.removePrefix("self-")) ||
+                (myLocalIp.isNotBlank() && myLocalIp != "127.0.0.1" && dev.host == myLocalIp) ||
+                (selfDevice != null && selfDevice.host.isNotBlank() && selfDevice.host != "127.0.0.1" && dev.host == selfDevice.host) ||
+                (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken)
+    }
+
+    val realOtherDevices = remember(discoveredDevices, connectedKeys) {
+        discoveredDevices.filter { !isDeviceSelf(it) }.distinctBy {
+            if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host
+            else (if (it.id.isNotBlank()) it.id else cleanDeviceDisplayName(it.name))
         }
     }
 
-    var isRefreshing by remember { mutableStateOf(false) }
-    var showScanningBanner by remember { mutableStateOf(false) }
-    var pullOffset by remember { mutableStateOf(0f) }
+    val connectedDevices = remember(realOtherDevices, connectedKeys) {
+        realOtherDevices.filter { dev ->
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                    connectedKeys.contains(dev.id) ||
+                    connectedKeys.contains(dev.host) ||
+                    connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                    ConnectionManager.isDeviceConnected(dev)
+            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
+            isConn && !isRemote
+        }.map { dev ->
+            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
+            UiDeviceItem(
+                id = dev.id.ifBlank { dev.host },
+                name = cleanDeviceDisplayName(dev.name),
+                os = devModel,
+                isOnline = dev.isOnline,
+                section = DeviceSectionType.CONNECTED,
+                realDevice = dev
+            )
+        }
+    }
 
-    fun triggerScan() {
-        if (isRefreshing) return
-        isRefreshing = true
-        pullOffset = 0f
-        scope.launch {
+    val nearbyDevices = remember(realOtherDevices, connectedKeys) {
+        realOtherDevices.filter { dev ->
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                    connectedKeys.contains(dev.id) ||
+                    connectedKeys.contains(dev.host) ||
+                    connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                    ConnectionManager.isDeviceConnected(dev)
+            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
+            !isConn && !isRemote
+        }.map { dev ->
+            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
+            UiDeviceItem(
+                id = dev.id.ifBlank { dev.host },
+                name = cleanDeviceDisplayName(dev.name),
+                os = devModel,
+                isOnline = dev.isOnline,
+                section = DeviceSectionType.NEARBY,
+                realDevice = dev
+            )
+        }
+    }
+
+    val disconnectedDevices = remember(realOtherDevices, connectedKeys) {
+        realOtherDevices.filter { dev ->
+            dev.isRemote || ConnectionManager.isRemoteDevice(dev) || dev.host.startsWith("remote-")
+        }.map { dev ->
+            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
+            UiDeviceItem(
+                id = dev.id.ifBlank { dev.host },
+                name = cleanDeviceDisplayName(dev.name),
+                os = devModel,
+                isOnline = dev.isOnline,
+                section = DeviceSectionType.DISCONNECTED,
+                realDevice = dev
+            )
+        }
+    }
+
+    val allDeviceItems = remember(nearbyDevices, connectedDevices, disconnectedDevices) {
+        nearbyDevices + connectedDevices + disconnectedDevices
+    }
+
+    fun handleDeviceSelection(item: UiDeviceItem) {
+        val targetDev = item.realDevice ?: DiscoveredDevice(
+            id = item.id,
+            name = item.name,
+            host = "192.168.1.100",
+            port = 52424,
+            osType = item.os
+        )
+        deviceForAction = targetDev
+    }
+
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
             try {
-                DeviceDiscoveryManager.startDiscovery()
-                DeviceDiscoveryManager.triggerDiscoveryPing()
-                delay(1200)
-            } finally {
-                isRefreshing = false
-                pullOffset = 0f
-            }
+                searchFocusRequester.requestFocus()
+            } catch (_: Exception) {}
         }
     }
 
-    LaunchedEffect(Unit) {
-        DeviceDiscoveryManager.startDiscovery()
-        DeviceDiscoveryManager.triggerDiscoveryPing()
-    }
-    val nestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < 0 && pullOffset > 0f) {
-                    val consumed = available.y.coerceAtLeast(-pullOffset)
-                    pullOffset += consumed
-                    return Offset(0f, consumed)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.UserInput && available.y > 0 && scrollState.value == 0 && !isRefreshing) {
-                    pullOffset = (pullOffset + available.y * 0.4f).coerceAtMost(250f)
-                    return Offset(0f, available.y)
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                if (pullOffset >= 150f && !isRefreshing) {
-                    triggerScan()
-                }
-                pullOffset = 0f
-                return Velocity.Zero
-            }
-        }
-    }
+    val isPro by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .nestedScroll(nestedScrollConnection)
-                .padding(horizontal = 24.dp)
-                .verticalScroll(scrollState)
-        ) {
-            Spacer(Modifier.height(16.dp))
-
-        // Top Bar: Clean Minimalist Page Header with Notification Bell
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = copy.homeTab,
-                color = Cloud,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.6).sp
-            )
-
-            val notificationsList by net.syncswift.notification.NotificationHistoryManager.notifications.collectAsState()
-            val unreadCount = remember(notificationsList) { notificationsList.count { !it.isRead } }
-
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(InputBg.copy(alpha = 0.7f))
-                    .clickable { onOpenNotifications() },
-                contentAlignment = Alignment.Center
-            ) {
-                NotificationBellIcon(Modifier.size(19.dp), color = Cloud)
-                if (unreadCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 8.dp, end = 8.dp)
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(Blue)
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // Current Device Info (Boxless, across the width)
-        val selfDev = remember { DeviceDiscoveryManager.getSelfDevice() }
-        val selfDeviceName = selfDev?.name ?: "SyncSwift Device"
-        val osText = selfDev?.osType ?: (if (currentPlatform() == PlatformFlavor.Android) "Android" else "iOS")
-        val deviceSubtitle = "$osText (${copy.yourDevice})"
-        val isMobileDevice = osText.equals("Android", ignoreCase = true) || osText.equals("iOS", ignoreCase = true)
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(InputBg.copy(alpha = 0.6f)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isMobileDevice) {
-                    PhoneVectorIcon(Modifier.size(19.dp), color = Blue)
-                } else {
-                    LaptopVectorIcon(Modifier.size(19.dp), color = Blue)
-                }
-            }
-
-            Spacer(Modifier.width(14.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = selfDeviceName,
-                    color = Cloud,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = (-0.2).sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(5.dp)
-                            .clip(CircleShape)
-                            .background(SuccessGreen)
-                    )
-                    Text(
-                        text = deviceSubtitle,
-                        color = Mist,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-
-        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-
-        // Modern Pull-to-Refresh: circular indicator with text underneath, no dots, no box
-        AnimatedVisibility(
-            visible = isRefreshing,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Column(
+        // TOP BAR
+        if (!isSearchActive) {
+            // Normal Top Bar (SyncSwift Brand Logo on Left, Search 🔍, Bell 🔔 with blue dot)
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .height(68.dp)
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    color = Blue,
-                    strokeWidth = 2.dp
+                BrandLogo(
+                    modifier = Modifier.height(50.dp)
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = copy.scanningNearbyDevices,
-                    color = Mist,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
 
-        val myName = cleanDeviceDisplayName(selfDevice?.name ?: SessionManager.getMyDeviceName())
-        val myRawName = selfDevice?.name ?: SessionManager.getMyDeviceName()
-        val myId = SessionManager.getPlatformDeviceId()
-        val myPushToken = SessionManager.getMyPushToken()
-        val myLocalIp = selfDevice?.host ?: ""
-        val isDeviceSelf: (DiscoveredDevice) -> Boolean = { dev ->
-            val devClean = cleanDeviceDisplayName(dev.name)
-            dev.isSelf ||
-            (myId.isNotBlank() && dev.id.equals(myId, ignoreCase = true)) ||
-            (myName.isNotBlank() && devClean.equals(myName, ignoreCase = true)) ||
-            (myRawName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(myRawName), ignoreCase = true) || dev.name.equals(myRawName, ignoreCase = true))) ||
-            (selfDevice != null && dev.id == selfDevice.id) ||
-            (selfDevice != null && dev.id.removePrefix("self-") == selfDevice.id.removePrefix("self-")) ||
-            (myLocalIp.isNotBlank() && myLocalIp != "127.0.0.1" && dev.host == myLocalIp) ||
-            (selfDevice != null && selfDevice.host.isNotBlank() && selfDevice.host != "127.0.0.1" && dev.host == selfDevice.host) ||
-            (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken)
-        }
-
-        val otherDevices = discoveredDevices.filter { dev ->
-            !isDeviceSelf(dev)
-        }.distinctBy {
-            if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host else (if (it.id.isNotBlank()) it.id else cleanDeviceDisplayName(it.name))
-        }
-        val connectedList = otherDevices.filter { dev ->
-            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
-                         connectedKeys.contains(dev.id) ||
-                         connectedKeys.contains(dev.host) ||
-                         connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
-                         ConnectionManager.isDeviceConnected(dev)
-            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
-            isConn && !isRemote
-        }
-        val availableList = otherDevices.filter { dev ->
-            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
-                         connectedKeys.contains(dev.id) ||
-                         connectedKeys.contains(dev.host) ||
-                         connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
-                         ConnectionManager.isDeviceConnected(dev)
-            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
-            !isConn && !isRemote
-        }
-
-        // SECTION 1: BAĞLI CİHAZLAR (Connected Devices)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { triggerScan() },
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = copy.connectedDevicesSection,
-                color = Cloud,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.3).sp,
-                maxLines = 1,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            val connectedCount = connectedList.size
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = copy.formatDeviceCount(connectedCount),
-                color = Mist,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Column(modifier = Modifier.fillMaxWidth()) {
-            if (connectedList.isNotEmpty()) {
-                connectedList.forEach { device ->
-                    val statusText = if (device.isOnline) copy.connectedStatus else copy.offlineSleeping
-                    BoxlessDeviceRow(
-                        name = cleanDeviceDisplayName(device.name),
-                        details = statusText,
-                        badge = device.osType,
-                        isOnline = device.isOnline,
-                        isConnected = true,
-                        onClick = {
-                            deviceForAction = device
-                        }
-                    )
-                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-                }
-            } else {
-                Text(
-                    text = copy.noDevicesOnNetwork,
-                    color = Mist,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        // SECTION 2: AĞDAKİ DİĞER CİHAZLAR (Available Devices)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { triggerScan() },
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = copy.availableDevicesSection,
-                color = Cloud,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.3).sp,
-                maxLines = 1,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = copy.formatDeviceCount(availableList.size),
-                color = Mist,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Column(modifier = Modifier.fillMaxWidth()) {
-            if (availableList.isNotEmpty()) {
-                availableList.forEach { device ->
-                    val isRemote = ConnectionManager.isRemoteDevice(device)
-                    val statusText = if (device.isOnline) {
-                        copy.deviceOnline
-                    } else if (isRemote) {
-                        copy.outsideLocalNetwork
-                    } else {
-                        copy.offlineSleeping
-                    }
-                    BoxlessDeviceRow(
-                        name = cleanDeviceDisplayName(device.name),
-                        details = statusText,
-                        badge = device.osType,
-                        isOnline = device.isOnline,
-                        isConnected = false,
-                        onClick = {
-                            deviceToPair = device
-                        }
-                    )
-                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-                }
-            } else {
-                Text(
-                    text = copy.noDevicesOnNetwork,
-                    color = Mist,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        // SECTION 2: ACTION BUTTONS (GÖNDER & ORTAK PANO)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Gönder (Send Files Action)
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(26.dp))
-                    .clickable(onClick = onSendClick),
-                shape = RoundedCornerShape(26.dp),
-                color = PillButtonBg
-            ) {
                 Row(
-                    modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    UploadIcon(Modifier.size(18.dp), color = PillButtonText)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = copy.send,
-                        color = PillButtonText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // Ortak Pano (Clipboard Action)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(26.dp))
-                        .clickable(onClick = onClipboardClick),
-                    shape = RoundedCornerShape(26.dp),
-                    color = InputBg,
-                    border = null
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .clickable { isSearchActive = true },
+                        contentAlignment = Alignment.Center
                     ) {
-                        ClipboardVectorIcon(Modifier.size(18.dp), color = Blue)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = copy.clipboard,
-                            color = Cloud,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
+                        SearchVectorIcon(Modifier.size(22.dp), color = Cloud)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .clickable { onOpenNotifications() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BellIcon(Modifier.size(22.dp), color = Cloud)
+                        // Blue Badge Dot
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 4.dp, end = 4.dp)
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(LocalSyncSwiftColors.current.blue)
                         )
                     }
                 }
             }
-        }
-
-        Spacer(Modifier.height(34.dp))
-
-        // SECTION 3: SON AKTARIMLAR (Recent Transfers)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = copy.recentTransfers,
-                color = Cloud,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.3).sp
-            )
-            if (recentTransfers.isNotEmpty()) {
-                Text(
-                    text = copy.viewAll,
-                    color = Blue,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(onClick = onViewAllTransfers)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Recent Transfer Items or Clean Empty State
-        if (recentTransfers.isEmpty()) {
-            Box(
+        } else {
+            // Dynamic Search Top Bar (3rd Screen in Image 2)
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 24.dp),
-                contentAlignment = Alignment.Center
+                    .height(56.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = copy.noTransfersYet,
-                    color = Mist.copy(alpha = 0.7f),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        } else {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                recentTransfers.take(4).forEach { item ->
-                    BoxlessTransferRow(
-                        title = item.fileName,
-                        info = "${if (item.isSent) copy.transfersSent else copy.transfersReceived} · ${item.formattedSize}",
-                        isSent = item.isSent,
-                        status = item.status
-                    )
-                    HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isDark) Color(0xFF131B28) else Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, InputBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SearchVectorIcon(Modifier.size(18.dp), color = Mist)
+                        Spacer(Modifier.width(8.dp))
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(searchFocusRequester),
+                            singleLine = true,
+                            textStyle = TextStyle(
+                                color = Cloud,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            cursorBrush = SolidColor(LocalSyncSwiftColors.current.blue),
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = copy.searchDevicesHint,
+                                        color = Mist,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                        if (searchQuery.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .clickable { searchQuery = "" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CrossVectorIcon(Modifier.size(12.dp), color = Mist)
+                            }
+                        }
+                    }
                 }
+
+                Text(
+                    text = copy.otpCancelAction,
+                    color = LocalSyncSwiftColors.current.blue,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            searchQuery = ""
+                            isSearchActive = false
+                        }
+                        .padding(horizontal = 6.dp, vertical = 6.dp)
+                )
             }
         }
 
-            Spacer(Modifier.height(24.dp))
+        // CONTENT AREA (Normal vs Search)
+        if (!isSearchActive) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 20.dp)
+            ) {
+                Spacer(Modifier.height(8.dp))
+
+                // SECTION 1: YAKINDAKİ CİHAZLAR (Horizontal Cards)
+                SectionHeaderRow(
+                    title = copy.nearbyDevicesSection,
+                    count = nearbyDevices.size,
+                    copy = copy,
+                    onViewAllClick = { viewAllSection = DeviceSectionType.NEARBY }
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                if (nearbyDevices.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        nearbyDevices.take(4).forEach { dev ->
+                            NearbyDeviceCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { DeviceDiscoveryManager.triggerDiscoveryPing() },
+                        shape = RoundedCornerShape(16.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                NearbyDiscoveryIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue)
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = copy.scanningNetworkDevices,
+                                    color = Cloud,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = copy.openSyncSwiftOnOtherDevice,
+                                    color = Mist,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // SECTION 2: YEREL BAĞLI CİHAZLAR
+                SectionHeaderRow(
+                    title = copy.connectedDevicesSectionTitle,
+                    count = connectedDevices.size,
+                    copy = copy,
+                    onViewAllClick = { viewAllSection = DeviceSectionType.CONNECTED }
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                if (connectedDevices.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        connectedDevices.take(4).forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Text(
+                            text = copy.noConnectedDevicesYet,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // SECTION 3: UZAKTAN BAĞLI CİHAZLAR
+                SectionHeaderRow(
+                    title = copy.disconnectedDevicesSectionTitle,
+                    count = disconnectedDevices.size,
+                    copy = copy,
+                    onViewAllClick = { viewAllSection = DeviceSectionType.DISCONNECTED }
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                if (disconnectedDevices.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        disconnectedDevices.take(4).forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Text(
+                            text = copy.noDisconnectedDevicesYet,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // SECTION 4: TWO LARGE ACTION BUTTONS (GÖNDER & ORTAK PANO)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Button 1: Gönder (Solid Blue)
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(60.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .clickable(onClick = onSendClick),
+                        shape = RoundedCornerShape(18.dp),
+                        color = LocalSyncSwiftColors.current.blue
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                PaperAirplaneIcon(Modifier.size(18.dp), color = Color.White)
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = copy.send,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = copy.transferFilesSubtitle,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+
+                    // Button 2: Ortak Pano (Card Surface)
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(60.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .clickable(onClick = onClipboardClick),
+                        shape = RoundedCornerShape(18.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ClipboardVectorIcon(Modifier.size(18.dp), color = LocalSyncSwiftColors.current.blue)
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = copy.sendClipboardAction,
+                                    color = Cloud,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = copy.clipboardShareAndSync,
+                                    color = Mist,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                // SECTION 5: TRANSFER GEÇMİŞİ (Real transfers from TransferEngine - Expandable/Collapsible)
+                val completedTransfers = remember(allTransfers) {
+                    allTransfers.filter { it.status == TransferStatus.COMPLETED }.take(5)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { isTransfersExpanded = !isTransfersExpanded }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = copy.transfersHistorySection,
+                            color = Cloud,
+                            fontSize = 17.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.3).sp
+                        )
+                        ChevronDownIcon(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .rotate(if (isTransfersExpanded) 0f else -90f),
+                            color = Mist
+                        )
+                    }
+
+                    Text(
+                        text = copy.viewAll,
+                        color = LocalSyncSwiftColors.current.blue,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable(onClick = onViewAllTransfers)
+                            .padding(4.dp)
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = isTransfersExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(Modifier.height(10.dp))
+
+                        if (completedTransfers.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                completedTransfers.forEach { item ->
+                                    val icon: @Composable () -> Unit = when {
+                                        item.fileName.endsWith(".pdf", ignoreCase = true) || item.mimeType.contains("pdf", ignoreCase = true) -> {
+                                            { FilePdfIcon(Modifier.size(38.dp)) }
+                                        }
+                                        item.fileName.endsWith(".zip", ignoreCase = true) || item.fileName.endsWith(".rar", ignoreCase = true) || item.mimeType.contains("zip", ignoreCase = true) -> {
+                                            { FileZipIcon(Modifier.size(38.dp)) }
+                                        }
+                                        else -> {
+                                            { FileImageIcon(Modifier.size(38.dp)) }
+                                        }
+                                    }
+                                    val subtitle = if (item.peerName.isNotBlank()) cleanDeviceDisplayName(item.peerName)
+                                    else if (item.isSent) copy.transfersSent else copy.transfersReceived
+
+                                    TransferItemRowCard(
+                                        icon = icon,
+                                        title = item.fileName,
+                                        subtitle = subtitle,
+                                        time = if (currentTimeMs() - item.timestamp < 86400000L) copy.timeToday else copy.timeYesterday,
+                                        size = item.formattedSize,
+                                        onClick = onViewAllTransfers
+                                    )
+                                }
+                            }
+                        } else {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp)),
+                                shape = RoundedCornerShape(16.dp),
+                                color = CardSurface,
+                                border = BorderStroke(1.dp, InputBorder)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = copy.noTransfersYetDesc,
+                                        color = Cloud,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = copy.sendFilePromptDesc,
+                                        color = Mist,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(28.dp))
+            }
+        } else {
+            // DYNAMIC SEARCH VIEW (Phone 3 in Image 2)
+            val filteredDevices = remember(searchQuery, allDeviceItems) {
+                if (searchQuery.isBlank()) allDeviceItems
+                else {
+                    allDeviceItems.filter { dev ->
+                        dev.name.contains(searchQuery, ignoreCase = true) ||
+                                dev.os.contains(searchQuery, ignoreCase = true)
+                    }
+                }
+            }
+
+            val searchNearby = remember(filteredDevices) {
+                filteredDevices.filter { it.section == DeviceSectionType.NEARBY }
+            }
+            val searchConnected = remember(filteredDevices) {
+                filteredDevices.filter { it.section == DeviceSectionType.CONNECTED }
+            }
+            val searchDisconnected = remember(filteredDevices) {
+                filteredDevices.filter { it.section == DeviceSectionType.DISCONNECTED }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 20.dp)
+            ) {
+                Spacer(Modifier.height(8.dp))
+
+                // FILTER CHIPS ROW
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChipPill(
+                        label = copy.filterAll,
+                        count = filteredDevices.size,
+                        selected = selectedFilterChip == 0,
+                        onClick = { selectedFilterChip = 0 }
+                    )
+                    FilterChipPill(
+                        label = copy.filterNearby,
+                        count = searchNearby.size,
+                        selected = selectedFilterChip == 1,
+                        onClick = { selectedFilterChip = 1 }
+                    )
+                    FilterChipPill(
+                        label = copy.filterConnected,
+                        count = searchConnected.size,
+                        selected = selectedFilterChip == 2,
+                        onClick = { selectedFilterChip = 2 }
+                    )
+                    FilterChipPill(
+                        label = copy.filterDisconnected,
+                        count = searchDisconnected.size,
+                        selected = selectedFilterChip == 3,
+                        onClick = { selectedFilterChip = 3 }
+                    )
+                }
+
+                Spacer(Modifier.height(18.dp))
+
+                // 1. Nearby Search Results
+                if ((selectedFilterChip == 0 || selectedFilterChip == 1) && searchNearby.isNotEmpty()) {
+                    SearchSectionHeader(title = copy.nearbyDevicesSection, count = searchNearby.size)
+                    Spacer(Modifier.height(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        searchNearby.forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
+
+                // 2. Connected Search Results
+                if ((selectedFilterChip == 0 || selectedFilterChip == 2) && searchConnected.isNotEmpty()) {
+                    SearchSectionHeader(title = copy.connectedDevicesSectionTitle, count = searchConnected.size)
+                    Spacer(Modifier.height(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        searchConnected.forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
+
+                // 3. Disconnected Search Results
+                if ((selectedFilterChip == 0 || selectedFilterChip == 3) && searchDisconnected.isNotEmpty()) {
+                    SearchSectionHeader(title = copy.disconnectedDevicesSectionTitle, count = searchDisconnected.size)
+                    Spacer(Modifier.height(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        searchDisconnected.forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
+
+                if (filteredDevices.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = copy.noMatchingDevicesFound,
+                            color = Mist,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(28.dp))
+            }
         }
 
         val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
@@ -575,6 +848,7 @@ fun HomeScreen(
         }
     }
 
+    // Pair request dialogs
     AnimatedVisibility(
         visible = deviceToPair != null,
         enter = fadeIn(animationSpec = tween(220)),
@@ -582,22 +856,10 @@ fun HomeScreen(
     ) {
         val target = deviceToPair
         if (target != null) {
-            BackHandler {
-                deviceToPair = null
-            }
             SendPairRequestScreen(
                 device = target,
                 copy = copy,
                 onSendRequest = {
-                    val connectedCount = discoveredDevices.count { ConnectionManager.isDeviceConnected(it) }
-                    if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedCount)) {
-                        deviceToPair = null
-                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                            net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
-                        )
-                        return@SendPairRequestScreen
-                    }
-
                     deviceToPair = null
                     showNativeToast(copy.sendingConnectionRequest)
                     ConnectionManager.requestPairing(target) { result ->
@@ -606,7 +868,8 @@ fun HomeScreen(
                             PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
                             PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
                             PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
-                            PairResult.PENDING_APPROVAL -> { /* OutgoingStatusModal displays approval waiting */ }
+                            PairResult.PENDING_APPROVAL -> {}
+                            else -> {}
                         }
                     }
                 },
@@ -615,6 +878,7 @@ fun HomeScreen(
         }
     }
 
+    // Device Action Bottom Sheet (Matching user screenshot)
     AnimatedVisibility(
         visible = deviceForAction != null,
         enter = fadeIn(animationSpec = tween(220)),
@@ -622,9 +886,6 @@ fun HomeScreen(
     ) {
         val target = deviceForAction
         if (target != null) {
-            BackHandler {
-                deviceForAction = null
-            }
             ConnectedDeviceActionScreen(
                 device = target,
                 copy = copy,
@@ -632,156 +893,544 @@ fun HomeScreen(
                     deviceForAction = null
                     onDeviceClick(target)
                 },
+                onSendClipboard = {
+                    deviceForAction = null
+                    onClipboardClick()
+                },
                 onDisconnect = {
                     deviceForAction = null
                     ConnectionManager.disconnectDevice(target)
                     showNativeToast(copy.disconnected)
                 },
-                onDismiss = { deviceForAction = null }
+                onDismiss = {
+                    deviceForAction = null
+                }
+            )
+        }
+    }
+
+    // View All Bottom Sheet Modal (Triggered by 'Tümünü Gör')
+    AnimatedVisibility(
+        visible = viewAllSection != null,
+        enter = fadeIn(animationSpec = tween(200)),
+        exit = fadeOut(animationSpec = tween(180))
+    ) {
+        val section = viewAllSection
+        if (section != null) {
+            val (sheetTitle, sheetList) = when (section) {
+                DeviceSectionType.NEARBY -> copy.nearbyDevicesSection to nearbyDevices
+                DeviceSectionType.CONNECTED -> copy.connectedDevicesSectionTitle to connectedDevices
+                DeviceSectionType.DISCONNECTED -> copy.disconnectedDevicesSectionTitle to disconnectedDevices
+            }
+            DeviceListBottomSheet(
+                title = sheetTitle,
+                devices = sheetList,
+                copy = copy,
+                onDeviceClick = { devItem ->
+                    viewAllSection = null
+                    handleDeviceSelection(devItem)
+                },
+                onDismiss = { viewAllSection = null }
             )
         }
     }
 }
 
 @Composable
-private fun BoxlessDeviceRow(
-    name: String,
-    details: String,
-    badge: String,
-    isOnline: Boolean,
-    isConnected: Boolean = false,
-    isSelf: Boolean = false,
-    onClick: (() -> Unit)? = null
+private fun SectionHeaderRow(
+    title: String,
+    count: Int,
+    copy: Copy,
+    onViewAllClick: () -> Unit
 ) {
-    val isMobile = badge.equals("Android", ignoreCase = true) || badge.equals("iOS", ignoreCase = true)
+    val isDark = LocalSyncSwiftColors.current.isDark
+    val blue = LocalSyncSwiftColors.current.blue
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(InputBg.copy(alpha = 0.6f)),
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (isMobile) {
-                PhoneVectorIcon(Modifier.size(19.dp), color = if (isConnected && isOnline) Blue else Mist)
-            } else {
-                LaptopVectorIcon(Modifier.size(19.dp), color = if (isConnected && isOnline) Blue else Mist)
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Text(
+                text = title,
+                color = Cloud,
+                fontSize = 17.5.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-0.3).sp
+            )
+
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
             ) {
-                Text(name, color = Cloud, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = badge,
-                    color = Mist,
+                    text = count.toString(),
+                    color = blue,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
-            Row(
-                modifier = Modifier.padding(top = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+        }
+
+        Text(
+            text = copy.viewAll,
+            color = blue,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(onClick = onViewAllClick)
+                .padding(4.dp)
+        )
+    }
+}
+
+@Composable
+private fun DeviceListBottomSheet(
+    title: String,
+    devices: List<UiDeviceItem>,
+    copy: Copy,
+    onDeviceClick: (UiDeviceItem) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isDark = LocalSyncSwiftColors.current.isDark
+    net.syncswift.UpdateSystemBars(isDark = true)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        net.syncswift.UpdateSystemBars(isDark = true)
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.50f))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.72f)
+                .clickable(enabled = false) {},
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = if (isDark) Color(0xFF131B28) else Color.White,
+            border = BorderStroke(1.dp, InputBorder)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 14.dp)
+            ) {
+                // Drag handle
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .width(38.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(Mist.copy(alpha = 0.4f))
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            color = Cloud,
+                            fontSize = 18.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.3).sp
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = devices.size.toString(),
+                                color = LocalSyncSwiftColors.current.blue,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
+                            .clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CrossVectorIcon(Modifier.size(12.dp), color = Mist)
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                HorizontalDivider(thickness = 0.6.dp, color = InputBorder)
+                Spacer(Modifier.height(14.dp))
+
+                if (devices.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        devices.forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { onDeviceClick(dev) }
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = copy.noMatchingDevicesFound,
+                            color = Mist,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+}
+
+@Composable
+private fun SearchSectionHeader(
+    title: String,
+    count: Int
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = title,
+            color = Cloud,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.2).sp
+        )
+        Text(
+            text = count.toString(),
+            color = Mist,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun NearbyDeviceCard(
+    item: UiDeviceItem,
+    onClick: () -> Unit
+) {
+    val blue = LocalSyncSwiftColors.current.blue
+    val isDark = LocalSyncSwiftColors.current.isDark
+    Surface(
+        modifier = Modifier
+            .width(114.dp)
+            .height(122.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = CardSurface,
+        border = BorderStroke(1.dp, InputBorder)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)
+        ) {
+            // Online Green / Offline Gray Status Dot
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(3.dp)
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(if (item.isOnline) Color(0xFF10B981) else Color(0xFF94A3B8))
+            )
+
+            // Centered circular icon container and device labels
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 4.dp, bottom = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(5.dp)
+                        .size(46.dp)
                         .clip(CircleShape)
-                        .background(if (isOnline) SuccessGreen else Mist.copy(alpha = 0.4f))
+                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        item.os.contains("iOS", ignoreCase = true) || item.os.contains("Android", ignoreCase = true) -> {
+                            MobileDeviceIcon(Modifier.size(24.dp), color = blue)
+                        }
+                        item.name.contains("iPad", ignoreCase = true) -> {
+                            TabletVectorIcon(Modifier.size(24.dp), color = blue)
+                        }
+                        else -> {
+                            LaptopVectorIcon(Modifier.size(26.dp), color = blue)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = item.name,
+                    color = Cloud,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = details,
-                    color = if (isConnected && isOnline) Blue else Mist,
-                    fontSize = 12.sp,
-                    fontWeight = if (isConnected && isOnline) FontWeight.SemiBold else FontWeight.Normal
+                    text = item.os,
+                    color = Mist,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
                 )
             }
-        }
-        if (!isSelf) {
-            ChevronRightIcon(Modifier.size(14.dp), color = Mist.copy(alpha = 0.6f))
         }
     }
 }
 
 @Composable
-private fun BoxlessTransferRow(
-    title: String,
-    info: String,
-    isSent: Boolean,
-    status: TransferStatus = TransferStatus.COMPLETED
+private fun DeviceListRowCard(
+    item: UiDeviceItem,
+    onClick: () -> Unit
 ) {
-    val isFailed = status == TransferStatus.FAILED || status == TransferStatus.CANCELLED
-    val statusColor = if (isFailed) ErrorRed else SuccessGreen
-
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = CardSurface,
+        border = BorderStroke(1.dp, InputBorder)
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(statusColor.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isSent) {
-                OutgoingArrowIcon(Modifier.size(18.dp), color = statusColor)
-            } else {
-                IncomingArrowIcon(Modifier.size(18.dp), color = statusColor)
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = Cloud,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
-            Text(
-                text = info,
-                color = if (isFailed) ErrorRed else Mist,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-        when (status) {
-            TransferStatus.IN_PROGRESS -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = Blue,
-                    strokeWidth = 2.dp
-                )
-            }
-            TransferStatus.COMPLETED -> {
-                AnimatedCheckCircleIcon(Modifier.size(20.dp))
-            }
-            TransferStatus.FAILED, TransferStatus.CANCELLED -> {
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(ErrorRed.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CrossVectorIcon(Modifier.size(10.dp), color = ErrorRed)
+            // Icon
+            Box(
+                modifier = Modifier.size(34.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val blue = LocalSyncSwiftColors.current.blue
+                when {
+                    item.name.contains("Windows", ignoreCase = true) -> {
+                        WindowsLogoIcon(Modifier.size(24.dp), color = blue)
+                    }
+                    item.os.contains("Android", ignoreCase = true) || item.os.contains("iOS", ignoreCase = true) -> {
+                        MobileDeviceIcon(Modifier.size(26.dp), color = blue)
+                    }
+                    item.name.contains("Ev Bilgisayarı", ignoreCase = true) || item.name.contains("mini", ignoreCase = true) -> {
+                        DesktopVectorIcon(Modifier.size(26.dp), color = blue)
+                    }
+                    else -> {
+                        LaptopVectorIcon(Modifier.size(28.dp), color = blue)
+                    }
                 }
             }
-            else -> {}
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = item.name,
+                    color = Cloud,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.2).sp
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = item.os,
+                    color = Mist,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            // Status Dot
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(if (item.isOnline) Color(0xFF10B981) else Color(0xFF94A3B8))
+            )
+
+            Spacer(Modifier.width(10.dp))
+
+            ChevronRightIcon(Modifier.size(15.dp), color = Mist)
+        }
+    }
+}
+
+@Composable
+private fun TransferItemRowCard(
+    icon: @Composable () -> Unit,
+    title: String,
+    subtitle: String,
+    time: String,
+    size: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = CardSurface,
+        border = BorderStroke(1.dp, InputBorder)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(38.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                icon()
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Cloud,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.2).sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    color = Mist,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = time,
+                    color = Mist,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = size,
+                    color = Mist,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(Modifier.width(10.dp))
+
+            ChevronRightIcon(Modifier.size(15.dp), color = Mist)
+        }
+    }
+}
+
+@Composable
+private fun FilterChipPill(
+    label: String,
+    count: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val isDark = LocalSyncSwiftColors.current.isDark
+    Surface(
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        shape = CircleShape,
+        color = if (selected) {
+            Color(0xFF2563EB).copy(alpha = if (isDark) 0.35f else 0.15f)
+        } else {
+            CardSurface
+        },
+        border = BorderStroke(
+            1.dp,
+            if (selected) Color(0xFF2563EB).copy(alpha = 0.6f) else InputBorder
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = label,
+                color = if (selected) Color(0xFF2563EB) else Mist,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+            )
+            Text(
+                text = count.toString(),
+                color = if (selected) Color(0xFF2563EB) else Mist.copy(alpha = 0.8f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

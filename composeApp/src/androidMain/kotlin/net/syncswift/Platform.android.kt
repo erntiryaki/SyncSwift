@@ -21,14 +21,50 @@ actual fun showNativeToast(message: String) {
 }
 
 @androidx.compose.runtime.Composable
-actual fun UpdateSystemBars(isDark: Boolean) {
+actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui.graphics.Color?) {
     val view = androidx.compose.ui.platform.LocalView.current
     if (!view.isInEditMode) {
+        val colorArgb = statusBarColor?.let {
+            val a = (it.alpha * 255.0f + 0.5f).toInt()
+            val r = (it.red * 255.0f + 0.5f).toInt()
+            val g = (it.green * 255.0f + 0.5f).toInt()
+            val b = (it.blue * 255.0f + 0.5f).toInt()
+            (a shl 24) or (r shl 16) or (g shl 8) or b
+        }
         androidx.compose.runtime.SideEffect {
-            val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
-            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+            // Check if we are inside a Dialog and configure its window edge-to-edge
+            var parent = view.parent
+            while (parent != null) {
+                if (parent is androidx.compose.ui.window.DialogWindowProvider) {
+                    val dialogWindow = parent.window
+                    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
+                    dialogWindow.statusBarColor = android.graphics.Color.TRANSPARENT
+                    dialogWindow.navigationBarColor = android.graphics.Color.TRANSPARENT
+                    dialogWindow.setLayout(
+                        android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                        android.view.WindowManager.LayoutParams.MATCH_PARENT
+                    )
+                    val dialogInsets = androidx.core.view.WindowCompat.getInsetsController(dialogWindow, dialogWindow.decorView)
+                    dialogInsets.isAppearanceLightStatusBars = !isDark
+                    dialogInsets.isAppearanceLightNavigationBars = !isDark
+                    break
+                }
+                parent = parent.parent
+            }
+
+            var ctx = view.context
+            while (ctx is android.content.ContextWrapper) {
+                if (ctx is android.app.Activity) break
+                ctx = ctx.baseContext
+            }
+            val activity = (ctx as? android.app.Activity) ?: SessionManager.getCurrentActivity()
+            val window = activity?.window ?: return@SideEffect
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = !isDark
             insetsController.isAppearanceLightNavigationBars = !isDark
+            if (colorArgb != null) {
+                window.statusBarColor = colorArgb
+            }
         }
     }
 }

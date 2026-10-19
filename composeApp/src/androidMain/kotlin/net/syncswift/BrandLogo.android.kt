@@ -15,13 +15,13 @@ import net.syncswift.ui.theme.SyncSwiftTheme
 
 @Composable
 actual fun BrandLogo(modifier: Modifier) {
-    val isDark = net.syncswift.ui.theme.IsDarkTheme
+    val isDark = net.syncswift.ui.theme.LocalSyncSwiftColors.current.isDark
     Image(
         painter = painterResource(R.drawable.logo_syncswift),
         contentDescription = "SyncSwift",
         modifier = modifier,
         contentScale = ContentScale.Fit,
-        colorFilter = if (!isDark) ColorFilter.tint(Color.Black, BlendMode.SrcIn) else null
+        colorFilter = if (!isDark) ColorFilter.tint(Color(0xFF0F172A), BlendMode.SrcIn) else null
     )
 }
 
@@ -31,6 +31,7 @@ actual fun BrandIcon(modifier: Modifier, tint: Color) {
         painter = painterResource(R.drawable.icon_syncswift),
         contentDescription = "SyncSwift Icon",
         modifier = modifier,
-        contentScale = ContentScale.Fit
+        contentScale = ContentScale.Fit,
+        colorFilter = if (tint != Color.Unspecified) ColorFilter.tint(tint, BlendMode.SrcIn) else null
     )
 }

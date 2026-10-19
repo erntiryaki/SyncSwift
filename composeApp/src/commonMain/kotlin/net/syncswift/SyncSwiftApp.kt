@@ -94,6 +94,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     var authAlert by remember { mutableStateOf(AuthAlertState.None) }
     // Empty by default — filled when OTP is actually sent; prevents guessing before send
     var currentOtpCode by remember { mutableStateOf("") }
+    var isPasswordResetFlow by remember { mutableStateOf(false) }
     val authPolicy = remember { AuthPolicy() }
     val scope = rememberCoroutineScope()
 
@@ -170,8 +171,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             latestCompletedItem = null
         }
     }
-    LaunchedEffect(Unit) {
-        if (!net.syncswift.subscription.SubscriptionManager.isProActive() &&
+    LaunchedEffect(screen) {
+        if (screen == AuthStep.Home &&
+            !net.syncswift.subscription.SubscriptionManager.isProActive() &&
             !net.syncswift.subscription.SubscriptionManager.isPro.value &&
             !net.syncswift.SessionManager.getSavedProStatus()) {
             net.syncswift.subscription.SubscriptionManager.checkTimedPaywall()
@@ -335,7 +337,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         BackHandler { screen = AuthStep.Home }
     } else if (screen == AuthStep.Password || screen == AuthStep.Otp) {
         BackHandler { screen = AuthStep.Email }
-    } else if (screen == AuthStep.Profile) {
+    } else if (screen == AuthStep.Profile || screen == AuthStep.ResetPassword) {
         BackHandler { screen = AuthStep.Otp }
     }
 
@@ -482,21 +484,28 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 copy = copy,
                                 email = authDraftEmail,
                                 updateEmail = { authDraftEmail = it },
-                                onSignInWithPassword = { userEmail, userPassword ->
+                                onSignInWithPassword = { userEmail, userPassword, onFinished ->
                                     scope.launch {
-                                        val ok = SupabaseNetwork.signInWithPassword(userEmail, userPassword)
-                                        if (ok) {
-                                            val prof = SupabaseNetwork.fetchUserProfile(userEmail)
-                                            val f = prof?.firstName ?: ""
-                                            val l = prof?.lastName ?: ""
-                                            verifyDeviceLimitAndLogin(userEmail, IdentityProvider.EmailPassword, f, l, userPassword)
-                                        } else {
+                                        try {
+                                            val ok = SupabaseNetwork.signInWithPassword(userEmail, userPassword)
+                                            if (ok) {
+                                                val prof = SupabaseNetwork.fetchUserProfile(userEmail)
+                                                val f = prof?.firstName ?: ""
+                                                val l = prof?.lastName ?: ""
+                                                verifyDeviceLimitAndLogin(userEmail, IdentityProvider.EmailPassword, f, l, userPassword)
+                                            } else {
+                                                authAlert = AuthAlertState.WrongPassword
+                                            }
+                                        } catch (e: Exception) {
                                             authAlert = AuthAlertState.WrongPassword
+                                        } finally {
+                                            onFinished()
                                         }
                                     }
                                 },
-                                onSendOtpAndContinue = { userEmail ->
+                                onSendOtpAndContinue = { userEmail, isReset ->
                                     authDraftEmail = userEmail
+                                    isPasswordResetFlow = isReset
                                     authProvider = IdentityProvider.EmailPassword
                                     triggerOrReuseOtp(userEmail)
                                     screen = AuthStep.Otp
@@ -583,12 +592,16 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                             AuthStep.Password -> PasswordAuthScreen(
                                 copy = copy,
                                 onBack = { screen = AuthStep.Email },
-                                done = {
+                                done = { onFinished ->
                                     scope.launch {
-                                        val prof = SupabaseNetwork.fetchUserProfile(authDraftEmail)
-                                        val f = prof?.firstName ?: ""
-                                        val l = prof?.lastName ?: ""
-                                        verifyDeviceLimitAndLogin(authDraftEmail, IdentityProvider.EmailPassword, f, l)
+                                        try {
+                                            val prof = SupabaseNetwork.fetchUserProfile(authDraftEmail)
+                                            val f = prof?.firstName ?: ""
+                                            val l = prof?.lastName ?: ""
+                                            verifyDeviceLimitAndLogin(authDraftEmail, IdentityProvider.EmailPassword, f, l)
+                                        } finally {
+                                            onFinished()
+                                        }
                                     }
                                 },
                                 language = language,
@@ -608,7 +621,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     }
                                 },
                                 onBack = { screen = AuthStep.Email },
-                                verified = { screen = AuthStep.Profile },
+                                verified = {
+                                    screen = if (isPasswordResetFlow) AuthStep.ResetPassword else AuthStep.Profile
+                                },
                                 language = language,
                                 setLanguage = ::updateLanguage
                             )
@@ -618,6 +633,21 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                 finished = { pFirstName, pLastName, password ->
                                     // User completed profile -> Commit account with firstName, lastName & password
                                     verifyDeviceLimitAndLogin(authDraftEmail, IdentityProvider.EmailPassword, pFirstName, pLastName, password)
+                                },
+                                language = language,
+                                setLanguage = ::updateLanguage
+                            )
+                            AuthStep.ResetPassword -> ResetPasswordAuthScreen(
+                                copy = copy,
+                                onBack = { screen = AuthStep.Otp },
+                                finished = { newPassword ->
+                                    scope.launch {
+                                        val ok = SupabaseNetwork.updateUserPassword(authDraftEmail, newPassword)
+                                        val prof = SupabaseNetwork.fetchUserProfile(authDraftEmail)
+                                        val f = prof?.firstName ?: ""
+                                        val l = prof?.lastName ?: ""
+                                        verifyDeviceLimitAndLogin(authDraftEmail, IdentityProvider.EmailPassword, f, l, newPassword)
+                                    }
                                 },
                                 language = language,
                                 setLanguage = ::updateLanguage
@@ -797,6 +827,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                 },
                                                                 onOpenNotifications = {
                                                                     inNotifications = true
+                                                                },
+                                                                onToggleTheme = {
+                                                                    updateThemeMode(if (themeMode == net.syncswift.ui.theme.AppThemeMode.Dark) net.syncswift.ui.theme.AppThemeMode.Light else net.syncswift.ui.theme.AppThemeMode.Dark)
                                                                 }
                                                             )
                                                         }
@@ -1112,7 +1145,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             val showPaywall by net.syncswift.subscription.SubscriptionManager.showPaywall.collectAsState()
             val paywallReason by net.syncswift.subscription.SubscriptionManager.paywallReason.collectAsState()
             AnimatedVisibility(
-                visible = showPaywall,
+                visible = showPaywall && screen == AuthStep.Home,
                 enter = fadeIn(animationSpec = tween(220)),
                 exit = fadeOut(animationSpec = tween(180))
             ) {

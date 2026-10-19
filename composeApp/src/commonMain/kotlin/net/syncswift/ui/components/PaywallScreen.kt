@@ -224,7 +224,7 @@ fun PaywallScreen(
                                         text = copy.trialPricingYearlySummary,
                                         color = Mist,
                                         fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Normal,
+                                        fontWeight = FontWeight.Medium,
                                         lineHeight = 16.sp
                                     )
                                 }
@@ -293,7 +293,7 @@ fun PaywallScreen(
                                     text = copy.trialPricingMonthlySummary,
                                     color = Mist,
                                     fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Normal,
+                                    fontWeight = FontWeight.Medium,
                                     lineHeight = 16.sp
                                 )
                             }

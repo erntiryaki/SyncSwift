@@ -1,17 +1,17 @@
 package net.syncswift.ui.components
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,181 +20,413 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import net.syncswift.Copy
-import net.syncswift.CrossVectorIcon
-import net.syncswift.LaptopVectorIcon
-import net.syncswift.PhoneVectorIcon
-import net.syncswift.TransferVectorIcon
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import net.syncswift.*
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.ui.theme.*
 
 /**
- * Full-page screen for connected device actions (NO MODAL).
- * Allows sending files, syncing clipboard, or disconnecting.
+ * Bottom Sheet for Device Actions matching the screenshot:
+ * 1. Main Action Sheet (Dosya Gönder, Ortak Pano, Bağlantıyı Kes, Cihazı Düzenle, Cihazı Kaldır)
+ * 2. Disconnect Confirmation Sheet (Broken Link icon, "Bağlantıyı Kes", "İptal")
  */
 @Composable
 fun ConnectedDeviceActionScreen(
     device: DiscoveredDevice,
     copy: Copy,
     onSendFile: () -> Unit,
+    onSendClipboard: () -> Unit = {},
     onDisconnect: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val cleanName = cleanDeviceDisplayName(device.name)
-    val isMobile = device.osType.equals("Android", ignoreCase = true) ||
-                   device.osType.equals("iOS", ignoreCase = true) ||
-                   device.name.contains("Phone", ignoreCase = true) ||
-                   device.name.contains("Mobile", ignoreCase = true)
+    var showDisconnectConfirmation by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var nicknameInput by remember { mutableStateOf(cleanDeviceDisplayName(device.name)) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Night)
+    val cleanName = cleanDeviceDisplayName(device.name)
+    val isDark = LocalSyncSwiftColors.current.isDark
+    val isMobile = device.osType.equals("Android", ignoreCase = true) ||
+            device.osType.equals("iOS", ignoreCase = true) ||
+            device.name.contains("Phone", ignoreCase = true) ||
+            device.name.contains("Mobile", ignoreCase = true)
+
+    net.syncswift.UpdateSystemBars(isDark = true)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
+        net.syncswift.UpdateSystemBars(isDark = true)
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+                .background(Color.Black.copy(alpha = 0.50f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            // TOP BAR
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = cleanName,
-                    color = Cloud,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.3).sp
-                )
-
-                // Close Button
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(InputBg)
-                        .clickable { onDismiss() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    CrossVectorIcon(Modifier.size(16.dp), color = Mist)
-                }
-            }
-
-            // CENTER CONTENT
+            Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 680.dp)
+                .clickable(enabled = false) {}, // Prevent click through
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = if (isDark) Color(0xFF131B28) else Color(0xFFFFFFFF),
+            border = BorderStroke(1.dp, InputBorder)
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Drag Handle
                 Box(
                     modifier = Modifier
-                        .size(110.dp)
+                        .width(38.dp)
+                        .height(4.dp)
                         .clip(CircleShape)
-                        .background(SuccessGreen.copy(alpha = 0.12f))
-                        .border(BorderStroke(1.5.dp, SuccessGreen.copy(alpha = 0.4f)), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(68.dp)
-                            .clip(CircleShape)
-                            .background(SuccessGreen),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isMobile) {
-                            PhoneVectorIcon(Modifier.size(34.dp), color = Color.White)
-                        } else {
-                            LaptopVectorIcon(Modifier.size(34.dp), color = Color.White)
+                        .background(Mist.copy(alpha = 0.4f))
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                AnimatedContent(
+                    targetState = showDisconnectConfirmation,
+                    transitionSpec = {
+                        fadeIn(tween(200)) togetherWith fadeOut(tween(180))
+                    }
+                ) { isConfirmingDisconnect ->
+                    if (!isConfirmingDisconnect) {
+                        // SCREEN 1: DEVICE ACTION MENU
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            // Device Header Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    // Device Icon
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isMobile) {
+                                            MobileDeviceIcon(Modifier.size(26.dp), color = Color(0xFF2563EB))
+                                        } else if (device.name.contains("iPad", ignoreCase = true)) {
+                                            TabletVectorIcon(Modifier.size(26.dp), color = Color(0xFF2563EB))
+                                        } else {
+                                            LaptopVectorIcon(Modifier.size(30.dp), color = Color(0xFF2563EB))
+                                        }
+                                    }
+
+                                    Column {
+                                        Text(
+                                            text = cleanName,
+                                            color = Cloud,
+                                            fontSize = 17.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = (-0.3).sp
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (device.isOnline) Color(0xFF10B981) else Color(0xFF94A3B8))
+                                            )
+                                            Text(
+                                                text = "${if (device.isOnline) copy.statusConnected else copy.statusOffline} • ${device.osType.ifBlank { "SyncSwift" }}",
+                                                color = Mist,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Normal
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Close Button (X in circle)
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
+                                        .clickable(onClick = onDismiss),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CrossVectorIcon(Modifier.size(12.dp), color = Mist)
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+
+                            HorizontalDivider(thickness = 0.6.dp, color = InputBorder)
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Action 1: Dosya Gönder
+                            DeviceActionItemRow(
+                                icon = { PaperAirplaneIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
+                                title = copy.sendFileAction,
+                                subtitle = copy.sendFileActionDesc,
+                                isDestructive = false,
+                                onClick = onSendFile
+                            )
+
+                            // Action 2: Ortak Pano
+                            DeviceActionItemRow(
+                                icon = { ClipboardVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
+                                title = copy.sendClipboardAction,
+                                subtitle = copy.sendClipboardActionDesc,
+                                isDestructive = false,
+                                onClick = onSendClipboard
+                            )
+
+                            // Action 3: Bağlantıyı Kes
+                            DeviceActionItemRow(
+                                icon = { LinkChainIcon(Modifier.size(20.dp), color = Cloud) },
+                                title = copy.disconnectDeviceAction,
+                                subtitle = copy.disconnectDeviceActionDesc,
+                                isDestructive = false,
+                                onClick = { showDisconnectConfirmation = true }
+                            )
+
+                            // Action 4: Cihazı Düzenle
+                            DeviceActionItemRow(
+                                icon = { EditVectorIcon(Modifier.size(20.dp), color = Cloud) },
+                                title = copy.editDeviceAction,
+                                subtitle = copy.editDeviceActionDesc,
+                                isDestructive = false,
+                                onClick = { showRenameDialog = true }
+                            )
+
+                            // Action 5: Cihazı Kaldır
+                            DeviceActionItemRow(
+                                icon = { TrashIcon(Modifier.size(20.dp), color = Color(0xFFEF4444)) },
+                                title = copy.removeDeviceAction,
+                                subtitle = copy.removeDeviceActionDesc,
+                                isDestructive = true,
+                                onClick = onDisconnect
+                            )
+
+                            Spacer(Modifier.height(14.dp))
+                        }
+                    } else {
+                        // SCREEN 2: DISCONNECT CONFIRMATION (Phone 2 in Screenshot)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Top Row with Close Button
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
+                                        .clickable { showDisconnectConfirmation = false },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CrossVectorIcon(Modifier.size(12.dp), color = Mist)
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Broken Link Red Glow Circular Container
+                            Box(
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                BrokenLinkIcon(Modifier.size(36.dp), color = Color(0xFFEF4444))
+                            }
+
+                            Spacer(Modifier.height(18.dp))
+
+                            Text(
+                                text = copy.disconnectDeviceAction,
+                                color = Cloud,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-0.3).sp
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Text(
+                                text = copy.disconnectConfirmQuestion.replace("%s", cleanName),
+                                color = Mist,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 20.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+
+                            Spacer(Modifier.height(24.dp))
+
+                            // Primary Red Button: Bağlantıyı Kes
+                            Button(
+                                onClick = onDisconnect,
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                            ) {
+                                Text(
+                                    text = copy.disconnectDeviceAction,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+
+                            // Secondary Button: İptal
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { showDisconnectConfirmation = false },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = copy.otpCancelAction,
+                                        color = Cloud,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(14.dp))
                         }
                     }
                 }
-
-                Spacer(Modifier.height(20.dp))
-
-                Text(
-                    text = cleanName,
-                    color = Cloud,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    letterSpacing = (-0.4).sp
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                val isRemote = net.syncswift.connection.ConnectionManager.isRemoteDevice(device)
-                val statusText = if (device.isOnline) {
-                    copy.connectedStatus
-                } else if (isRemote) {
-                    copy.outsideLocalNetwork
-                } else {
-                    copy.offlineSleeping
-                }
-                Text(
-                    text = "${device.osType} · $statusText",
-                    color = Mist,
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            // BOTTOM ACTIONS (Lifted up clearly above navbar)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 56.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // 1. Dosya Gönder
-                Button(
-                    onClick = onSendFile,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PillButtonBg,
-                        contentColor = PillButtonText
-                    )
-                ) {
-                    TransferVectorIcon(Modifier.size(18.dp), color = PillButtonText)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = copy.send,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // 2. Bağlantıyı Kes
-                Button(
-                    onClick = onDisconnect,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = InputBg,
-                        contentColor = ErrorRed
-                    ),
-                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f))
-                ) {
-                    Text(
-                        text = copy.disconnect,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
             }
         }
+    }
+}
+
+    // Rename Modal Dialog
+    if (showRenameDialog) {
+        SyncSwiftModal(
+            onDismissRequest = { showRenameDialog = false },
+            title = copy.editDeviceDialogTitle,
+            titleIcon = { EditVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
+            confirmText = copy.saveChanges,
+            confirmColor = PillButtonBg,
+            confirmTextColor = PillButtonText,
+            onConfirm = {
+                if (nicknameInput.isNotBlank()) {
+                    showNativeToast(copy.deviceNameUpdatedToast)
+                }
+                showRenameDialog = false
+            },
+            dismissText = copy.otpCancelAction,
+            onDismiss = { showRenameDialog = false }
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                Text(
+                    text = copy.editDeviceActionDesc,
+                    color = Mist,
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = nicknameInput,
+                    onValueChange = { nicknameInput = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceActionItemRow(
+    icon: @Composable () -> Unit,
+    title: String,
+    subtitle: String,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(26.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            icon()
+        }
+
+        Spacer(Modifier.width(16.dp))
+
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (isDestructive) Color(0xFFEF4444) else Cloud,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.2).sp
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                color = Mist,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        ChevronRightIcon(
+            Modifier.size(16.dp),
+            color = if (isDestructive) Color(0xFFEF4444).copy(alpha = 0.8f) else Mist
+        )
     }
 }

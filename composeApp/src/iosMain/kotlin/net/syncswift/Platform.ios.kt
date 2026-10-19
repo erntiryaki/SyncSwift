@@ -55,7 +55,7 @@ actual fun showNativeToast(message: String) {
 }
 
 @androidx.compose.runtime.Composable
-actual fun UpdateSystemBars(isDark: Boolean) {
+actual fun UpdateSystemBars(isDark: Boolean, statusBarColor: androidx.compose.ui.graphics.Color?) {
     // Handled by iOS UIViewController preferredStatusBarStyle
 }
 
