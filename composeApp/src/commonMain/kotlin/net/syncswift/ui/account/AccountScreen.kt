@@ -334,7 +334,7 @@ fun AccountScreen(
 
             // 3. Connect Desktop (My Devices)
             AccountMenuItemRow(
-                icon = { DesktopVectorIcon(Modifier.size(22.dp), color = iconColor) },
+                icon = { SmartphoneVectorIcon(Modifier.size(22.dp), color = iconColor) },
                 title = copy.myDevicesMenu,
                 subtitle = copy.myDevicesMenuDesc,
                 onClick = onOpenConnectDesktop

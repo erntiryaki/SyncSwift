@@ -89,15 +89,12 @@ fun AuthPage(
                 .imePadding()
                 .navigationBarsPadding()
         ) {
-            // Hero Image starts seamlessly, with balanced breathing room and soft fade gradients
+            // Hero Image starts seamlessly from top edge, with balanced breathing room and soft fade gradients
             if (showHero) {
-                Spacer(Modifier.statusBarsPadding())
-                Spacer(Modifier.height(if (isIos) 2.dp else 0.dp))
-
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(270.dp)
+                        .height(260.dp)
                 ) {
                     AuthHeroImage(
                         isDark = isDark,
@@ -108,7 +105,7 @@ fun AuthPage(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(36.dp)
+                            .height(48.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
@@ -136,7 +133,7 @@ fun AuthPage(
                             )
                     )
                 }
-                Spacer(Modifier.height(if (isIos) 22.dp else 18.dp))
+                Spacer(Modifier.height(if (isIos) 16.dp else 12.dp))
             } else {
                 // When hero is not shown, provide space below the floating top navigation bar
                 Spacer(Modifier.statusBarsPadding())

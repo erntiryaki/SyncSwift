@@ -173,38 +173,6 @@ fun WorkspaceScreen(
                     ) {
                         KeyVectorIcon(Modifier.size(16.dp), color = primaryBlue)
                     }
-
-                    Spacer(Modifier.width(8.dp))
-
-                    // New Workspace button
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(CardSurface)
-                            .border(1.dp, InputBorder, CircleShape)
-                            .clickable { showCreateWorkspaceDialog = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AddPlusVectorIcon(Modifier.size(16.dp), color = primaryBlue)
-                    }
-
-                    if (selectedWorkspace != null) {
-                        Spacer(Modifier.width(8.dp))
-
-                        // Edit Workspace button
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(CardSurface)
-                                .border(1.dp, InputBorder, CircleShape)
-                                .clickable { workspaceToEdit = selectedWorkspace },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            EditVectorIcon(Modifier.size(16.dp), color = Mist)
-                        }
-                    }
                 }
 
                 // Modern Breadcrumb Folder Back Navigation
@@ -548,11 +516,9 @@ fun WorkspaceScreen(
                             onUploadFileClick?.invoke()
                         }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(copy.uploadFromThisDevice, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
-                    Spacer(Modifier.width(14.dp))
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -562,6 +528,8 @@ fun WorkspaceScreen(
                     ) {
                         SmartphoneVectorIcon(Modifier.size(22.dp), color = primaryBlue)
                     }
+                    Spacer(Modifier.width(14.dp))
+                    Text(copy.uploadFromThisDevice, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
                 }
 
                 // 2. Diğer cihazımdan getir (Faz 6: Görev Devretme)
@@ -574,18 +542,9 @@ fun WorkspaceScreen(
                             showTaskDelegationDialog = true
                         }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(copy.fetchFromOtherDevice, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
-                        Text(
-                            text = copy.delegateTaskSubtitle,
-                            fontSize = 11.5.sp,
-                            color = Mist
-                        )
-                    }
-                    Spacer(Modifier.width(14.dp))
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -593,7 +552,16 @@ fun WorkspaceScreen(
                             .background(primaryBlue.copy(alpha = 0.14f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        DesktopVectorIcon(Modifier.size(22.dp), color = primaryBlue)
+                        LaptopVectorIcon(Modifier.size(22.dp), color = primaryBlue)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(copy.fetchFromOtherDevice, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
+                        Text(
+                            text = copy.delegateTaskSubtitle,
+                            fontSize = 11.5.sp,
+                            color = Mist
+                        )
                     }
                 }
 
@@ -607,11 +575,9 @@ fun WorkspaceScreen(
                             showNewFolderDialog = true
                         }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(copy.newFolder, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
-                    Spacer(Modifier.width(14.dp))
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -621,6 +587,8 @@ fun WorkspaceScreen(
                     ) {
                         FolderVectorIcon(Modifier.size(22.dp), color = primaryBlue)
                     }
+                    Spacer(Modifier.width(14.dp))
+                    Text(copy.newFolder, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
                 }
             }
         }
@@ -1288,6 +1256,37 @@ fun WorkspaceScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = primaryBlue,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            showWorkspaceSwitcher = false
+                            showCreateWorkspaceDialog = true
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 13.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AddPlusVectorIcon(Modifier.size(16.dp), color = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = copy.createWorkspace,
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
                     }
                 }
 
