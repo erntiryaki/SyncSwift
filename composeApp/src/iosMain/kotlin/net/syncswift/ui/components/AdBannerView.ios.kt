@@ -12,6 +12,8 @@ import platform.UIKit.UIView
 import platform.UIKit.UIApplication
 import platform.Foundation.NSClassFromString
 
+import androidx.compose.ui.draw.alpha
+
 private var iosAdBannerProvider: ((String) -> UIView)? = null
 
 fun setIosAdBannerProvider(provider: (String) -> UIView) {
@@ -22,7 +24,6 @@ fun setIosAdBannerProvider(provider: (String) -> UIView) {
 @Composable
 actual fun AdBannerView(modifier: Modifier) {
     val isModalOpen by AdBannerManager.isModalOpen.collectAsState()
-    if (isModalOpen) return
 
     val adUnit = net.syncswift.PlatformConfig.admobBannerId.ifBlank {
         "ca-app-pub-3940256099942544/2934735716"
@@ -31,8 +32,9 @@ actual fun AdBannerView(modifier: Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
-            .background(net.syncswift.ui.theme.CardSurface),
+            .height(if (isModalOpen) 0.dp else 50.dp)
+            .alpha(if (isModalOpen) 0f else 1f)
+            .background(if (isModalOpen) androidx.compose.ui.graphics.Color.Transparent else net.syncswift.ui.theme.CardSurface),
         contentAlignment = Alignment.Center
     ) {
         UIKitView(
@@ -40,7 +42,10 @@ actual fun AdBannerView(modifier: Modifier) {
                 val provided = iosAdBannerProvider?.invoke(adUnit)
                 provided ?: UIView()
             },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
+            modifier = Modifier.fillMaxWidth().height(if (isModalOpen) 0.dp else 50.dp),
+            update = { view ->
+                view.hidden = isModalOpen
+            },
             onRelease = { view ->
                 view.removeFromSuperview()
             }

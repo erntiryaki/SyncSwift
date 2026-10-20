@@ -759,20 +759,34 @@ actual object DeviceDiscoveryManager {
         processNextResolve()
     }
 
+    private var resolveWatchdogJob: Job? = null
+
     private fun processNextResolve() {
         if (isResolving) return
         val next = resolveQueue.poll() ?: return
         isResolving = true
 
+        resolveWatchdogJob?.cancel()
+        resolveWatchdogJob = scope.launch {
+            delay(5000)
+            if (isResolving) {
+                Log.w(TAG, "Resolve watchdog timed out for ${next.serviceName}, unblocking queue")
+                isResolving = false
+                processNextResolve()
+            }
+        }
+
         try {
             nsdManager?.resolveService(next, object : NsdManager.ResolveListener {
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                    resolveWatchdogJob?.cancel()
                     Log.w(TAG, "Resolve failed for ${serviceInfo.serviceName}: $errorCode")
                     isResolving = false
                     processNextResolve()
                 }
 
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                    resolveWatchdogJob?.cancel()
                     isResolving = false
                     val hostAddress = serviceInfo.host?.hostAddress ?: ""
                     val localIp = getLocalIpAddress()

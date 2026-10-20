@@ -49,6 +49,7 @@ fun WorkspaceScreen(
     val deviceJobs by WorkspaceManager.deviceJobs.collectAsState()
 
     // Modals
+    var showWorkspaceSwitcher by remember { mutableStateOf(false) }
     var showCreateWorkspaceDialog by remember { mutableStateOf(false) }
     var showJoinWorkspaceDialog by remember { mutableStateOf(false) }
     var showMembersDialog by remember { mutableStateOf(false) }
@@ -88,24 +89,44 @@ fun WorkspaceScreen(
                         .height(52.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = selectedWorkspace?.name ?: copy.workspacesTitle,
-                            color = Cloud,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = (-0.6).sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = selectedWorkspace?.description?.ifBlank { copy.workspacesSubtitle } ?: copy.workspacesSubtitle,
-                            fontSize = 12.5.sp,
-                            color = Mist,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showWorkspaceSwitcher = true }
+                            .padding(vertical = 2.dp, horizontal = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(primaryBlue.copy(alpha = 0.12f))
+                                .border(1.dp, primaryBlue.copy(alpha = 0.28f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ChevronDownIcon(Modifier.size(13.dp), color = primaryBlue)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = selectedWorkspace?.name ?: copy.workspacesTitle,
+                                color = Cloud,
+                                fontSize = 23.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-0.6).sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = selectedWorkspace?.description?.ifBlank { copy.workspacesSubtitle } ?: copy.workspacesSubtitle,
+                                fontSize = 12.5.sp,
+                                color = Mist,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
                     // Members pill
@@ -130,7 +151,22 @@ fun WorkspaceScreen(
                         }
                     }
 
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(8.dp))
+
+                    // Join Workspace with Code button
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(CardSurface)
+                            .border(1.dp, InputBorder, CircleShape)
+                            .clickable { showJoinWorkspaceDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        KeyVectorIcon(Modifier.size(16.dp), color = primaryBlue)
+                    }
+
+                    Spacer(Modifier.width(8.dp))
 
                     // New Workspace button
                     Box(
@@ -237,19 +273,41 @@ fun WorkspaceScreen(
                             }
                             Spacer(Modifier.height(16.dp))
                             Text(
-                                text = copy.emptyFolder,
+                                text = if (currentFolderId == null) copy.emptyWorkspace else copy.emptyFolder,
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Cloud
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                text = copy.emptyFolderDesc,
+                                text = if (currentFolderId == null) copy.emptyWorkspaceDesc else copy.emptyFolderDesc,
                                 fontSize = 13.sp,
                                 color = Mist,
                                 lineHeight = 19.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
+                            if (currentFolderId == null) {
+                                Spacer(Modifier.height(18.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = primaryBlue,
+                                    modifier = Modifier.clickable { showJoinWorkspaceDialog = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        KeyVectorIcon(Modifier.size(15.dp), color = Color.White)
+                                        Spacer(Modifier.width(7.dp))
+                                        Text(
+                                            text = copy.joinWorkspace,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -507,6 +565,31 @@ fun WorkspaceScreen(
                     }
                     Spacer(Modifier.width(14.dp))
                     Text(copy.newFolder, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
+                }
+
+                // 4. Koda göre çalışma alanına katıl
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            showPlusActionMenu = false
+                            showJoinWorkspaceDialog = true
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(primaryBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        KeyVectorIcon(Modifier.size(20.dp), color = primaryBlue)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Text(copy.joinWorkspace, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
                 }
             }
         }
@@ -975,6 +1058,384 @@ fun WorkspaceScreen(
                 }
 
                 Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
+    // MODAL: ÇALIŞMA ALANI DEĞİŞTİRİCİ (Workspace Switcher Bottom Sheet)
+    if (showWorkspaceSwitcher) {
+        WorkspaceModalBottomSheet(
+            onDismissRequest = { showWorkspaceSwitcher = false },
+            containerColor = CardSurface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(primaryBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ChevronDownIcon(Modifier.size(20.dp), color = primaryBlue)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = copy.workspacesTitle,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            color = Cloud
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = copy.workspacesSubtitle,
+                            fontSize = 12.5.sp,
+                            color = Mist
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Workspaces List
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(workspaces, key = { it.id }) { ws ->
+                        val isSelected = ws.id == selectedWorkspace?.id
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) primaryBlue.copy(alpha = 0.14f) else Night,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) primaryBlue.copy(alpha = 0.6f) else InputBorder
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable {
+                                    WorkspaceManager.selectWorkspace(ws)
+                                    showWorkspaceSwitcher = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) primaryBlue else primaryBlue.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = ws.name.take(1).uppercase(),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 17.sp,
+                                        color = if (isSelected) Color.White else primaryBlue
+                                    )
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = ws.name,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Cloud,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.height(3.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = if (ws.role == WorkspaceRole.OWNER) copy.roleOwner else copy.roleMember,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (ws.role == WorkspaceRole.OWNER) primaryBlue else Mist
+                                        )
+                                        Text(text = "•", fontSize = 11.sp, color = Mist)
+                                        UsersVectorIcon(Modifier.size(12.dp), color = Mist)
+                                        Spacer(Modifier.width(2.dp))
+                                        Text(
+                                            text = "${ws.memberCount}",
+                                            fontSize = 11.5.sp,
+                                            color = Mist
+                                        )
+                                    }
+                                }
+                                if (isSelected) {
+                                    Spacer(Modifier.width(10.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(primaryBlue),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CheckIcon(Modifier.size(14.dp), color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Actions: Join with Code or Create New Workspace
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Night,
+                        border = BorderStroke(1.dp, InputBorder),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                showWorkspaceSwitcher = false
+                                showJoinWorkspaceDialog = true
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 13.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = copy.joinWorkspace,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Cloud
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = primaryBlue,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                showWorkspaceSwitcher = false
+                                showCreateWorkspaceDialog = true
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 13.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AddPlusVectorIcon(Modifier.size(14.dp), color = Color.White)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = copy.createWorkspace,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+            }
+        }
+    }
+
+    // MODAL: ÇALIŞMA ALANINA KOD İLE KATILMA (Join Workspace with Code Bottom Sheet)
+    if (showJoinWorkspaceDialog) {
+        var inviteCodeInput by remember { mutableStateOf("") }
+        var joinError by remember { mutableStateOf<String?>(null) }
+
+        WorkspaceModalBottomSheet(
+            onDismissRequest = {
+                showJoinWorkspaceDialog = false
+                joinError = null
+            },
+            containerColor = CardSurface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(primaryBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        UsersVectorIcon(Modifier.size(22.dp), color = primaryBlue)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = copy.joinWorkspace,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            color = Cloud
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = copy.enterInviteCode,
+                            fontSize = 12.5.sp,
+                            color = Mist
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                BasicTextField(
+                    value = inviteCodeInput,
+                    onValueChange = {
+                        if (it.length <= 6 && it.all { ch -> ch.isDigit() || ch.isLetter() }) {
+                            inviteCodeInput = it.uppercase()
+                            joinError = null
+                        }
+                    },
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        color = Cloud,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 4.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    ),
+                    cursorBrush = SolidColor(primaryBlue),
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Night)
+                                .border(1.dp, if (joinError != null) ErrorRed else InputBorder, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (inviteCodeInput.isEmpty()) {
+                                Text(
+                                    text = "000000",
+                                    color = Mist.copy(alpha = 0.4f),
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 4.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                )
+
+                if (joinError != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = joinError ?: "",
+                        color = ErrorRed,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (inviteCodeInput.length == 6) primaryBlue else primaryBlue.copy(alpha = 0.35f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(enabled = inviteCodeInput.length == 6) {
+                            val joined = WorkspaceManager.joinWorkspaceByCode(inviteCodeInput.trim())
+                            if (joined) {
+                                showNativeToast(copy.workspaceJoinedToast)
+                                showJoinWorkspaceDialog = false
+                                inviteCodeInput = ""
+                                joinError = null
+                            } else {
+                                joinError = "Geçersiz davet kodu (6 hane olmalıdır)"
+                            }
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 14.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = copy.joinWorkspace,
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            showJoinWorkspaceDialog = false
+                            joinError = null
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = copy.otpCancelAction,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Mist
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
             }
         }
     }

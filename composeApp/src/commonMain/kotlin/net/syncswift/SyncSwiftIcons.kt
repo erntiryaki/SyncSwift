@@ -329,19 +329,24 @@ fun HomeVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(
 fun WorkspacesVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
     val w = size.width
     val h = size.height
-    val s = Stroke(size.minDimension * 0.075f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val sw = size.minDimension * 0.08f
+    val s = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
     val folderPath = Path().apply {
-        moveTo(w * 0.14f, h * 0.32f)
-        lineTo(w * 0.38f, h * 0.32f)
-        lineTo(w * 0.48f, h * 0.42f)
-        lineTo(w * 0.86f, h * 0.42f)
-        lineTo(w * 0.86f, h * 0.78f)
-        lineTo(w * 0.14f, h * 0.78f)
+        moveTo(w * 0.12f, h * 0.20f)
+        lineTo(w * 0.40f, h * 0.20f)
+        lineTo(w * 0.50f, h * 0.32f)
+        lineTo(w * 0.86f, h * 0.32f)
+        cubicTo(w * 0.88f, h * 0.32f, w * 0.88f, h * 0.35f, w * 0.88f, h * 0.38f)
+        lineTo(w * 0.88f, h * 0.82f)
+        cubicTo(w * 0.88f, h * 0.84f, w * 0.86f, h * 0.84f, w * 0.82f, h * 0.84f)
+        lineTo(w * 0.16f, h * 0.84f)
+        cubicTo(w * 0.12f, h * 0.84f, w * 0.12f, h * 0.82f, w * 0.12f, h * 0.78f)
+        lineTo(w * 0.12f, h * 0.24f)
         close()
     }
     drawPath(folderPath, color, style = s)
-    // Small inner lock/shield line
-    drawLine(color, Offset(w * 0.35f, h * 0.60f), Offset(w * 0.65f, h * 0.60f), strokeWidth = s.width, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.26f, h * 0.54f), Offset(w * 0.74f, h * 0.54f), strokeWidth = sw * 0.9f, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.26f, h * 0.68f), Offset(w * 0.56f, h * 0.68f), strokeWidth = sw * 0.9f, cap = StrokeCap.Round)
 }
 
 @Composable
@@ -1792,17 +1797,17 @@ fun PaperAirplaneIcon(modifier: Modifier = Modifier, color: Color = Color.White)
     val sw = size.minDimension * 0.08f
     val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
     val path = Path().apply {
-        moveTo(w * 0.18f, h * 0.50f)
-        lineTo(w * 0.86f, h * 0.14f)
-        lineTo(w * 0.50f, h * 0.86f)
-        lineTo(w * 0.40f, h * 0.60f)
+        moveTo(w * 0.15f, h * 0.52f)
+        lineTo(w * 0.85f, h * 0.18f)
+        lineTo(w * 0.48f, h * 0.85f)
+        lineTo(w * 0.38f, h * 0.60f)
         close()
     }
     drawPath(path, color = color, style = s)
     drawLine(
         color = color,
-        start = Offset(w * 0.40f, h * 0.60f),
-        end = Offset(w * 0.86f, h * 0.14f),
+        start = Offset(w * 0.38f, h * 0.60f),
+        end = Offset(w * 0.85f, h * 0.18f),
         strokeWidth = sw,
         cap = StrokeCap.Round
     )
@@ -2174,4 +2179,5 @@ fun WarningVectorIcon(modifier: Modifier = Modifier, color: Color = Color(0xFFEF
     drawLine(color, Offset(w * 0.50f, h * 0.38f), Offset(w * 0.50f, h * 0.58f), strokeWidth = sw, cap = StrokeCap.Round)
     drawCircle(color, radius = sw * 0.6f, center = Offset(w * 0.50f, h * 0.70f))
 }
+
 

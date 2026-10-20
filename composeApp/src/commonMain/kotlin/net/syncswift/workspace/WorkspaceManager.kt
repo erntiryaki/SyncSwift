@@ -328,6 +328,37 @@ object WorkspaceManager {
         return true
     }
 
+    fun resetForLogout() {
+        _folders.value = emptyList()
+        _files.value = emptyList()
+        _members.value = emptyList()
+        _deviceJobs.value = emptyList()
+        val defaultWs = WorkspaceItem(
+            id = "ws_primary",
+            name = "Kişisel Kasa",
+            description = "Şifreli bulut kasası ve cihazlarım",
+            ownerEmail = "local@syncswift.net",
+            role = WorkspaceRole.OWNER,
+            memberCount = 1
+        )
+        _workspaces.value = listOf(defaultWs)
+        _selectedWorkspace.value = defaultWs
+        _currentFolderId.value = null
+        saveState()
+    }
+
+    fun syncWorkspacesWithAccount(newEmail: String) {
+        if (newEmail.isBlank()) return
+        val updated = _workspaces.value.map { ws ->
+            if (ws.ownerEmail == "local@syncswift.net" || ws.ownerEmail == "user@syncswift.net" || ws.ownerEmail.isBlank()) {
+                ws.copy(ownerEmail = newEmail)
+            } else ws
+        }
+        _workspaces.value = updated
+        _selectedWorkspace.value = updated.find { it.id == _selectedWorkspace.value?.id } ?: updated.firstOrNull()
+        saveState()
+    }
+
     fun generateInviteCode(workspaceId: String): String {
         return Random.nextInt(100000, 999999).toString()
     }

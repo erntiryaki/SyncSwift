@@ -1085,5 +1085,87 @@ actual object SupabaseNetwork {
         } catch (_: Exception) {}
         return null
     }
+
+    actual suspend fun publishQuickAccessSession(
+        code: String,
+        sessionId: String,
+        senderName: String,
+        fileName: String,
+        fileSize: Long,
+        textContent: String?,
+        host: String,
+        port: Int
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+
+            val safeText = (textContent ?: "").replace("\"", "\\\"").replace("\n", "\\n")
+            val devName = "$senderName:::$fileName:::$fileSize:::$safeText"
+            val json = org.json.JSONObject().apply {
+                put("code", code)
+                put("device_id", sessionId)
+                put("device_name", devName)
+                put("device_type", "QuickAccess")
+                put("host", host)
+                put("port", port)
+            }
+            conn.outputStream.use { it.write(json.toString().toByteArray()) }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.w("SupabaseNetwork", "publishQuickAccessSession error: ${e.message}")
+            false
+        }
+    }
+
+    actual suspend fun queryQuickAccessSession(code: String): Map<String, String>? = withContext(Dispatchers.IO) {
+        try {
+            val clean = code.trim().replace(" ", "")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean&select=*")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val arr = org.json.JSONArray(body)
+                if (arr.length() > 0) {
+                    val obj = arr.getJSONObject(0)
+                    val expiresAtStr = obj.optString("expires_at", "")
+                    val isExpired = try {
+                        if (expiresAtStr.isNotBlank()) {
+                            java.time.Instant.parse(expiresAtStr).isBefore(java.time.Instant.now())
+                        } else false
+                    } catch (_: Exception) { false }
+                    if (isExpired) return@withContext null
+
+                    val result = mutableMapOf<String, String>()
+                    result["code"] = obj.optString("code", clean)
+                    result["sessionId"] = obj.optString("device_id", "")
+                    result["deviceName"] = obj.optString("device_name", "")
+                    result["deviceType"] = obj.optString("device_type", "")
+                    result["host"] = obj.optString("host", "")
+                    result["port"] = obj.optInt("port", 52424).toString()
+                    return@withContext result
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w("SupabaseNetwork", "queryQuickAccessSession error: ${e.message}")
+            null
+        }
+    }
 }
+
 

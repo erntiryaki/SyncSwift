@@ -609,8 +609,7 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.Center,
+                                .padding(horizontal = 13.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -620,12 +619,13 @@ fun HomeScreen(
                                     .background(Color.White.copy(alpha = 0.22f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                PaperAirplaneIcon(Modifier.size(18.dp), color = Color.White)
+                                PaperAirplaneIcon(Modifier.size(17.dp), color = Color.White)
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(10.dp))
                             Column(
                                 verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.Start
+                                horizontalAlignment = Alignment.Start,
+                                modifier = Modifier.weight(1f)
                             ) {
                                 Text(
                                     text = copy.send,
@@ -662,8 +662,7 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.Center,
+                                .padding(horizontal = 13.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -673,12 +672,13 @@ fun HomeScreen(
                                     .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                ClipboardVectorIcon(Modifier.size(18.dp), color = LocalSyncSwiftColors.current.blue)
+                                ClipboardVectorIcon(Modifier.size(17.dp), color = LocalSyncSwiftColors.current.blue)
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(10.dp))
                             Column(
                                 verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.Start
+                                horizontalAlignment = Alignment.Start,
+                                modifier = Modifier.weight(1f)
                             ) {
                                 Text(
                                     text = copy.sendClipboardAction,

@@ -20,11 +20,11 @@ import net.syncswift.ui.theme.CardSurface
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.alpha
 
 @Composable
 actual fun AdBannerView(modifier: Modifier) {
     val isModalOpen by AdBannerManager.isModalOpen.collectAsState()
-    if (isModalOpen) return
 
     val adUnit = PlatformConfig.admobBannerId.ifBlank {
         "ca-app-pub-3940256099942544/6300978111"
@@ -33,14 +33,15 @@ actual fun AdBannerView(modifier: Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
-            .background(CardSurface),
+            .height(if (isModalOpen) 0.dp else 50.dp)
+            .alpha(if (isModalOpen) 0f else 1f)
+            .background(if (isModalOpen) androidx.compose.ui.graphics.Color.Transparent else CardSurface),
         contentAlignment = Alignment.Center
     ) {
         AndroidView(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(if (isModalOpen) 0.dp else 50.dp),
             factory = { context ->
                 val displayMetrics = context.resources.displayMetrics
                 val widthPixels = displayMetrics.widthPixels
@@ -61,6 +62,17 @@ actual fun AdBannerView(modifier: Modifier) {
                         ViewGroup.LayoutParams.WRAP_CONTENT
                     )
                     loadAd(AdRequest.Builder().build())
+                }
+            },
+            update = { adView ->
+                val targetVis = if (isModalOpen) android.view.View.GONE else android.view.View.VISIBLE
+                if (adView.visibility != targetVis) {
+                    adView.visibility = targetVis
+                    if (isModalOpen) {
+                        try { adView.pause() } catch (_: Exception) {}
+                    } else {
+                        try { adView.resume() } catch (_: Exception) {}
+                    }
                 }
             },
             onRelease = { adView ->

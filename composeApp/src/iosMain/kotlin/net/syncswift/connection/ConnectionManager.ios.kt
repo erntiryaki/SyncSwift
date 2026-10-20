@@ -323,7 +323,12 @@ actual object ConnectionManager {
                 val dataPairs = data.entries.joinToString(",") { (k, v) ->
                     "\"${escapeJson(k)}\": \"${escapeJson(v)}\""
                 }
-                val jsonBody = """{"targetToken":"${escapeJson(token)}","token":"${escapeJson(token)}","title":"${escapeJson(title)}","body":"${escapeJson(body)}","data":{$dataPairs}}"""
+                val escTitle = escapeJson(title)
+                val escBody = escapeJson(body)
+                val notifPart = if (title.isNotBlank() || body.isNotBlank()) {
+                    """"notification":{"title":"$escTitle","body":"$escBody","sound":"default","badge":1},"aps":{"sound":"default","badge":1,"content-available":1,"alert":{"title":"$escTitle","body":"$escBody"}},"""
+                } else ""
+                val jsonBody = """{"targetToken":"${escapeJson(token)}","token":"${escapeJson(token)}","title":"$escTitle","body":"$escBody",$notifPart"data":{$dataPairs}}"""
                 val bodyData = (jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding)
                 req.setHTTPBody(bodyData)
 

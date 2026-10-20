@@ -623,6 +623,8 @@ class Copy {
     var folderName: String = "Folder Name"
     var emptyFolder: String = "This folder is empty"
     var emptyFolderDesc: String = "Tap + to upload files or create subfolders."
+    var emptyWorkspace: String = "This workspace is empty"
+    var emptyWorkspaceDesc: String = "Tap + to upload files or create folders."
     var visibilityOnlyMe: String = "Only Me"
     var visibilitySelected: String = "Selected Members"
     var visibilityAllMembers: String = "All Members"

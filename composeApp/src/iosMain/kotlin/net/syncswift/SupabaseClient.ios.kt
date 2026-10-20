@@ -940,4 +940,88 @@ actual object SupabaseNetwork {
             return true
         }
     }
+
+    actual suspend fun publishQuickAccessSession(
+        code: String,
+        sessionId: String,
+        senderName: String,
+        fileName: String,
+        fileSize: Long,
+        textContent: String?,
+        host: String,
+        port: Int
+    ): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        try {
+            val safeText = (textContent ?: "").replace("\"", "\\\"").replace("\n", "\\n")
+            val devName = "$senderName:::$fileName:::$fileSize:::$safeText"
+            val body = """
+                {
+                    "code": "$code",
+                    "device_id": "$sessionId",
+                    "device_name": "$devName",
+                    "device_type": "QuickAccess",
+                    "host": "$host",
+                    "port": $port
+                }
+            """.trimIndent()
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/pairing_codes",
+                method = "POST",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "resolution=merge-duplicates"
+                ),
+                body = body
+            )
+            return resp.statusCode in 200..299
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    actual suspend fun queryQuickAccessSession(code: String): Map<String, String>? {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        try {
+            val clean = code.trim().replace(" ", "")
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean&select=*",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (resp.statusCode in 200..299) {
+                val body = resp.body.trim()
+                if (body.isBlank() || body == "[]") return null
+                val codeMatch = Regex(""""code"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: clean
+                val devId = Regex(""""device_id"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val devName = Regex(""""device_name"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val devType = Regex(""""device_type"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val host = Regex(""""host"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val port = Regex(""""port"\s*:\s*([0-9]+)""").find(body)?.groupValues?.get(1) ?: "52424"
+
+                return mapOf(
+                    "code" to codeMatch,
+                    "sessionId" to devId,
+                    "deviceName" to devName,
+                    "deviceType" to devType,
+                    "host" to host,
+                    "port" to port
+                )
+            }
+            return null
+        } catch (_: Exception) {
+            return null
+        }
+    }
 }
+

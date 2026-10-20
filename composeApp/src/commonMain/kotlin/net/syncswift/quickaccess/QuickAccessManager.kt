@@ -86,6 +86,22 @@ object QuickAccessManager {
         localActiveSessions[code] = session
         _activeSendSession.value = session
 
+        // Publish to Supabase so receiver on any device can find it
+        scope.launch {
+            try {
+                net.syncswift.SupabaseNetwork.publishQuickAccessSession(
+                    code = code,
+                    sessionId = sessionId,
+                    senderName = selfName,
+                    fileName = file.fileName,
+                    fileSize = file.fileSize,
+                    textContent = file.textContent,
+                    host = selfHost,
+                    port = selfPort
+                )
+            } catch (_: Exception) {}
+        }
+
         // Start countdown timer job
         countdownJob = scope.launch {
             while (isActive) {
@@ -102,16 +118,52 @@ object QuickAccessManager {
         return session
     }
 
-    /** Looks up a 6-digit session (checks local network active sessions or simulated relay) */
-    fun querySessionByCode(code: String): QuickSessionData? {
+    /** Looks up a 6-digit session (checks local network active sessions or Supabase backend) */
+    suspend fun querySessionByCode(code: String): QuickSessionData? {
         val cleanCode = code.trim().replace(" ", "")
         if (cleanCode.length != 6) return null
 
-        val found = localActiveSessions[cleanCode]
-        if (found != null && currentTimeMs() < found.expiresAt && found.state != QuickSessionState.CANCELLED) {
-            _incomingSession.value = found
-            return found
+        // 1. Check local session cache
+        val local = localActiveSessions[cleanCode]
+        if (local != null && currentTimeMs() < local.expiresAt && local.state != QuickSessionState.CANCELLED) {
+            _incomingSession.value = local
+            return local
         }
+
+        // 2. Query Supabase backend
+        try {
+            val remoteMap = net.syncswift.SupabaseNetwork.queryQuickAccessSession(cleanCode)
+            if (remoteMap != null) {
+                val devNameRaw = remoteMap["deviceName"] ?: ""
+                val parts = devNameRaw.split(":::")
+                val senderName = parts.getOrNull(0)?.ifBlank { null } ?: "SyncSwift Cihazı"
+                val fileName = parts.getOrNull(1)?.ifBlank { null } ?: "Hızlı_Aktarım.dat"
+                val fileSize = parts.getOrNull(2)?.toLongOrNull() ?: 1024L
+                val textContent = parts.getOrNull(3)?.ifBlank { null }
+                val host = remoteMap["host"] ?: ""
+                val port = remoteMap["port"]?.toIntOrNull() ?: 52424
+                val sessionId = remoteMap["sessionId"] ?: "qs_$cleanCode"
+
+                val session = QuickSessionData(
+                    sessionId = sessionId,
+                    code = cleanCode,
+                    senderName = senderName,
+                    senderHost = host,
+                    senderPort = port,
+                    file = QuickAccessFileMetadata(
+                        fileName = fileName,
+                        fileSize = fileSize,
+                        textContent = textContent
+                    ),
+                    state = QuickSessionState.WAITING_FOR_RECEIVER,
+                    expiresAt = currentTimeMs() + (5 * 60 * 1000L),
+                    progress = 0f
+                )
+                _incomingSession.value = session
+                return session
+            }
+        } catch (_: Exception) {}
+
         return null
     }
 
@@ -125,9 +177,16 @@ object QuickAccessManager {
                 _activeSendSession.value = activeSend.copy(state = QuickSessionState.RECEIVER_CONNECTED)
             }
 
+            // If text snippet, add to clipboard history
+            session.file.textContent?.let { txt ->
+                try {
+                    net.syncswift.clipboard.ClipboardHistoryManager.addClip(txt)
+                } catch (_: Exception) {}
+            }
+
             // Simulate progress / transfer execution
             for (p in 1..10) {
-                delay(120L)
+                delay(100L)
                 val progress = p / 10f
                 onProgress(progress)
                 _incomingSession.value = session.copy(state = QuickSessionState.TRANSFERRING, progress = progress)

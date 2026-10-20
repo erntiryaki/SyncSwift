@@ -342,7 +342,12 @@ private fun TransferItemDetailCard(
                 )
             }
 
-            if (item.status == TransferStatus.COMPLETED && !item.isSent) {
+            val isClipboard = item.mimeType == "text/plain" ||
+                    item.fileName.startsWith(copy.clipboard) ||
+                    item.fileName.startsWith("Pano") ||
+                    item.fileName.startsWith("Clipboard")
+
+            if (item.status == TransferStatus.COMPLETED && !item.isSent && !isClipboard) {
                 Spacer(Modifier.height(14.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),

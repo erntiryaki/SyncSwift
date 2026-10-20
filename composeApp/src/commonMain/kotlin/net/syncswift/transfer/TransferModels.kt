@@ -61,4 +61,5 @@ expect object TransferEngine {
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     )
+    fun clearHistory()
 }

@@ -84,7 +84,7 @@ fun BottomNavBar(
             NavBarItem(
                 selected = selectedTab == MainNavTab.Workspaces,
                 label = copy.workspacesTab,
-                icon = { color -> WorkspacesVectorIcon(Modifier.size(21.dp), color = color) },
+                icon = { color -> WorkspacesVectorIcon(Modifier.size(22.dp), color = color) },
                 onClick = { onTabSelected(MainNavTab.Workspaces) },
                 isDark = isDark,
                 modifier = Modifier.weight(1f)

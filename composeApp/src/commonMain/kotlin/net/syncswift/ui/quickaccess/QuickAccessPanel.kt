@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.syncswift.*
 import net.syncswift.quickaccess.*
 import net.syncswift.ui.theme.LocalSyncSwiftColors
@@ -45,6 +46,7 @@ fun QuickAccessPanel(
     val borderColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
     val primaryBlue = LocalSyncSwiftColors.current.blue
     val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
 
     var selectedSubTab by remember { mutableStateOf(0) } // 0: Kod Oluştur (Gönder), 1: Kod Gir (Al)
     var textToShare by remember { mutableStateOf("") }
@@ -522,10 +524,12 @@ fun QuickAccessPanel(
                         onClick = {
                             isCheckingCode = true
                             queryError = null
-                            val found = QuickAccessManager.querySessionByCode(enteredCode)
-                            isCheckingCode = false
-                            if (found == null) {
-                                queryError = copy.invalidOrExpiredCode
+                            scope.launch {
+                                val found = QuickAccessManager.querySessionByCode(enteredCode)
+                                isCheckingCode = false
+                                if (found == null) {
+                                    queryError = copy.invalidOrExpiredCode
+                                }
                             }
                         },
                         enabled = enteredCode.length == 6 && !isCheckingCode,

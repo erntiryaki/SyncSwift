@@ -85,5 +85,21 @@ expect object SupabaseNetwork {
 
     /** Verifies if this device ID is still active in the Supabase devices table for the user */
     suspend fun isDeviceActiveInSupabase(deviceId: String, expectedUserId: String? = null): Boolean
+
+    /** Publishes a temporary 6-digit Quick Access file/snippet session */
+    suspend fun publishQuickAccessSession(
+        code: String,
+        sessionId: String,
+        senderName: String,
+        fileName: String,
+        fileSize: Long,
+        textContent: String?,
+        host: String,
+        port: Int
+    ): Boolean
+
+    /** Queries an active Quick Access session by its 6-digit code */
+    suspend fun queryQuickAccessSession(code: String): Map<String, String>?
 }
+
 

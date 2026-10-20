@@ -1084,8 +1084,29 @@ actual object ConnectionManager {
                 put("token", token)
                 put("title", title)
                 put("body", body)
+                if (title.isNotBlank() || body.isNotBlank()) {
+                    val notifObj = JSONObject().apply {
+                        put("title", title)
+                        put("body", body)
+                        put("sound", "default")
+                        put("badge", 1)
+                    }
+                    put("notification", notifObj)
+                    val apsObj = JSONObject().apply {
+                        put("sound", "default")
+                        put("badge", 1)
+                        put("content-available", 1)
+                        put("alert", JSONObject().apply {
+                            put("title", title)
+                            put("body", body)
+                        })
+                    }
+                    put("aps", apsObj)
+                }
                 val dataObj = JSONObject()
                 data.forEach { (k, v) -> dataObj.put(k, v) }
+                if (title.isNotBlank()) dataObj.put("title", title)
+                if (body.isNotBlank()) dataObj.put("body", body)
                 put("data", dataObj)
             }
 

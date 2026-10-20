@@ -326,6 +326,23 @@ actual object TransferEngine {
 
                             ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
+                            val cancelWatchJob = scope.launch(Dispatchers.Default) {
+                                val pollBuf = ByteArray(1)
+                                while (isActive && !transferRequest.deferredResponse.isCompleted) {
+                                    delay(200)
+                                    val peeked = pollBuf.usePinned { pinned ->
+                                        recv(clientSock, pinned.addressOf(0), 1.convert(), MSG_PEEK or MSG_DONTWAIT)
+                                    }
+                                    if (peeked == 0) {
+                                        ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                        dispatch_async(dispatch_get_main_queue()) {
+                                            showNativeToast(currentAppCopy().transferCancelledBySender)
+                                        }
+                                        break
+                                    }
+                                }
+                            }
+
                             val accepted = try {
                                 withTimeout(35000) {
                                     transferRequest.deferredResponse.await()
@@ -333,6 +350,8 @@ actual object TransferEngine {
                             } catch (e: Exception) {
                                 ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                                 false
+                            } finally {
+                                cancelWatchJob.cancel()
                             }
 
                             if (!accepted) {
@@ -441,6 +460,23 @@ actual object TransferEngine {
 
                             ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
+                            val cancelWatchJob = scope.launch(Dispatchers.Default) {
+                                val pollBuf = ByteArray(1)
+                                while (isActive && !transferRequest.deferredResponse.isCompleted) {
+                                    delay(200)
+                                    val peeked = pollBuf.usePinned { pinned ->
+                                        recv(clientSock, pinned.addressOf(0), 1.convert(), MSG_PEEK or MSG_DONTWAIT)
+                                    }
+                                    if (peeked == 0) {
+                                        ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                        dispatch_async(dispatch_get_main_queue()) {
+                                            showNativeToast(currentAppCopy().transferCancelledBySender)
+                                        }
+                                        break
+                                    }
+                                }
+                            }
+
                             val accepted = try {
                                 withTimeout(35000) {
                                     transferRequest.deferredResponse.await()
@@ -448,12 +484,27 @@ actual object TransferEngine {
                             } catch (e: Exception) {
                                 ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                                 false
+                            } finally {
+                                cancelWatchJob.cancel()
                             }
 
                             if (!accepted) {
                                 val rejByte = byteArrayOf(RESP_REJECTED)
                                 rejByte.usePinned { pinned ->
                                     send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                }
+                                return@memScoped
+                            }
+
+                            // Confirm sender socket is still alive before applying clipboard
+                            val ackByte = byteArrayOf(RESP_ACCEPTED)
+                            var sentAcc = 0
+                            ackByte.usePinned { pinned ->
+                                sentAcc = send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                            }
+                            if (sentAcc <= 0) {
+                                dispatch_async(dispatch_get_main_queue()) {
+                                    showNativeToast(currentAppCopy().transferCancelledBySender)
                                 }
                                 return@memScoped
                             }
@@ -472,11 +523,6 @@ actual object TransferEngine {
                                 timestamp = (NSDate().timeIntervalSince1970 * 1000).toLong()
                             )
                             recordTransfer(item)
-
-                            val ackByte = byteArrayOf(RESP_ACCEPTED)
-                            ackByte.usePinned { pinned ->
-                                send(clientSock, pinned.addressOf(0), 1.convert(), 0)
-                            }
                         }
 
                         else -> {
@@ -522,6 +568,11 @@ actual object TransferEngine {
             return null
         } finally {
             fclose(filePtr)
+            if (totalRead < fileSize) {
+                try {
+                    fileManager.removeItemAtPath(targetPath, null)
+                } catch (_: Throwable) {}
+            }
         }
     }
 
@@ -1363,4 +1414,10 @@ actual object TransferEngine {
             }
         }
     }
+
+    actual fun clearHistory() {
+        _transfers.value = emptyList()
+        SessionManager.saveTransfersJson("")
+    }
 }
+

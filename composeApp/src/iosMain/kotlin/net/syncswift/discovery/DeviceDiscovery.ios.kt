@@ -257,6 +257,12 @@ actual object DeviceDiscoveryManager {
                     onLost = { lostService ->
                         resolvingServices.remove(lostService.name)
                         val lostName = cleanDeviceDisplayName(lostService.name)
+                        val now = currentTimeMs()
+                        val lastSeen = lastSeenTimestamps[lostService.name] ?: lastSeenTimestamps[lostName] ?: 0L
+                        if (now - lastSeen < 35000L) {
+                            // Ignore transient mDNS drop if seen recently
+                            return@ServiceBrowserDelegate
+                        }
                         val current = _devices.value.toMutableList()
                         var changed = false
                         val iterator = current.listIterator()
@@ -282,9 +288,22 @@ actual object DeviceDiscoveryManager {
                 b.delegate = bDelegate
                 b.scheduleInRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
                 b.searchForServicesOfType(SERVICE_TYPE, inDomain = "local.")
+
+                // Periodic re-browse every 20s to keep local devices refreshed
+                scope.launch(Dispatchers.Main) {
+                    while (isActive && _isScanning.value) {
+                        delay(20000)
+                        try {
+                            b.stop()
+                            delay(250)
+                            b.searchForServicesOfType(SERVICE_TYPE, inDomain = "local.")
+                        } catch (_: Exception) {}
+                    }
+                }
             } catch (e: Exception) {
                 println("[SyncSwift iOS Discovery] startDiscovery error: ${e.message}")
             }
+        }
         }
     }
 

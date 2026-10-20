@@ -316,6 +316,24 @@ actual object TransferEngine {
 
                         ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
+                        // Monitor if sender cancels or disconnects while receiver UI is waiting
+                        val cancelWatchJob = scope.launch(Dispatchers.IO) {
+                            try {
+                                val b = input.read()
+                                if (b == -1 || b == 10) {
+                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                    Handler(Looper.getMainLooper()).post {
+                                        showNativeToast(currentAppCopy().transferCancelledBySender)
+                                    }
+                                }
+                            } catch (_: Exception) {
+                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                Handler(Looper.getMainLooper()).post {
+                                    showNativeToast(currentAppCopy().transferCancelledBySender)
+                                }
+                            }
+                        }
+
                         // Wait for recipient to accept or reject in UI (max 35 seconds)
                         val accepted = try {
                             withTimeout(35000) {
@@ -324,6 +342,8 @@ actual object TransferEngine {
                         } catch (e: Exception) {
                             ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                             false
+                        } finally {
+                            cancelWatchJob.cancel()
                         }
 
                         if (!accepted) {
@@ -334,7 +354,16 @@ actual object TransferEngine {
                             return
                         }
 
-                        // Receiver accepted -> set clipboard and reply accepted
+                        // Verify sender socket is still alive before applying clipboard
+                        try {
+                            output.writeByte(RESP_ACCEPTED.toInt())
+                            output.flush()
+                        } catch (e: Exception) {
+                            showNativeToast(copy.transferCancelledBySender)
+                            return
+                        }
+
+                        // Receiver accepted and sender is alive -> set clipboard
                         applyReceivedClipboard(text, copy)
 
                         val item = TransferItem(
@@ -349,9 +378,6 @@ actual object TransferEngine {
                             timestamp = System.currentTimeMillis()
                         )
                         recordTransfer(item)
-
-                        output.writeByte(RESP_ACCEPTED.toInt())
-                        output.flush()
                     }
 
                     TYPE_FILE_HANDSHAKE -> {
@@ -371,6 +397,24 @@ actual object TransferEngine {
 
                         ConnectionManager.dispatchIncomingTransferRequest(transferRequest)
 
+                        // Monitor if sender cancels or disconnects while receiver UI is waiting
+                        val cancelWatchJob = scope.launch(Dispatchers.IO) {
+                            try {
+                                val b = input.read()
+                                if (b == -1 || b == 10) {
+                                    ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                    Handler(Looper.getMainLooper()).post {
+                                        showNativeToast(currentAppCopy().transferCancelledBySender)
+                                    }
+                                }
+                            } catch (_: Exception) {
+                                ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
+                                Handler(Looper.getMainLooper()).post {
+                                    showNativeToast(currentAppCopy().transferCancelledBySender)
+                                }
+                            }
+                        }
+
                         // Wait for user to accept or reject in UI (max 35 seconds)
                         val accepted = try {
                             withTimeout(35000) {
@@ -379,6 +423,8 @@ actual object TransferEngine {
                         } catch (e: Exception) {
                             ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                             false
+                        } finally {
+                            cancelWatchJob.cancel()
                         }
 
                         if (!accepted) {
@@ -617,17 +663,16 @@ actual object TransferEngine {
                 out.flush()
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && targetUri != null) {
-                try {
-                    val finishValues = ContentValues().apply {
-                        put(MediaStore.MediaColumns.IS_PENDING, 0)
-                    }
-                    ctx.contentResolver.update(targetUri, finishValues, null, null)
-                } catch (_: Exception) {}
-            }
-
             val isOk = if (fileSize > 0) totalRead == fileSize else totalRead > 0
             if (isOk) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && targetUri != null) {
+                    try {
+                        val finishValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.IS_PENDING, 0)
+                        }
+                        ctx.contentResolver.update(targetUri, finishValues, null, null)
+                    } catch (_: Exception) {}
+                }
                 if (isImage && fallbackPath != null) {
                     try {
                         android.media.MediaScannerConnection.scanFile(
@@ -641,8 +686,15 @@ actual object TransferEngine {
                 val savedLocation = targetUri?.toString() ?: fallbackPath
                 showFileCompletedNotification(fileName, effectiveMime, savedLocation)
                 return savedLocation
+            } else {
+                // Transfer was cancelled or incomplete -> delete partial/corrupt file immediately
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && targetUri != null) {
+                    try { ctx.contentResolver.delete(targetUri, null, null) } catch (_: Exception) {}
+                } else if (fallbackPath != null) {
+                    try { File(fallbackPath).delete() } catch (_: Exception) {}
+                }
+                return null
             }
-            return null
         } catch (e: Exception) {
             Log.e(TAG, "Failed saving incoming file: ${e.message}", e)
             return null
@@ -678,6 +730,7 @@ actual object TransferEngine {
             isCancelled = true
             transferJob?.cancel()
             OutgoingStatusManager.dismiss()
+            stagedTransfers.remove(transferId)
             try {
                 activeSocket?.let { s ->
                     try {
@@ -900,6 +953,7 @@ actual object TransferEngine {
         val cancelRemote: () -> Unit = {
             isCancelled = true
             uploadJob?.cancel()
+            stagedTransfers.remove(transferId)
             updateTransferProgress(transferId, 0, TransferStatus.CANCELLED)
             ConnectionManager.markRequestCancelled(transferId)
             OutgoingStatusManager.dismiss()
@@ -1591,4 +1645,10 @@ actual object TransferEngine {
             Log.e(TAG, "Error saving transfers: ${e.message}")
         }
     }
+
+    actual fun clearHistory() {
+        _transfers.value = emptyList()
+        SessionManager.saveTransfersJson("")
+    }
 }
+

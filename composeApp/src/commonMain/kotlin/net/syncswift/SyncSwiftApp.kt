@@ -385,6 +385,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         if (fName.isNotBlank()) firstName = fName
         if (lName.isNotBlank()) lastName = lName
         SessionManager.saveSession(userEmail, provider, firstName, lastName)
+        net.syncswift.workspace.WorkspaceManager.syncWorkspacesWithAccount(userEmail)
         scope.launch {
             SupabaseNetwork.registerUserInSupabase(
                 email = userEmail,
@@ -622,6 +623,11 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     lastName = ""
                                     authDraftEmail = ""
                                     SessionManager.saveLocalSession()
+                                    // Reset private data for fresh local/guest session
+                                    net.syncswift.transfer.TransferEngine.clearHistory()
+                                    net.syncswift.clipboard.ClipboardHistoryManager.clearHistory(keepFavorites = false)
+                                    net.syncswift.workspace.WorkspaceManager.resetForLogout()
+                                    SessionManager.saveNotificationsJson("")
                                     screen = AuthStep.Home
                                 },
                                 onBack = if (authProvider == IdentityProvider.Local) {
@@ -876,6 +882,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                     authDraftEmail = ""
                                                                     authProvider = IdentityProvider.EmailPassword
                                                                     SessionManager.clearSession()
+                                                                    net.syncswift.transfer.TransferEngine.clearHistory()
+                                                                    net.syncswift.clipboard.ClipboardHistoryManager.clearHistory(keepFavorites = false)
+                                                                    net.syncswift.workspace.WorkspaceManager.resetForLogout()
+                                                                    SessionManager.saveNotificationsJson("")
                                                                     net.syncswift.subscription.SubscriptionManager.setProState(false)
                                                                     mainTab = net.syncswift.ui.components.MainNavTab.Home
                                                                     screen = AuthStep.Email
@@ -904,8 +914,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
                                             // Persistent Ad Banner across main tabs
                                             val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
-                                            val isModalOpen by net.syncswift.ui.components.AdBannerManager.isModalOpen.collectAsState()
-                                            if (!isProUser && !isModalOpen) {
+                                            if (!isProUser) {
                                                 net.syncswift.ui.components.AdBannerView(
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
@@ -1013,73 +1022,80 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             }
                                         }
 
-                                        Spacer(Modifier.height(12.dp))
+                                        val isClipboard = item.mimeType == "text/plain" ||
+                                                item.fileName.startsWith(copy.clipboard) ||
+                                                item.fileName.startsWith("Pano") ||
+                                                item.fileName.startsWith("Clipboard")
 
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            // 1. Dosya Konumunu Gör
-                                            Surface(
-                                                modifier = Modifier
-                                                    .weight(1.3f)
-                                                    .height(36.dp)
-                                                    .clip(RoundedCornerShape(18.dp))
-                                                    .clickable {
-                                                        latestCompletedItem = null
-                                                        net.syncswift.showFileLocation(item.localFilePath, item.fileName)
-                                                    },
-                                                shape = RoundedCornerShape(18.dp),
-                                                color = InputBg,
-                                                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))
+                                        if (!isClipboard) {
+                                            Spacer(Modifier.height(12.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.Center
+                                                // 1. Dosya Konumunu Gör
+                                                Surface(
+                                                    modifier = Modifier
+                                                        .weight(1.3f)
+                                                        .height(36.dp)
+                                                        .clip(RoundedCornerShape(18.dp))
+                                                        .clickable {
+                                                            latestCompletedItem = null
+                                                            net.syncswift.showFileLocation(item.localFilePath, item.fileName)
+                                                        },
+                                                    shape = RoundedCornerShape(18.dp),
+                                                    color = InputBg,
+                                                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))
                                                 ) {
-                                                    FolderOutlineIcon(Modifier.size(15.dp), color = Mist)
-                                                    Spacer(Modifier.width(6.dp))
-                                                    Text(
-                                                        text = copy.showFileLocationAction,
-                                                        color = Cloud,
-                                                        fontSize = 12.sp,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
+                                                    Row(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center
+                                                    ) {
+                                                        FolderOutlineIcon(Modifier.size(15.dp), color = Mist)
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text(
+                                                            text = copy.showFileLocationAction,
+                                                            color = Cloud,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
                                                 }
-                                            }
 
-                                            // 2. Aç
-                                            Surface(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(36.dp)
-                                                    .clip(RoundedCornerShape(18.dp))
-                                                    .clickable {
-                                                        latestCompletedItem = null
-                                                        net.syncswift.openFile(item.localFilePath, item.fileName, item.mimeType)
-                                                    },
-                                                shape = RoundedCornerShape(18.dp),
-                                                color = PillButtonBg,
-                                                border = BorderStroke(1.dp, PillButtonBorder)
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.Center
+                                                // 2. Aç
+                                                Surface(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(36.dp)
+                                                        .clip(RoundedCornerShape(18.dp))
+                                                        .clickable {
+                                                            latestCompletedItem = null
+                                                            net.syncswift.openFile(item.localFilePath, item.fileName, item.mimeType)
+                                                        },
+                                                    shape = RoundedCornerShape(18.dp),
+                                                    color = PillButtonBg,
+                                                    border = BorderStroke(1.dp, PillButtonBorder)
                                                 ) {
-                                                    OpenExternalIcon(Modifier.size(14.dp), color = PillButtonText)
-                                                    Spacer(Modifier.width(6.dp))
-                                                    Text(
-                                                        text = copy.openFileAction,
-                                                        color = PillButtonText,
-                                                        fontSize = 12.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
+                                                    Row(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center
+                                                    ) {
+                                                        OpenExternalIcon(Modifier.size(14.dp), color = PillButtonText)
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text(
+                                                            text = copy.openFileAction,
+                                                            color = PillButtonText,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
