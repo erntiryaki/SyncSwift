@@ -174,6 +174,8 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val isRemote = data["isRemote"] == "true"
                 val senderLanguage = data["senderLanguage"] ?: "en"
 
+                val senderPushToken = data["senderPushToken"] ?: ""
+
                 val request = IncomingTransferRequest(
                     senderName = senderName,
                     fileName = fileName,
@@ -181,6 +183,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     mimeType = mimeType,
                     senderHost = senderHost,
                     senderPort = senderPort,
+                    senderPushToken = senderPushToken,
                     transferId = transferId,
                     downloadUrl = downloadUrl,
                     isRemote = isRemote,
@@ -292,6 +295,16 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 )
                 ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
                 net.syncswift.showNativeToast("${cleanDeviceDisplayName(senderName)}: ${copy.disconnected}")
+                return
+            }
+            "file_completed", "file_accepted" -> {
+                val transferId = data["transferId"] ?: ""
+                val fileName = data["fileName"] ?: "File"
+                if (transferId.isNotBlank()) {
+                    net.syncswift.transfer.TransferEngine.updateTransferProgress(transferId, 100, net.syncswift.transfer.TransferStatus.COMPLETED)
+                }
+                net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.fileSentSuccessfully.replace("%s", fileName))
+                net.syncswift.showNativeToast(copy.fileSentSuccessfully.replace("%s", fileName))
                 return
             }
             "file_rejected" -> {

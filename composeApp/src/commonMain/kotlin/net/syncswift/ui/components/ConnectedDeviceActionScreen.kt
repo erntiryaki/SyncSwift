@@ -156,13 +156,13 @@ fun ConnectedDeviceActionScreen(
                                             .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (isMobile) {
-                                            MobileDeviceIcon(Modifier.size(26.dp), color = Color(0xFF2563EB))
-                                        } else if (device.name.contains("iPad", ignoreCase = true)) {
-                                            TabletVectorIcon(Modifier.size(26.dp), color = Color(0xFF2563EB))
-                                        } else {
-                                            LaptopVectorIcon(Modifier.size(30.dp), color = Color(0xFF2563EB))
-                                        }
+                                        DevicePlatformIcon(
+                                            name = cleanName,
+                                            osType = device.osType,
+                                            modelCode = device.modelCode,
+                                            color = Color(0xFF2563EB),
+                                            modifier = Modifier.size(28.dp)
+                                        )
                                     }
 
                                     Column {

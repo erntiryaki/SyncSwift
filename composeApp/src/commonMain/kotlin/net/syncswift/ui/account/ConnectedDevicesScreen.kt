@@ -926,7 +926,6 @@ private fun DeviceItemRow(
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val isMobile = badge.equals("Android", ignoreCase = true) || badge.equals("iOS", ignoreCase = true)
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -934,11 +933,12 @@ private fun DeviceItemRow(
                 .background(InputBg.copy(alpha = 0.6f)),
             contentAlignment = Alignment.Center
         ) {
-            if (isMobile) {
-                PhoneVectorIcon(Modifier.size(20.dp), color = if (isConnected && isOnline) Blue else Mist)
-            } else {
-                LaptopVectorIcon(Modifier.size(20.dp), color = if (isConnected && isOnline) Blue else Mist)
-            }
+            DevicePlatformIcon(
+                name = name,
+                osType = badge,
+                color = if (isConnected && isOnline) Blue else Mist,
+                modifier = Modifier.size(20.dp)
+            )
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {

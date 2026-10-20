@@ -110,6 +110,8 @@ class Copy {
     var emailVerifiedBadge: String = "Email Verified"
 
     // Clipboard History & Smart Actions
+    var myDeviceLabel: String = "My Device"
+    var connectedDeviceLabel: String = "Connected Device"
     var recentTransfersSection: String = "Recent Transfers"
     var transfersHistorySection: String = "Transfer History"
     var searchClipboardHint: String = "Search clipboard..."

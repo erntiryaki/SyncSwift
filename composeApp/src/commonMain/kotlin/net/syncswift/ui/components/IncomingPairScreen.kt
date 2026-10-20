@@ -25,8 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
-import net.syncswift.LaptopVectorIcon
-import net.syncswift.PhoneVectorIcon
+import net.syncswift.DevicePlatformIcon
 import net.syncswift.connection.IncomingPairRequest
 import net.syncswift.ui.theme.*
 
@@ -126,11 +125,12 @@ fun IncomingPairScreen(
                             .background(Blue),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isMobile) {
-                            PhoneVectorIcon(Modifier.size(36.dp), color = Color.White)
-                        } else {
-                            LaptopVectorIcon(Modifier.size(36.dp), color = Color.White)
-                        }
+                        DevicePlatformIcon(
+                            name = request.senderName,
+                            osType = request.senderOsType,
+                            color = Color.White,
+                            modifier = Modifier.size(36.dp)
+                        )
                     }
                 }
 

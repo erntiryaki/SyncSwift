@@ -39,6 +39,7 @@ data class IncomingTransferRequest(
     val mimeType: String,
     val senderHost: String = "",
     val senderPort: Int = 52424,
+    val senderPushToken: String = "",
     val transferId: String = "",
     val downloadUrl: String = "",
     val isRemote: Boolean = false,

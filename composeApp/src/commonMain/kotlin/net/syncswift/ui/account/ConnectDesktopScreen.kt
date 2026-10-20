@@ -518,7 +518,13 @@ fun ConnectDesktopScreen(
                                             .background(Blue.copy(alpha = 0.14f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        DesktopVectorIcon(Modifier.size(19.dp), color = Blue)
+                                        DevicePlatformIcon(
+                                            name = dev.name,
+                                            osType = dev.osType,
+                                            modelCode = dev.modelCode,
+                                            color = Blue,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
 
                                     Spacer(Modifier.width(12.dp))

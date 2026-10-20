@@ -843,13 +843,35 @@ actual object ConnectionManager {
                 }
             }
         } else if (request.isRemote && request.downloadUrl.isNotBlank()) {
+            scope.launch {
+                val senderToken = if (request.senderPushToken.isNotBlank()) request.senderPushToken else queryPushTokenFromSupabase(request.senderHost, request.senderName)
+                if (!senderToken.isNullOrBlank()) {
+                    val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
+                    val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                    val selfName = cleanDeviceDisplayName(self?.name ?: platform.UIKit.UIDevice.currentDevice.name)
+                    sendFcmNotification(
+                        token = senderToken,
+                        title = targetCopy.notificationFileRequestTitle,
+                        body = targetCopy.fileSentSuccessfully.replace("%s", request.fileName),
+                        data = mapOf(
+                            "type" to "file_accepted",
+                            "transferId" to request.transferId,
+                            "fileName" to request.fileName,
+                            "senderName" to selfName
+                        )
+                    )
+                }
+            }
             net.syncswift.transfer.TransferEngine.downloadRemoteFile(
                 downloadUrl = request.downloadUrl,
                 fileName = request.fileName,
                 fileSize = request.fileSize,
                 mimeType = request.mimeType,
                 transferId = request.transferId,
-                senderName = request.senderName
+                senderName = request.senderName,
+                senderHost = request.senderHost,
+                senderPushToken = request.senderPushToken,
+                senderLanguage = request.senderLanguage
             )
         } else if (request.senderHost.isNotBlank() && request.transferId.isNotBlank()) {
             net.syncswift.transfer.TransferEngine.downloadStagedFile(

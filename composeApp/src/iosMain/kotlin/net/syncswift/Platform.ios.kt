@@ -68,18 +68,124 @@ actual fun setSystemBarsDirect(isDark: Boolean, statusBarColor: androidx.compose
     // Handled by iOS UIViewController preferredStatusBarStyle
 }
 
+private var activeDocController: platform.UIKit.UIDocumentInteractionController? = null
+private var activeDocPreviewDelegate: DocPreviewDelegate? = null
+
+private class DocPreviewDelegate(private val presentingVc: platform.UIKit.UIViewController) : platform.darwin.NSObject(), platform.UIKit.UIDocumentInteractionControllerDelegateProtocol {
+    override fun documentInteractionControllerViewControllerForPreview(controller: platform.UIKit.UIDocumentInteractionController): platform.UIKit.UIViewController {
+        return presentingVc
+    }
+    override fun documentInteractionControllerViewForPreview(controller: platform.UIKit.UIDocumentInteractionController): platform.UIKit.UIView? {
+        return presentingVc.view
+    }
+    override fun documentInteractionControllerDidEndPreview(controller: platform.UIKit.UIDocumentInteractionController) {
+        activeDocController = null
+        activeDocPreviewDelegate = null
+    }
+}
+
+private fun getTopViewController(): platform.UIKit.UIViewController? {
+    val windows = platform.UIKit.UIApplication.sharedApplication.windows
+    val keyWindow = windows.firstOrNull { 
+        (it as? platform.UIKit.UIWindow)?.isKeyWindow() == true 
+    } as? platform.UIKit.UIWindow ?: platform.UIKit.UIApplication.sharedApplication.keyWindow
+    var topVc = keyWindow?.rootViewController
+    while (topVc?.presentedViewController != null) {
+        topVc = topVc.presentedViewController
+    }
+    return topVc
+}
+
+private fun resolveFileUrl(filePathOrUri: String?, fileName: String): platform.Foundation.NSURL? {
+    val fileManager = platform.Foundation.NSFileManager.defaultManager
+
+    // 1. Direct path exists
+    if (!filePathOrUri.isNullOrBlank()) {
+        val cleanPath = filePathOrUri.removePrefix("file://")
+        if (fileManager.fileExistsAtPath(cleanPath)) {
+            return platform.Foundation.NSURL.fileURLWithPath(cleanPath)
+        }
+    }
+
+    // 2. Check NSDocumentDirectory
+    val docDirs = fileManager.URLsForDirectory(platform.Foundation.NSDocumentDirectory, platform.Foundation.NSUserDomainMask)
+    val docDir = docDirs.firstOrNull() as? platform.Foundation.NSURL
+    if (docDir != null) {
+        if (fileName.isNotBlank()) {
+            val fileUrl = docDir.URLByAppendingPathComponent(fileName)
+            if (fileUrl != null && fileUrl.path != null && fileManager.fileExistsAtPath(fileUrl.path!!)) {
+                return fileUrl
+            }
+        }
+        if (!filePathOrUri.isNullOrBlank()) {
+            val lastComp = filePathOrUri.substringAfterLast('/').substringAfterLast('\\')
+            if (lastComp.isNotBlank()) {
+                val fileUrl = docDir.URLByAppendingPathComponent(lastComp)
+                if (fileUrl != null && fileUrl.path != null && fileManager.fileExistsAtPath(fileUrl.path!!)) {
+                    return fileUrl
+                }
+            }
+        }
+    }
+
+    // 3. Fallback: return fileURLWithPath if path exists or non-blank
+    if (!filePathOrUri.isNullOrBlank()) {
+        return platform.Foundation.NSURL.fileURLWithPath(filePathOrUri.removePrefix("file://"))
+    }
+    return null
+}
+
 actual fun openFile(filePathOrUri: String?, fileName: String, mimeType: String) {
     println("[SyncSwift iOS] Opening file $fileName at $filePathOrUri")
-    val path = filePathOrUri ?: return
-    val url = platform.Foundation.NSURL.fileURLWithPath(path)
-    platform.UIKit.UIApplication.sharedApplication.openURL(url)
+    platform.darwin.dispatch_async(platform.darwin.dispatch_get_main_queue()) {
+        try {
+            val url = resolveFileUrl(filePathOrUri, fileName) ?: return@dispatch_async
+            val topVc = getTopViewController() ?: return@dispatch_async
+
+            val docController = platform.UIKit.UIDocumentInteractionController.interactionControllerWithURL(url)
+            val previewDelegate = DocPreviewDelegate(topVc)
+            activeDocController = docController
+            activeDocPreviewDelegate = previewDelegate
+            docController.delegate = previewDelegate
+
+            val presented = docController.presentPreviewAnimated(true)
+            if (!presented) {
+                val rect = platform.CoreGraphics.CGRectMake(topVc.view.bounds.size.width / 2, topVc.view.bounds.size.height / 2, 0.0, 0.0)
+                val success = docController.presentOptionsMenuFromRect(rect, inView = topVc.view, animated = true)
+                if (!success) {
+                    val activityVc = platform.UIKit.UIActivityViewController(listOf(url), null)
+                    activityVc.popoverPresentationController?.apply {
+                        sourceView = topVc.view
+                        sourceRect = rect
+                        permittedArrowDirections = 0uL
+                    }
+                    topVc.presentViewController(activityVc, animated = true, completion = null)
+                }
+            }
+        } catch (e: Exception) {
+            println("[SyncSwift iOS] openFile error: ${e.message}")
+        }
+    }
 }
 
 actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
-    println("[SyncSwift iOS] Showing file location for $fileName at $filePathOrUri")
-    val filesAppUrl = platform.Foundation.NSURL.URLWithString("shareddocuments://")
-    if (filesAppUrl != null && platform.UIKit.UIApplication.sharedApplication.canOpenURL(filesAppUrl)) {
-        platform.UIKit.UIApplication.sharedApplication.openURL(filesAppUrl)
+    println("[SyncSwift iOS] Showing file location/share sheet for $fileName at $filePathOrUri")
+    platform.darwin.dispatch_async(platform.darwin.dispatch_get_main_queue()) {
+        try {
+            val url = resolveFileUrl(filePathOrUri, fileName) ?: return@dispatch_async
+            val topVc = getTopViewController() ?: return@dispatch_async
+
+            val activityVc = platform.UIKit.UIActivityViewController(listOf(url), null)
+            val rect = platform.CoreGraphics.CGRectMake(topVc.view.bounds.size.width / 2, topVc.view.bounds.size.height / 2, 0.0, 0.0)
+            activityVc.popoverPresentationController?.apply {
+                sourceView = topVc.view
+                sourceRect = rect
+                permittedArrowDirections = 0uL
+            }
+            topVc.presentViewController(activityVc, animated = true, completion = null)
+        } catch (e: Exception) {
+            println("[SyncSwift iOS] showFileLocation error: ${e.message}")
+        }
     }
 }
 
@@ -237,6 +343,15 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
         }
         "clipboard_rejected" -> {
             net.syncswift.connection.OutgoingStatusManager.fail(copy.operationRejectedOrTimeout)
+        }
+        "file_completed", "file_accepted" -> {
+            val transferId = extractNotificationField(userInfo, "transferId") ?: ""
+            val fileName = extractNotificationField(userInfo, "fileName") ?: "File"
+            if (transferId.isNotBlank()) {
+                net.syncswift.transfer.TransferEngine.updateTransferProgress(transferId, 100, net.syncswift.transfer.TransferStatus.COMPLETED)
+            }
+            net.syncswift.connection.OutgoingStatusManager.completeSuccess(copy.fileSentSuccessfully.replace("%s", fileName))
+            showNativeToast(copy.fileSentSuccessfully.replace("%s", fileName))
         }
         "pair_accepted" -> {
             val senderId = extractNotificationField(userInfo, "senderId") ?: ""
@@ -456,6 +571,8 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 return
             }
 
+            val senderPushToken = extractNotificationField(userInfo, "senderPushToken") ?: ""
+
             val request = net.syncswift.connection.IncomingTransferRequest(
                 senderName = senderName,
                 fileName = fileName,
@@ -463,6 +580,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 mimeType = mimeType,
                 senderHost = senderHost,
                 senderPort = senderPort,
+                senderPushToken = senderPushToken,
                 transferId = transferId,
                 downloadUrl = downloadUrl,
                 isRemote = isRemote,

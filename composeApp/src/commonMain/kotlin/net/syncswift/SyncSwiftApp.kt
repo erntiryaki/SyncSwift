@@ -1287,7 +1287,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                         .padding(horizontal = 14.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    MobileDeviceIcon(Modifier.size(20.dp), color = Blue)
+                                    DevicePlatformIcon(name = oldDev.name, osType = oldDev.osType, modelCode = oldDev.modelCode, color = Blue, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(

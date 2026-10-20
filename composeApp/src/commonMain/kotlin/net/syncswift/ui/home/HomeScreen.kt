@@ -265,13 +265,13 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
+                    .height(70.dp)
                     .padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 BrandLogo(
-                    modifier = Modifier.height(50.dp)
+                    modifier = Modifier.height(58.dp)
                 )
 
                 Row(
@@ -546,29 +546,29 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(76.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .height(62.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .clickable(onClick = onSendClick),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = LocalSyncSwiftColors.current.blue
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(34.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.22f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                PaperAirplaneIcon(Modifier.size(20.dp), color = Color.White)
+                                PaperAirplaneIcon(Modifier.size(18.dp), color = Color.White)
                             }
-                            Spacer(Modifier.width(10.dp))
+                            Spacer(Modifier.width(8.dp))
                             Column(
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.Start
@@ -576,16 +576,16 @@ fun HomeScreen(
                                 Text(
                                     text = copy.send,
                                     color = Color.White,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(1.dp))
                                 Text(
                                     text = copy.transferFilesSubtitle,
                                     color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -598,30 +598,30 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(76.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .height(62.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .clickable(onClick = onClipboardClick),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = CardSurface,
                         border = BorderStroke(1.dp, InputBorder)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(34.dp)
                                     .clip(CircleShape)
                                     .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                ClipboardVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue)
+                                ClipboardVectorIcon(Modifier.size(18.dp), color = LocalSyncSwiftColors.current.blue)
                             }
-                            Spacer(Modifier.width(10.dp))
+                            Spacer(Modifier.width(8.dp))
                             Column(
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.Start
@@ -629,16 +629,16 @@ fun HomeScreen(
                                 Text(
                                     text = copy.sendClipboardAction,
                                     color = Cloud,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(1.dp))
                                 Text(
                                     text = copy.clipboardShareAndSync,
                                     color = Mist,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -669,7 +669,7 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = copy.transfersHistorySection,
+                            text = copy.recentTransfersSection,
                             color = Cloud,
                             fontSize = 17.5.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -1338,17 +1338,12 @@ private fun NearbyDeviceCard(
                         .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)),
                     contentAlignment = Alignment.Center
                 ) {
-                    when {
-                        item.os.contains("iOS", ignoreCase = true) || item.os.contains("Android", ignoreCase = true) -> {
-                            MobileDeviceIcon(Modifier.size(24.dp), color = blue)
-                        }
-                        item.name.contains("iPad", ignoreCase = true) -> {
-                            TabletVectorIcon(Modifier.size(24.dp), color = blue)
-                        }
-                        else -> {
-                            LaptopVectorIcon(Modifier.size(26.dp), color = blue)
-                        }
-                    }
+                    DevicePlatformIcon(
+                        name = item.name,
+                        osType = item.os,
+                        color = blue,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -1399,20 +1394,12 @@ private fun DeviceListRowCard(
                 contentAlignment = Alignment.Center
             ) {
                 val blue = LocalSyncSwiftColors.current.blue
-                when {
-                    item.name.contains("Windows", ignoreCase = true) -> {
-                        WindowsLogoIcon(Modifier.size(24.dp), color = blue)
-                    }
-                    item.os.contains("Android", ignoreCase = true) || item.os.contains("iOS", ignoreCase = true) -> {
-                        MobileDeviceIcon(Modifier.size(26.dp), color = blue)
-                    }
-                    item.name.contains("Ev Bilgisayarı", ignoreCase = true) || item.name.contains("mini", ignoreCase = true) -> {
-                        DesktopVectorIcon(Modifier.size(26.dp), color = blue)
-                    }
-                    else -> {
-                        LaptopVectorIcon(Modifier.size(28.dp), color = blue)
-                    }
-                }
+                DevicePlatformIcon(
+                    name = item.name,
+                    osType = item.os,
+                    color = blue,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
             Spacer(Modifier.width(12.dp))

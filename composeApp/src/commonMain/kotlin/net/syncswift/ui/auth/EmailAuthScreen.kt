@@ -289,34 +289,30 @@ fun EmailAuthScreen(
                     isLoading = isGoogleLoading
                 )
             } else {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    AuthSocialHalfButton(
-                        provider = IdentityProvider.Google,
-                        text = "Google",
-                        onClick = {
-                            isGoogleLoading = true
-                            launchNativeGoogleAuth()
-                        },
-                        isDark = isDark,
-                        enabled = !isAnyLoading,
-                        isLoading = isGoogleLoading,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    AuthSocialHalfButton(
-                        provider = IdentityProvider.Apple,
-                        text = "Apple",
+                    AuthAppleWideButton(
+                        text = copy.apple,
                         onClick = {
                             isAppleLoading = true
                             launchNativeAppleAuth()
                         },
                         isDark = isDark,
                         enabled = !isAnyLoading,
-                        isLoading = isAppleLoading,
-                        modifier = Modifier.weight(1f)
+                        isLoading = isAppleLoading
+                    )
+
+                    AuthGoogleWideButton(
+                        text = copy.google,
+                        onClick = {
+                            isGoogleLoading = true
+                            launchNativeGoogleAuth()
+                        },
+                        isDark = isDark,
+                        enabled = !isAnyLoading,
+                        isLoading = isGoogleLoading
                     )
                 }
             }
@@ -475,34 +471,30 @@ fun EmailAuthScreen(
                     isLoading = isGoogleLoading
                 )
             } else {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    AuthSocialHalfButton(
-                        provider = IdentityProvider.Google,
-                        text = "Google",
-                        onClick = {
-                            isGoogleLoading = true
-                            launchNativeGoogleAuth()
-                        },
-                        isDark = isDark,
-                        enabled = !isAnyLoading,
-                        isLoading = isGoogleLoading,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    AuthSocialHalfButton(
-                        provider = IdentityProvider.Apple,
-                        text = "Apple",
+                    AuthAppleWideButton(
+                        text = copy.apple,
                         onClick = {
                             isAppleLoading = true
                             launchNativeAppleAuth()
                         },
                         isDark = isDark,
                         enabled = !isAnyLoading,
-                        isLoading = isAppleLoading,
-                        modifier = Modifier.weight(1f)
+                        isLoading = isAppleLoading
+                    )
+
+                    AuthGoogleWideButton(
+                        text = copy.google,
+                        onClick = {
+                            isGoogleLoading = true
+                            launchNativeGoogleAuth()
+                        },
+                        isDark = isDark,
+                        enabled = !isAnyLoading,
+                        isLoading = isGoogleLoading
                     )
                 }
             }

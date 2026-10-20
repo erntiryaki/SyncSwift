@@ -1825,6 +1825,87 @@ fun WindowsLogoIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas
 }
 
 @Composable
+fun AppleLogoIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+
+    // Leaf (angled oval leaf at top right)
+    val leafPath = Path().apply {
+        moveTo(w * 0.52f, h * 0.16f)
+        cubicTo(w * 0.54f, h * 0.08f, w * 0.62f, h * 0.02f, w * 0.68f, h * 0.02f)
+        cubicTo(w * 0.68f, h * 0.10f, w * 0.60f, h * 0.18f, w * 0.52f, h * 0.16f)
+        close()
+    }
+    drawPath(leafPath, color)
+
+    // Body with bite on right side
+    val bodyPath = Path().apply {
+        moveTo(w * 0.50f, h * 0.28f)
+        // Top right lobe
+        cubicTo(w * 0.56f, h * 0.23f, w * 0.66f, h * 0.23f, w * 0.73f, h * 0.28f)
+        cubicTo(w * 0.81f, h * 0.34f, w * 0.87f, h * 0.44f, w * 0.87f, h * 0.52f)
+        // Bite cutout on right edge
+        cubicTo(w * 0.80f, h * 0.52f, w * 0.75f, h * 0.58f, w * 0.75f, h * 0.65f)
+        cubicTo(w * 0.75f, h * 0.72f, w * 0.81f, h * 0.78f, w * 0.87f, h * 0.78f)
+        // Bottom right
+        cubicTo(w * 0.83f, h * 0.88f, w * 0.75f, h * 0.98f, w * 0.67f, h * 0.98f)
+        // Bottom dip
+        cubicTo(w * 0.61f, h * 0.98f, w * 0.57f, h * 0.94f, w * 0.50f, h * 0.94f)
+        cubicTo(w * 0.43f, h * 0.94f, w * 0.39f, h * 0.98f, w * 0.33f, h * 0.98f)
+        // Bottom left
+        cubicTo(w * 0.25f, h * 0.98f, w * 0.17f, h * 0.88f, w * 0.13f, h * 0.78f)
+        // Left side & top left lobe
+        cubicTo(w * 0.08f, h * 0.63f, w * 0.12f, h * 0.44f, w * 0.22f, h * 0.34f)
+        cubicTo(w * 0.29f, h * 0.25f, w * 0.40f, h * 0.23f, w * 0.50f, h * 0.28f)
+        close()
+    }
+    drawPath(bodyPath, color)
+}
+
+/**
+ * Universal Device Platform Icon - automatically detects OS from device name, osType, and modelCode:
+ * Windows -> WindowsLogoIcon
+ * Mac / macOS -> AppleLogoIcon
+ * iPad / Tablet -> TabletVectorIcon
+ * Mobile (Android / iPhone) -> MobileDeviceIcon
+ * Linux / Desktop / PC -> DesktopVectorIcon
+ * Other -> LaptopVectorIcon
+ */
+@Composable
+fun DevicePlatformIcon(
+    name: String,
+    osType: String = "",
+    modelCode: String = "",
+    modifier: Modifier = Modifier,
+    color: Color = Blue
+) {
+    val combined = "$name $osType $modelCode".lowercase()
+    when {
+        combined.contains("windows") || combined.contains("win10") || combined.contains("win11") || combined.contains("win_") -> {
+            WindowsLogoIcon(modifier, color = color)
+        }
+        combined.contains("mac") || combined.contains("darwin") || combined.contains("apple") || combined.contains("osx") -> {
+            AppleLogoIcon(modifier, color = color)
+        }
+        combined.contains("ipad") || combined.contains("tablet") -> {
+            TabletVectorIcon(modifier, color = color)
+        }
+        combined.contains("android") || combined.contains("ios") || combined.contains("iphone") || combined.contains("phone") || combined.contains("galaxy") || combined.contains("pixel") || combined.contains("redmi") || combined.contains("xiaomi") -> {
+            MobileDeviceIcon(modifier, color = color)
+        }
+        combined.contains("linux") || combined.contains("ubuntu") -> {
+            DesktopVectorIcon(modifier, color = color)
+        }
+        combined.contains("desktop") || combined.contains("pc") || combined.contains("bilgisayar") || combined.contains("ev bilgisayarı") -> {
+            DesktopVectorIcon(modifier, color = color)
+        }
+        else -> {
+            LaptopVectorIcon(modifier, color = color)
+        }
+    }
+}
+
+@Composable
 fun FileImageIcon(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier

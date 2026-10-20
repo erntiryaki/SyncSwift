@@ -13,6 +13,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,10 +23,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
-import net.syncswift.LaptopVectorIcon
-import net.syncswift.PhoneVectorIcon
+import net.syncswift.DevicePlatformIcon
 import net.syncswift.TransferVectorIcon
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
@@ -43,6 +49,17 @@ fun FileDeviceSelectScreen(
     onSelectDevice: (DiscoveredDevice) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val loggedInEmail = net.syncswift.SessionManager.getLoggedInEmail()
+    var registeredAccountDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
+    LaunchedEffect(loggedInEmail) {
+        if (!loggedInEmail.isNullOrBlank()) {
+            withContext(Dispatchers.IO) {
+                try {
+                    registeredAccountDevices = net.syncswift.SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                } catch (_: Exception) {}
+            }
+        }
+    }
     val targetDevices = remember(devices) {
         val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
         devices.filter { dev ->
@@ -169,9 +186,26 @@ fun FileDeviceSelectScreen(
                 ) {
                     items(targetDevices) { dev ->
                         val connected = isDeviceConnected(dev)
-                        val isRemote = dev.isRemote || net.syncswift.connection.ConnectionManager.isRemoteDevice(dev)
-                        val connectionBadgeText = if (isRemote) copy.remotelyConnected else copy.locallyConnected
-                        val badgeColor = if (isRemote) Blue else SuccessGreen
+                        val isDesktop = dev.osType.equals("Desktop", ignoreCase = true) ||
+                                dev.osType.equals("Windows", ignoreCase = true) ||
+                                dev.osType.equals("macOS", ignoreCase = true) ||
+                                dev.name.lowercase().let { it.contains("windows") || it.contains("mac") || it.contains("desktop") || it.contains("pc") }
+                        val isMyDevice = registeredAccountDevices.any {
+                            it.id == dev.id || (it.host.isNotBlank() && it.host == dev.host && it.name == dev.name)
+                        } || (isDesktop && connected)
+
+                        val badgeText = when {
+                            isMyDevice -> copy.myDeviceLabel
+                            connected -> copy.connectedDeviceLabel
+                            else -> copy.filterNearby
+                        }
+                        val subtitleText = when {
+                            isMyDevice -> copy.myDeviceLabel
+                            connected -> copy.connectedDeviceLabel
+                            else -> "${dev.osType} · ${if (dev.isOnline) copy.deviceOnline else copy.offlineSleeping}"
+                        }
+                        val badgeColor = if (isMyDevice || connected) Blue else Mist
+
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -179,7 +213,7 @@ fun FileDeviceSelectScreen(
                                 .clickable { onSelectDevice(dev) },
                             shape = RoundedCornerShape(14.dp),
                             color = CardSurface,
-                            border = BorderStroke(1.dp, if (connected) badgeColor.copy(alpha = 0.4f) else InputBorder.copy(alpha = 0.3f))
+                            border = BorderStroke(1.dp, if (connected || isMyDevice) badgeColor.copy(alpha = 0.4f) else InputBorder.copy(alpha = 0.3f))
                         ) {
                             Row(
                                 modifier = Modifier
@@ -191,23 +225,16 @@ fun FileDeviceSelectScreen(
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(CircleShape)
-                                        .background(if (connected) badgeColor.copy(alpha = 0.15f) else InputBg),
+                                        .background(if (connected || isMyDevice) badgeColor.copy(alpha = 0.15f) else InputBg),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    val isMobile = dev.osType.equals("Android", ignoreCase = true) ||
-                                            dev.osType.equals("iOS", ignoreCase = true) ||
-                                            dev.name.lowercase().let { n ->
-                                                n.contains("iphone") || n.contains("android") || n.contains("galaxy") ||
-                                                n.contains("pixel") || n.contains("redmi") || n.contains("xiaomi") ||
-                                                n.contains("huawei") || n.contains("samsung") || n.contains("oppo") ||
-                                                n.contains("vivo") || n.contains("phone") || n.contains("ipad") ||
-                                                n.contains("tablet")
-                                            }
-                                    if (isMobile) {
-                                        PhoneVectorIcon(Modifier.size(20.dp), color = if (connected) badgeColor else Mist)
-                                    } else {
-                                        LaptopVectorIcon(Modifier.size(20.dp), color = if (connected) badgeColor else Mist)
-                                    }
+                                    DevicePlatformIcon(
+                                        name = dev.name,
+                                        osType = dev.osType,
+                                        modelCode = dev.modelCode,
+                                        color = if (connected || isMyDevice) badgeColor else Mist,
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
 
                                 Spacer(Modifier.width(14.dp))
@@ -233,7 +260,7 @@ fun FileDeviceSelectScreen(
                                             border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
                                         ) {
                                             Text(
-                                                text = connectionBadgeText,
+                                                text = badgeText,
                                                 color = badgeColor,
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Medium,
@@ -242,12 +269,9 @@ fun FileDeviceSelectScreen(
                                         }
                                     }
                                     Spacer(Modifier.height(3.dp))
-                                    val isDevRemote = net.syncswift.connection.ConnectionManager.isRemoteDevice(dev)
-                                    val devStatus = if (dev.isOnline) copy.deviceOnline else if (isDevRemote) copy.outsideLocalNetwork else copy.offlineSleeping
-                                    val connStatusText = if (dev.isOnline) copy.deviceOnline else if (isDevRemote) copy.outsideLocalNetwork else copy.offlineSleeping
                                     Text(
-                                        text = if (connected) "$connectionBadgeText · $connStatusText" else "${dev.osType} · $devStatus",
-                                        color = if (connected) badgeColor else Mist,
+                                        text = subtitleText,
+                                        color = if (isMyDevice || connected) badgeColor else Mist,
                                         fontSize = 12.sp
                                     )
                                 }

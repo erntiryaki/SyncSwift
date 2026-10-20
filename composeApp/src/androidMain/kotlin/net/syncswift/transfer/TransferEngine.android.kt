@@ -927,6 +927,9 @@ actual object TransferEngine {
                 val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
                 val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
                 val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                val ctx = appContext
+                val myPushToken = if (ctx != null) net.syncswift.fcm.SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
+                val selfHost = self?.host ?: ""
                 val fcmSent = ConnectionManager.sendFcmNotification(
                     token = pushToken,
                     title = targetCopy.notificationFileRequestTitle,
@@ -938,6 +941,8 @@ actual object TransferEngine {
                         "type" to "file_request",
                         "transferId" to transferId,
                         "senderName" to selfName,
+                        "senderHost" to selfHost,
+                        "senderPushToken" to myPushToken,
                         "fileName" to fileName,
                         "fileSize" to "${fileBytes.size}",
                         "mimeType" to mimeType,
@@ -1026,7 +1031,10 @@ actual object TransferEngine {
         fileSize: Long,
         mimeType: String,
         transferId: String,
-        senderName: String
+        senderName: String,
+        senderHost: String = "",
+        senderPushToken: String = "",
+        senderLanguage: String = "en"
     ) {
         scope.launch(Dispatchers.IO) {
             try {
@@ -1069,6 +1077,23 @@ actual object TransferEngine {
                     withContext(Dispatchers.Main) {
                         val copy = currentAppCopy()
                         showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))
+                    }
+                    val senderToken = if (senderPushToken.isNotBlank()) senderPushToken else ConnectionManager.queryPushTokenFromSupabase(senderHost, senderName)
+                    if (!senderToken.isNullOrBlank()) {
+                        val targetCopy = net.syncswift.copyForLanguageCode(senderLanguage)
+                        val self = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                        val selfName = net.syncswift.discovery.cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                        ConnectionManager.sendFcmNotification(
+                            token = senderToken,
+                            title = targetCopy.fileReceivedSuccess.replace("%s", fileName),
+                            body = targetCopy.fileSentSuccessfully.replace("%s", fileName),
+                            data = mapOf(
+                                "type" to "file_completed",
+                                "transferId" to transferId,
+                                "fileName" to fileName,
+                                "senderName" to selfName
+                            )
+                        )
                     }
                 } else {
                     updateTransferProgress(transferId, 0, TransferStatus.FAILED)

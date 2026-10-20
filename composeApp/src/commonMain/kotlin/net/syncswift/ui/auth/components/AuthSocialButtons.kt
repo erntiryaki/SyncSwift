@@ -79,6 +79,58 @@ fun AuthGoogleWideButton(
 }
 
 @Composable
+fun AuthAppleWideButton(
+    text: String,
+    onClick: () -> Unit,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isLoading: Boolean = false
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(AuthColors.secondary(isDark))
+            .border(
+                BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else Color(0xFFE2E8F0)),
+                RoundedCornerShape(26.dp)
+            )
+            .clickable(enabled = enabled && !isLoading) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(22.dp),
+                color = AuthColors.button,
+                strokeWidth = 2.5.dp
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                SocialProviderIcon(
+                    provider = IdentityProvider.Apple,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (isDark) Color.White else Color(0xFF121829)
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                Text(
+                    text = text,
+                    color = AuthColors.textPrimary(isDark),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun AuthSocialHalfButton(
     provider: IdentityProvider,
     text: String,

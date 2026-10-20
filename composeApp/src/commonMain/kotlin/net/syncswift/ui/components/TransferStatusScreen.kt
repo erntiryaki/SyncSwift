@@ -31,8 +31,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
-import net.syncswift.LaptopVectorIcon
-import net.syncswift.PhoneVectorIcon
+import net.syncswift.DevicePlatformIcon
 import net.syncswift.TransferVectorIcon
 import net.syncswift.connection.OutgoingRequestState
 import net.syncswift.connection.OutgoingStatusType
@@ -255,11 +254,7 @@ private fun TransferWaitingSection(
         if (state.type == OutgoingStatusType.FILE) {
             TransferVectorIcon(Modifier.size(54.dp), color = Blue)
         } else {
-            if (isMobile) {
-                PhoneVectorIcon(Modifier.size(54.dp), color = Blue)
-            } else {
-                LaptopVectorIcon(Modifier.size(54.dp), color = Blue)
-            }
+            DevicePlatformIcon(name = state.deviceName, osType = "", color = Blue, modifier = Modifier.size(54.dp))
         }
     }
 
@@ -294,11 +289,7 @@ private fun TransferWaitingSection(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isMobile) {
-                PhoneVectorIcon(Modifier.size(16.dp), color = Mist)
-            } else {
-                LaptopVectorIcon(Modifier.size(16.dp), color = Mist)
-            }
+            DevicePlatformIcon(name = state.deviceName, osType = "", color = Mist, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
             Text(
                 text = state.deviceName,
