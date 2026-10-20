@@ -98,22 +98,196 @@ object WorkspaceManager {
     val deviceJobs: StateFlow<List<DeviceJob>> = _deviceJobs.asStateFlow()
 
     init {
-        // Initialize sample/default workspace if user has none
-        val email = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
-        val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
-        val defaultWs = WorkspaceItem(
-            id = "ws_primary",
-            name = "Kişisel Kasa",
-            description = "Şifreli bulut kasası ve cihazlarım",
-            ownerEmail = email,
-            role = WorkspaceRole.OWNER,
-            memberCount = 1
+        loadSavedState()
+        if (_workspaces.value.isEmpty()) {
+            val email = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
+            val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
+            val defaultWs = WorkspaceItem(
+                id = "ws_primary",
+                name = "Kişisel Kasa",
+                description = "Şifreli bulut kasası ve cihazlarım",
+                ownerEmail = email,
+                role = WorkspaceRole.OWNER,
+                memberCount = 1
+            )
+            _workspaces.value = listOf(defaultWs)
+            _selectedWorkspace.value = defaultWs
+            _members.value = listOf(
+                WorkspaceMember(id = "mem_1", email = email, displayName = myName, role = WorkspaceRole.OWNER)
+            )
+            saveState()
+        } else {
+            val email = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
+            val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
+            _members.value = listOf(
+                WorkspaceMember(id = "mem_1", email = email, displayName = myName, role = WorkspaceRole.OWNER)
+            )
+        }
+    }
+
+    private fun escapeJson(s: String): String {
+        val sb = StringBuilder()
+        for (ch in s) {
+            when (ch) {
+                '\\' -> sb.append("\\\\")
+                '"' -> sb.append("\\\"")
+                '\b' -> sb.append("\\b")
+                '\u000C' -> sb.append("\\f")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                else -> {
+                    if (ch.code < 32) {
+                        val hex = ch.code.toString(16).padStart(4, '0')
+                        sb.append("\\u$hex")
+                    } else {
+                        sb.append(ch)
+                    }
+                }
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun parseJsonObjects(json: String): List<Map<String, String>> {
+        val results = mutableListOf<Map<String, String>>()
+        val objRegex = Regex("""\{([^{}]+)\}""")
+        val fieldRegex = Regex(""""([^"]+)"\s*:\s*("(?:[^"\\]|\\.)*"|[^,}\s]+)""")
+
+        for (match in objRegex.findAll(json)) {
+            val map = mutableMapOf<String, String>()
+            for (field in fieldRegex.findAll(match.groupValues[1])) {
+                val key = field.groupValues[1]
+                var rawVal = field.groupValues[2].trim()
+                if (rawVal.startsWith("\"") && rawVal.endsWith("\"")) {
+                    rawVal = rawVal.substring(1, rawVal.length - 1)
+                        .replace("\\\"", "\"")
+                        .replace("\\\\", "\\")
+                        .replace("\\n", "\n")
+                        .replace("\\r", "\r")
+                        .replace("\\t", "\t")
+                }
+                map[key] = rawVal
+            }
+            if (map.isNotEmpty()) {
+                results.add(map)
+            }
+        }
+        return results
+    }
+
+    private fun mapToWorkspaceItem(map: Map<String, String>): WorkspaceItem? {
+        val id = map["id"] ?: return null
+        val name = map["name"] ?: return null
+        val desc = map["desc"] ?: map["description"] ?: ""
+        val ownerEmail = map["ownerEmail"] ?: "user@syncswift.net"
+        val roleStr = map["role"] ?: "OWNER"
+        val role = if (roleStr.equals("MEMBER", ignoreCase = true)) WorkspaceRole.MEMBER else WorkspaceRole.OWNER
+        val memberCount = map["memberCount"]?.toIntOrNull() ?: 1
+        val createdAt = map["createdAt"]?.toLongOrNull() ?: currentTimeMs()
+        return WorkspaceItem(id, name, desc, ownerEmail, role, memberCount, createdAt)
+    }
+
+    private fun mapToWorkspaceFolder(map: Map<String, String>): WorkspaceFolder? {
+        val id = map["id"] ?: return null
+        val workspaceId = map["workspaceId"] ?: return null
+        val parentId = map["parentId"]?.takeIf { it.isNotBlank() && it != "null" }
+        val name = map["name"] ?: return null
+        val createdAt = map["createdAt"]?.toLongOrNull() ?: currentTimeMs()
+        return WorkspaceFolder(id, workspaceId, parentId, name, createdAt)
+    }
+
+    private fun mapToWorkspaceFile(map: Map<String, String>): WorkspaceFile? {
+        val id = map["id"] ?: return null
+        val workspaceId = map["workspaceId"] ?: return null
+        val folderId = map["folderId"]?.takeIf { it.isNotBlank() && it != "null" }
+        val name = map["name"] ?: return null
+        val size = map["size"]?.toLongOrNull() ?: 0L
+        val mimeType = map["mimeType"] ?: "*/*"
+        val uploaderEmail = map["uploaderEmail"] ?: ""
+        val uploaderName = map["uploaderName"] ?: ""
+        val uploadedAt = map["uploadedAt"]?.toLongOrNull() ?: currentTimeMs()
+        val visStr = map["visibility"] ?: "ALL_MEMBERS"
+        val visibility = try { FileVisibility.valueOf(visStr) } catch (_: Exception) { FileVisibility.ALL_MEMBERS }
+        val selectedMembers = map["selectedMembers"]?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        val downloadUrl = map["downloadUrl"]?.takeIf { it.isNotBlank() && it != "null" }
+        return WorkspaceFile(
+            id = id,
+            workspaceId = workspaceId,
+            folderId = folderId,
+            name = name,
+            size = size,
+            mimeType = mimeType,
+            uploaderEmail = uploaderEmail,
+            uploaderName = uploaderName,
+            uploadedAt = uploadedAt,
+            visibility = visibility,
+            selectedMembers = selectedMembers,
+            downloadUrl = downloadUrl
         )
-        _workspaces.value = listOf(defaultWs)
-        _selectedWorkspace.value = defaultWs
-        _members.value = listOf(
-            WorkspaceMember(id = "mem_1", email = email, displayName = myName, role = WorkspaceRole.OWNER)
-        )
+    }
+
+    private fun saveState() {
+        try {
+            // Save Workspaces
+            val wsList = _workspaces.value
+            val wsSb = StringBuilder("[")
+            wsList.forEachIndexed { idx, ws ->
+                wsSb.append("""{"id":"${escapeJson(ws.id)}","name":"${escapeJson(ws.name)}","desc":"${escapeJson(ws.description)}","ownerEmail":"${escapeJson(ws.ownerEmail)}","role":"${ws.role.name}","memberCount":${ws.memberCount},"createdAt":${ws.createdAt}}""")
+                if (idx < wsList.size - 1) wsSb.append(",")
+            }
+            wsSb.append("]")
+            SessionManager.saveWorkspacesJson(wsSb.toString())
+
+            // Save Folders
+            val fldList = _folders.value
+            val fldSb = StringBuilder("[")
+            fldList.forEachIndexed { idx, fld ->
+                val pId = fld.parentId?.let { "\"${escapeJson(it)}\"" } ?: "null"
+                fldSb.append("""{"id":"${escapeJson(fld.id)}","workspaceId":"${escapeJson(fld.workspaceId)}","parentId":$pId,"name":"${escapeJson(fld.name)}","createdAt":${fld.createdAt}}""")
+                if (idx < fldList.size - 1) fldSb.append(",")
+            }
+            fldSb.append("]")
+            SessionManager.saveWorkspaceFoldersJson(fldSb.toString())
+
+            // Save Files
+            val fileList = _files.value
+            val fileSb = StringBuilder("[")
+            fileList.forEachIndexed { idx, f ->
+                val fldId = f.folderId?.let { "\"${escapeJson(it)}\"" } ?: "null"
+                val selMem = escapeJson(f.selectedMembers.joinToString(","))
+                val dUrl = f.downloadUrl?.let { "\"${escapeJson(it)}\"" } ?: "null"
+                fileSb.append("""{"id":"${escapeJson(f.id)}","workspaceId":"${escapeJson(f.workspaceId)}","folderId":$fldId,"name":"${escapeJson(f.name)}","size":${f.size},"mimeType":"${escapeJson(f.mimeType)}","uploaderEmail":"${escapeJson(f.uploaderEmail)}","uploaderName":"${escapeJson(f.uploaderName)}","uploadedAt":${f.uploadedAt},"visibility":"${f.visibility.name}","selectedMembers":"$selMem","downloadUrl":$dUrl}""")
+                if (idx < fileList.size - 1) fileSb.append(",")
+            }
+            fileSb.append("]")
+            SessionManager.saveWorkspaceFilesJson(fileSb.toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun loadSavedState() {
+        try {
+            val wsJson = SessionManager.getSavedWorkspacesJson()
+            if (!wsJson.isNullOrBlank()) {
+                val loaded = parseJsonObjects(wsJson).mapNotNull { mapToWorkspaceItem(it) }
+                if (loaded.isNotEmpty()) {
+                    _workspaces.value = loaded
+                    _selectedWorkspace.value = loaded.firstOrNull()
+                }
+            }
+
+            val fldJson = SessionManager.getSavedWorkspaceFoldersJson()
+            if (!fldJson.isNullOrBlank()) {
+                val loaded = parseJsonObjects(fldJson).mapNotNull { mapToWorkspaceFolder(it) }
+                _folders.value = loaded
+            }
+
+            val filesJson = SessionManager.getSavedWorkspaceFilesJson()
+            if (!filesJson.isNullOrBlank()) {
+                val loaded = parseJsonObjects(filesJson).mapNotNull { mapToWorkspaceFile(it) }
+                _files.value = loaded
+            }
+        } catch (_: Exception) {}
     }
 
     fun selectWorkspace(workspace: WorkspaceItem) {
@@ -133,6 +307,7 @@ object WorkspaceManager {
         )
         _workspaces.value = listOf(ws) + _workspaces.value
         _selectedWorkspace.value = ws
+        saveState()
         return ws
     }
 
@@ -149,6 +324,7 @@ object WorkspaceManager {
         )
         _workspaces.value = _workspaces.value + joined
         _selectedWorkspace.value = joined
+        saveState()
         return true
     }
 
@@ -165,6 +341,7 @@ object WorkspaceManager {
             name = name
         )
         _folders.value = _folders.value + folder
+        saveState()
     }
 
     fun navigateIntoFolder(folderId: String?) {
@@ -194,28 +371,35 @@ object WorkspaceManager {
             selectedMembers = selectedMembers
         )
         _files.value = listOf(file) + _files.value
+        saveState()
     }
 
     fun updateFileVisibility(fileId: String, visibility: FileVisibility, selectedMembers: List<String> = emptyList()) {
         _files.value = _files.value.map {
             if (it.id == fileId) it.copy(visibility = visibility, selectedMembers = selectedMembers) else it
         }
+        saveState()
     }
 
     fun deleteFile(fileId: String) {
         _files.value = _files.value.filter { it.id != fileId }
+        saveState()
     }
 
     fun deleteFolder(folderId: String) {
         _folders.value = _folders.value.filter { it.id != folderId }
         _files.value = _files.value.filter { it.folderId != folderId }
+        saveState()
     }
 
     fun deleteWorkspace(workspaceId: String) {
         _workspaces.value = _workspaces.value.filter { it.id != workspaceId }
+        _folders.value = _folders.value.filter { it.workspaceId != workspaceId }
+        _files.value = _files.value.filter { it.workspaceId != workspaceId }
         if (_selectedWorkspace.value?.id == workspaceId) {
             _selectedWorkspace.value = _workspaces.value.firstOrNull()
         }
+        saveState()
     }
 
     /** Dispatches a secure remote command to user's desktop to fetch allowed file into workspace */

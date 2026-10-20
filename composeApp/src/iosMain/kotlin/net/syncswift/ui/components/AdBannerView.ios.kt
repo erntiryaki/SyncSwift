@@ -21,6 +21,9 @@ fun setIosAdBannerProvider(provider: (String) -> UIView) {
 @OptIn(ExperimentalForeignApi::class)
 @Composable
 actual fun AdBannerView(modifier: Modifier) {
+    val isModalOpen by AdBannerManager.isModalOpen.collectAsState()
+    if (isModalOpen) return
+
     val adUnit = net.syncswift.PlatformConfig.admobBannerId.ifBlank {
         "ca-app-pub-3940256099942544/2934735716"
     }

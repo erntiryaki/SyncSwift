@@ -273,11 +273,21 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val senderId = data["senderId"] ?: ""
                 val senderHost = data["senderHost"] ?: ""
                 val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
+                val clean = cleanDeviceDisplayName(senderName)
                 if (senderHost.isNotBlank()) {
                     ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+                    ConnectionManager.markDeviceDisconnected(senderHost)
                 }
-                if (senderId.isNotBlank()) {
-                    ConnectionManager.markDeviceDisconnected(senderId)
+                if (senderId.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderId)
+                if (senderName.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderName)
+                if (clean.isNotBlank()) ConnectionManager.markDeviceDisconnected(clean)
+                val matchedDev = DeviceDiscoveryManager.devices.value.firstOrNull {
+                    cleanDeviceDisplayName(it.name) == clean ||
+                    (senderHost.isNotBlank() && it.host == senderHost) ||
+                    (senderId.isNotBlank() && it.id == senderId)
+                }
+                if (matchedDev != null) {
+                    ConnectionManager.disconnectDevice(matchedDev, notifyPeer = false)
                 }
                 net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
             }
@@ -294,7 +304,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     isRemote = true
                 )
                 ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
-                net.syncswift.showNativeToast("${cleanDeviceDisplayName(senderName)}: ${copy.disconnected}")
+                // Quietly disconnect - NO toast or alert as requested by user
                 return
             }
             "file_completed", "file_accepted" -> {

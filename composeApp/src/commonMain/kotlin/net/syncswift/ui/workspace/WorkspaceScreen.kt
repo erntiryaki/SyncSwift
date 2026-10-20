@@ -410,7 +410,7 @@ fun WorkspaceScreen(
 
     // MODAL 1: + ACTION MENU
     if (showPlusActionMenu) {
-        ModalBottomSheet(
+        WorkspaceModalBottomSheet(
             onDismissRequest = { showPlusActionMenu = false },
             containerColor = CardSurface
         ) {
@@ -517,7 +517,7 @@ fun WorkspaceScreen(
         var remoteFileName by remember { mutableStateOf("Baskı_Tasarım.pdf") }
         var selectedFolder by remember { mutableStateOf("MatMatbaa") }
 
-        ModalBottomSheet(
+        WorkspaceModalBottomSheet(
             onDismissRequest = { showTaskDelegationDialog = false },
             containerColor = CardSurface,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -662,7 +662,7 @@ fun WorkspaceScreen(
     // MODAL 3: YENİ KLASÖR OLUŞTURMA (Modern Bottom Sheet)
     if (showNewFolderDialog) {
         var newFolderName by remember { mutableStateOf("") }
-        ModalBottomSheet(
+        WorkspaceModalBottomSheet(
             onDismissRequest = { showNewFolderDialog = false },
             containerColor = CardSurface,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -778,7 +778,7 @@ fun WorkspaceScreen(
     // MODAL 4: DOSYA AKSİYONLARI VE GÖRÜNÜRLÜK (Faz 5)
     if (selectedFileForAction != null) {
         val file = selectedFileForAction!!
-        ModalBottomSheet(
+        WorkspaceModalBottomSheet(
             onDismissRequest = { selectedFileForAction = null },
             containerColor = CardSurface
         ) {
@@ -839,7 +839,7 @@ fun WorkspaceScreen(
     // MODAL 5: ÜYELER VE DAVET KODU (Modern Bottom Sheet)
     if (showMembersDialog) {
         val wsId = selectedWorkspace?.id ?: ""
-        ModalBottomSheet(
+        WorkspaceModalBottomSheet(
             onDismissRequest = { showMembersDialog = false },
             containerColor = CardSurface,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -974,25 +974,7 @@ fun WorkspaceScreen(
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
-
-                Button(
-                    onClick = { showMembersDialog = false },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
-                ) {
-                    Text(
-                        text = copy.understandAction,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
@@ -1002,7 +984,7 @@ fun WorkspaceScreen(
         var newWsName by remember { mutableStateOf("") }
         var newWsDesc by remember { mutableStateOf("") }
 
-        ModalBottomSheet(
+        WorkspaceModalBottomSheet(
             onDismissRequest = { showCreateWorkspaceDialog = false },
             containerColor = CardSurface,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -1128,4 +1110,26 @@ fun WorkspaceScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WorkspaceModalBottomSheet(
+    onDismissRequest: () -> Unit,
+    containerColor: Color = CardSurface,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    DisposableEffect(Unit) {
+        net.syncswift.ui.components.AdBannerManager.incrementModalCount()
+        onDispose {
+            net.syncswift.ui.components.AdBannerManager.decrementModalCount()
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        containerColor = containerColor,
+        shape = shape,
+        content = content
+    )
 }

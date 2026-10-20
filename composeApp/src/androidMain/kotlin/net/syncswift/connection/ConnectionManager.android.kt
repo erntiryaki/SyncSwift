@@ -107,23 +107,34 @@ actual object ConnectionManager {
         return false
     }
 
-    private val cancelledRequestIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val cancelledRequestTimestamps = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     actual fun isRequestCancelled(requestId: String): Boolean {
         if (requestId.isBlank()) return false
-        return cancelledRequestIds.contains(requestId)
+        val ts = cancelledRequestTimestamps[requestId] ?: return false
+        if (System.currentTimeMillis() - ts > 30_000L) {
+            cancelledRequestTimestamps.remove(requestId)
+            return false
+        }
+        return true
     }
 
     actual fun markRequestCancelled(requestId: String) {
         if (requestId.isNotBlank()) {
-            cancelledRequestIds.add(requestId)
+            cancelledRequestTimestamps[requestId] = System.currentTimeMillis()
+        }
+    }
+
+    fun clearRequestCancelled(requestId: String) {
+        if (requestId.isNotBlank()) {
+            cancelledRequestTimestamps.remove(requestId)
         }
     }
 
     actual fun markDeviceConnected(deviceKey: String, isRemote: Boolean) {
-        if (isRequestCancelled(deviceKey)) {
-            Log.d(TAG, "Skipping markDeviceConnected for cancelled device: $deviceKey")
-            return
+        if (deviceKey.isNotBlank()) {
+            cancelledRequestTimestamps.remove(deviceKey)
+            cancelledRequestTimestamps.remove(cleanDeviceDisplayName(deviceKey))
         }
         val clean = cleanDeviceDisplayName(deviceKey)
         val keysToAdd = setOf(deviceKey, clean).filter { it.isNotBlank() }
@@ -278,6 +289,21 @@ actual object ConnectionManager {
             _pendingPairRequest.value = null
         }
         request.deferredResponse.complete(false)
+
+        // Ensure sender is completely disconnected locally
+        if (request.senderHost.isNotBlank()) {
+            markDeviceDisconnected(request.senderHost)
+            markDeviceDisconnected(deviceKey(request.senderHost, request.senderPort))
+        }
+        if (request.senderId.isNotBlank()) markDeviceDisconnected(request.senderId)
+        if (request.senderName.isNotBlank()) {
+            markDeviceDisconnected(request.senderName)
+            markDeviceDisconnected(cleanDeviceDisplayName(request.senderName))
+        }
+        SessionManager.getAppContext()?.let { ctx: Context ->
+            val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.cancel(net.syncswift.fcm.SyncSwiftFirebaseMessagingService.NOTIFICATION_PAIR_ID)
+        }
 
         scope.launch {
             val senderToken = if (request.senderPushToken.isNotBlank()) {
@@ -699,6 +725,15 @@ actual object ConnectionManager {
         val selfPort = self?.port ?: 52424
         val selfOs = self?.osType ?: "Android"
 
+        // Clear any old cancellation flags for this target device so new pairing is never blocked
+        val targetDevKey = deviceKey(target.host, target.port)
+        val cleanTargetName = cleanDeviceDisplayName(target.name)
+        clearRequestCancelled(target.id)
+        clearRequestCancelled(target.host)
+        clearRequestCancelled(targetDevKey)
+        clearRequestCancelled(target.name)
+        clearRequestCancelled(cleanTargetName)
+
         var activeSocket: Socket? = null
         var isCancelled = false
         var pairJob: Job? = null
@@ -722,10 +757,9 @@ actual object ConnectionManager {
             // Mark locally cancelled so any late pair_accepted doesn't register as connected
             markRequestCancelled(target.id)
             markRequestCancelled(target.host)
-            markRequestCancelled(deviceKey(target.host, target.port))
-            markDeviceDisconnected(deviceKey(target.host, target.port))
+            markRequestCancelled(targetDevKey)
+            markDeviceDisconnected(targetDevKey)
             markDeviceDisconnected(target.id)
-            DeviceDiscoveryManager.removeManualDevice(target.host)
 
             scope.launch {
                 val token = if (target.pushToken?.isNotBlank() == true) target.pushToken else queryPushTokenFromSupabase(target.host, target.name)
@@ -769,7 +803,7 @@ actual object ConnectionManager {
                     val socket = Socket()
                     activeSocket = socket
                     socket.connect(InetSocketAddress(target.host, target.port), 3500)
-                    socket.soTimeout = 25000
+                    socket.soTimeout = 35000
                     socket.use { s ->
                         val out = DataOutputStream(s.getOutputStream())
                         val input = DataInputStream(s.getInputStream())
@@ -798,6 +832,11 @@ actual object ConnectionManager {
                             }
                             return@launch
                         } else {
+                            markDeviceDisconnected(deviceKey(target.host, target.port))
+                            markDeviceDisconnected(target.id)
+                            markDeviceDisconnected(target.host)
+                            markDeviceDisconnected(target.name)
+                            markDeviceDisconnected(cleanDeviceDisplayName(target.name))
                             OutgoingStatusManager.fail(currentCopy.connectionRequestRejected)
                             withContext(Dispatchers.Main) {
                                 onResult(PairResult.REJECTED)
@@ -982,7 +1021,7 @@ actual object ConnectionManager {
             } else {
                 "device_name=eq.$encodedName"
             }
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?select=push_token&$queryParam&limit=1")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?select=push_token&$queryParam&push_token=not.is.null&push_token=neq.&order=created_at.desc&limit=1")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 4000

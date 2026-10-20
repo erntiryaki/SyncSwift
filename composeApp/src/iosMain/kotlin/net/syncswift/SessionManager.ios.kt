@@ -166,6 +166,30 @@ actual object SessionManager {
         return NSUserDefaults.standardUserDefaults.stringForKey("clipboard_history_json")
     }
 
+    actual fun saveWorkspacesJson(json: String) {
+        NSUserDefaults.standardUserDefaults.setObject(json, "workspaces_json")
+    }
+
+    actual fun getSavedWorkspacesJson(): String? {
+        return NSUserDefaults.standardUserDefaults.stringForKey("workspaces_json")
+    }
+
+    actual fun saveWorkspaceFoldersJson(json: String) {
+        NSUserDefaults.standardUserDefaults.setObject(json, "workspace_folders_json")
+    }
+
+    actual fun getSavedWorkspaceFoldersJson(): String? {
+        return NSUserDefaults.standardUserDefaults.stringForKey("workspace_folders_json")
+    }
+
+    actual fun saveWorkspaceFilesJson(json: String) {
+        NSUserDefaults.standardUserDefaults.setObject(json, "workspace_files_json")
+    }
+
+    actual fun getSavedWorkspaceFilesJson(): String? {
+        return NSUserDefaults.standardUserDefaults.stringForKey("workspace_files_json")
+    }
+
     actual fun saveProStatus(isPro: Boolean) {
         NSUserDefaults.standardUserDefaults.setBool(isPro, "is_pro_member")
     }

@@ -451,11 +451,27 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             val senderName = extractNotificationField(userInfo, "senderName") ?: copy.deviceSingle
             val senderHost = extractNotificationField(userInfo, "senderHost") ?: ""
             val senderPort = extractNotificationField(userInfo, "senderPort")?.toIntOrNull() ?: 52424
+            val clean = net.syncswift.discovery.cleanDeviceDisplayName(senderName)
             if (senderHost.isNotBlank()) {
                 net.syncswift.connection.ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+                net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderHost)
             }
             if (senderId.isNotBlank()) {
                 net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderId)
+            }
+            if (senderName.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderName)
+            }
+            if (clean.isNotBlank()) {
+                net.syncswift.connection.ConnectionManager.markDeviceDisconnected(clean)
+            }
+            val matchedDev = net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull {
+                net.syncswift.discovery.cleanDeviceDisplayName(it.name) == clean ||
+                (senderHost.isNotBlank() && it.host == senderHost) ||
+                (senderId.isNotBlank() && it.id == senderId)
+            }
+            if (matchedDev != null) {
+                net.syncswift.connection.ConnectionManager.disconnectDevice(matchedDev, notifyPeer = false)
             }
             net.syncswift.connection.OutgoingStatusManager.fail(copy.notificationPairRejectedStatus.replace("%s", senderName))
             net.syncswift.notification.NotificationHistoryManager.addNotification(
@@ -479,7 +495,7 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 isRemote = true
             )
             net.syncswift.connection.ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
-            showNativeToast("${net.syncswift.discovery.cleanDeviceDisplayName(senderName)}: ${copy.disconnected}")
+            // Quietly disconnect - NO toast or alert as requested by user
             return
         }
         "clipboard_request", "clipboard_sync" -> {

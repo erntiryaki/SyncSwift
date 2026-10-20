@@ -428,24 +428,20 @@ actual object DeviceDiscoveryManager {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else if (lastSeen > 0L && age >= 12000L) {
+                    } else if (lastSeen > 0L && age >= 15000L) {
                         val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
                         if (!isConnected) {
-                            if (age >= 25000L) {
+                            if (age >= 60000L) {
                                 iterator.remove()
                                 changed = true
-                            } else if (dev.isOnline) {
+                            } else if (dev.isOnline && age >= 20000L) {
                                 iterator.set(dev.copy(isOnline = false))
                                 changed = true
                             }
                         } else {
-                            if (dev.isOnline) {
+                            // User-connected devices must STAY connected. We NEVER disconnect or remove them due to transient discovery silence!
+                            if (age >= 60000L && dev.isOnline) {
                                 iterator.set(dev.copy(isOnline = false))
-                                changed = true
-                            }
-                            if (age >= 35000L) {
-                                net.syncswift.connection.ConnectionManager.markDeviceDisconnected(dev.id)
-                                iterator.remove()
                                 changed = true
                             }
                         }
@@ -627,6 +623,15 @@ actual object DeviceDiscoveryManager {
                 serviceName = selfServiceName
                 serviceType = SERVICE_TYPE
                 port = actualPort
+                try {
+                    val ctx = SessionManager.getAppContext()
+                    val myToken = if (ctx != null) net.syncswift.fcm.SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
+                    if (myToken.isNotBlank()) {
+                        setAttribute("pushToken", myToken)
+                    }
+                    setAttribute("osType", "Android")
+                    setAttribute("model", Build.MODEL)
+                } catch (_: Exception) {}
             }
 
             registrationListener = object : NsdManager.RegistrationListener {
@@ -793,8 +798,15 @@ actual object DeviceDiscoveryManager {
                     lastSeenTimestamps[rawName] = now
                     lastSeenTimestamps[cleanName] = now
 
+                    val pushTokenFromAttr = try {
+                        serviceInfo.attributes["pushToken"]?.decodeToString()?.ifBlank { null }
+                    } catch (_: Exception) { null }
+                    val osFromAttr = try {
+                        serviceInfo.attributes["osType"]?.decodeToString()?.ifBlank { null }
+                    } catch (_: Exception) { null }
+
                     // Deduce OS type from name or attributes
-                    val os = when {
+                    val os = osFromAttr ?: when {
                         cleanName.contains("Mac", ignoreCase = true) || rawName.contains("macOS", ignoreCase = true) -> "macOS"
                         cleanName.contains("iPhone", ignoreCase = true) || cleanName.contains("iPad", ignoreCase = true) -> "iOS"
                         cleanName.contains("Windows", ignoreCase = true) || cleanName.contains("PC", ignoreCase = true) -> "Windows"
@@ -809,10 +821,11 @@ actual object DeviceDiscoveryManager {
                         port = port,
                         osType = os,
                         isSelf = false,
-                        isOnline = true
+                        isOnline = true,
+                        pushToken = pushTokenFromAttr
                     )
 
-                    Log.d(TAG, "NSD Device resolved: $device")
+                    Log.d(TAG, "NSD Device resolved: $device (pushToken: $pushTokenFromAttr)")
 
                     // Add or update in list, preserving pushToken
                     val current = _devices.value.toMutableList()
@@ -826,7 +839,7 @@ actual object DeviceDiscoveryManager {
                         val existing = current[existingIdx]
                         current[existingIdx] = device.copy(
                             name = cleanName,
-                            pushToken = existing.pushToken ?: device.pushToken
+                            pushToken = pushTokenFromAttr ?: existing.pushToken ?: device.pushToken
                         )
                     } else {
                         current.add(device)

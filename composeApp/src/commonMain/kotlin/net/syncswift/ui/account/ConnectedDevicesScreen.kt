@@ -207,7 +207,10 @@ fun ConnectedDevicesScreen(
                     ConnectionManager.requestPairing(dev) { result ->
                         when (result) {
                             PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                            PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                            PairResult.REJECTED -> {
+                                ConnectionManager.disconnectDevice(dev, notifyPeer = false)
+                                showNativeToast(copy.connectionRejected)
+                            }
                             PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
                             PairResult.UNAVAILABLE -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
                             PairResult.PENDING_APPROVAL -> {}
@@ -860,7 +863,10 @@ fun ConnectedDevicesScreen(
                         isPairingInFlight = false
                         when (result) {
                             PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                            PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                            PairResult.REJECTED -> {
+                                ConnectionManager.disconnectDevice(target, notifyPeer = false)
+                                showNativeToast(copy.connectionRejected)
+                            }
                             PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
                             PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
                             PairResult.PENDING_APPROVAL -> {}

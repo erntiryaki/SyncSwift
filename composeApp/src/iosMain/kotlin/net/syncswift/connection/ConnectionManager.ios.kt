@@ -203,23 +203,34 @@ actual object ConnectionManager {
         return false
     }
 
-    private val cancelledRequestIds = mutableSetOf<String>()
+    private val cancelledRequestTimestamps = mutableMapOf<String, Long>()
 
     actual fun isRequestCancelled(requestId: String): Boolean {
         if (requestId.isBlank()) return false
-        return cancelledRequestIds.contains(requestId)
+        val ts = cancelledRequestTimestamps[requestId] ?: return false
+        if (currentTimeMs() - ts > 30_000L) {
+            cancelledRequestTimestamps.remove(requestId)
+            return false
+        }
+        return true
     }
 
     actual fun markRequestCancelled(requestId: String) {
         if (requestId.isNotBlank()) {
-            cancelledRequestIds.add(requestId)
+            cancelledRequestTimestamps[requestId] = currentTimeMs()
+        }
+    }
+
+    fun clearRequestCancelled(requestId: String) {
+        if (requestId.isNotBlank()) {
+            cancelledRequestTimestamps.remove(requestId)
         }
     }
 
     actual fun markDeviceConnected(deviceKey: String, isRemote: Boolean) {
-        if (isRequestCancelled(deviceKey)) {
-            println("[SyncSwift iOS] Skipping markDeviceConnected for cancelled device: $deviceKey")
-            return
+        if (deviceKey.isNotBlank()) {
+            cancelledRequestTimestamps.remove(deviceKey)
+            cancelledRequestTimestamps.remove(cleanDeviceDisplayName(deviceKey))
         }
         val clean = cleanDeviceDisplayName(deviceKey)
         val keysToAdd = setOf(deviceKey, clean).filter { it.isNotBlank() }
@@ -256,7 +267,7 @@ actual object ConnectionManager {
             } else {
                 "device_name=eq.$encodedName"
             }
-            val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices?select=push_token&$queryParam&limit=1")
+            val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices?select=push_token&$queryParam&push_token=not.is.null&push_token=neq.&order=created_at.desc&limit=1")
             if (url == null) {
                 continuation.resume(null)
                 return@suspendCancellableCoroutine
@@ -372,6 +383,15 @@ actual object ConnectionManager {
         val selfPort = self?.port ?: 52424
         val selfOs = "iOS"
 
+        // Clear any old cancellation flags for this target device so new pairing is never blocked
+        val targetDevKey = deviceKey(target.host, target.port)
+        val cleanTargetName = cleanDeviceDisplayName(target.name)
+        clearRequestCancelled(target.id)
+        clearRequestCancelled(target.host)
+        clearRequestCancelled(targetDevKey)
+        clearRequestCancelled(target.name)
+        clearRequestCancelled(cleanTargetName)
+
         var activeSocket: Int = -1
         var isCancelled = false
         var pairJob: Job? = null
@@ -390,10 +410,9 @@ actual object ConnectionManager {
             }
             markRequestCancelled(target.id)
             markRequestCancelled(target.host)
-            markRequestCancelled(deviceKey(target.host, target.port))
-            markDeviceDisconnected(deviceKey(target.host, target.port))
+            markRequestCancelled(targetDevKey)
+            markDeviceDisconnected(targetDevKey)
             markDeviceDisconnected(target.id)
-            DeviceDiscoveryManager.removeManualDevice(target.host)
 
             scope.launch(Dispatchers.Default) {
                 val token = if (target.pushToken?.isNotBlank() == true) target.pushToken else queryPushTokenFromSupabase(target.host, target.name)
@@ -438,7 +457,7 @@ actual object ConnectionManager {
                     activeSocket = sock
                     val connected = memScoped {
                         val timeout = alloc<timeval>()
-                        timeout.tv_sec = 2
+                        timeout.tv_sec = 35
                         timeout.tv_usec = 0
                         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, timeout.ptr, sizeOf<timeval>().convert())
                         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, timeout.ptr, sizeOf<timeval>().convert())
@@ -475,6 +494,12 @@ actual object ConnectionManager {
                                         withContext(Dispatchers.Main) { onResult(PairResult.ACCEPTED) }
                                         return@memScoped true
                                     } else if (r > 0 && resp[0] == 8.toByte()) {
+                                        val key = deviceKey(target.host, target.port)
+                                        markDeviceDisconnected(key)
+                                        markDeviceDisconnected(target.id)
+                                        markDeviceDisconnected(target.host)
+                                        markDeviceDisconnected(target.name)
+                                        markDeviceDisconnected(cleanDeviceDisplayName(target.name))
                                         OutgoingStatusManager.fail(copy.connectionRequestRejected)
                                         withContext(Dispatchers.Main) { onResult(PairResult.REJECTED) }
                                         return@memScoped true
@@ -776,6 +801,17 @@ actual object ConnectionManager {
     actual fun rejectPairRequest(request: IncomingPairRequest) {
         _pendingPairRequest.value = null
         request.deferredResponse.complete(false)
+
+        // Ensure sender is completely disconnected locally
+        if (request.senderHost.isNotBlank()) {
+            markDeviceDisconnected(request.senderHost)
+            markDeviceDisconnected(deviceKey(request.senderHost, request.senderPort))
+        }
+        if (request.senderId.isNotBlank()) markDeviceDisconnected(request.senderId)
+        if (request.senderName.isNotBlank()) {
+            markDeviceDisconnected(request.senderName)
+            markDeviceDisconnected(cleanDeviceDisplayName(request.senderName))
+        }
 
         scope.launch(Dispatchers.Default) {
             val senderToken = if (request.senderPushToken.isNotBlank()) {

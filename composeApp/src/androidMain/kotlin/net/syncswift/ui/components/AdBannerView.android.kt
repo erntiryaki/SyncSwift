@@ -18,8 +18,14 @@ import com.google.android.gms.ads.AdView
 import net.syncswift.PlatformConfig
 import net.syncswift.ui.theme.CardSurface
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+
 @Composable
 actual fun AdBannerView(modifier: Modifier) {
+    val isModalOpen by AdBannerManager.isModalOpen.collectAsState()
+    if (isModalOpen) return
+
     val adUnit = PlatformConfig.admobBannerId.ifBlank {
         "ca-app-pub-3940256099942544/6300978111"
     }

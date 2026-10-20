@@ -46,8 +46,6 @@ fun ConnectedDeviceActionScreen(
     onDismiss: () -> Unit
 ) {
     var showDisconnectConfirmation by remember { mutableStateOf(false) }
-    var showRenameDialog by remember { mutableStateOf(false) }
-    var nicknameInput by remember { mutableStateOf(cleanDeviceDisplayName(device.name)) }
 
     val cleanName = cleanDeviceDisplayName(device.name)
     val isDark = LocalSyncSwiftColors.current.isDark
@@ -58,6 +56,17 @@ fun ConnectedDeviceActionScreen(
 
     val scope = rememberCoroutineScope()
     var isVisible by remember { mutableStateOf(true) }
+
+    DisposableEffect(isVisible) {
+        if (isVisible) {
+            AdBannerManager.incrementModalCount()
+            onDispose {
+                AdBannerManager.decrementModalCount()
+            }
+        } else {
+            onDispose {}
+        }
+    }
 
     val handleDismiss: () -> Unit = {
         scope.launch {
@@ -260,14 +269,6 @@ fun ConnectedDeviceActionScreen(
                                     isDestructive = false,
                                     onClick = { showDisconnectConfirmation = true }
                                 )
-
-                                DeviceActionItemRow(
-                                    icon = { EditVectorIcon(Modifier.size(20.dp), color = Cloud) },
-                                    title = copy.editDeviceAction,
-                                    subtitle = copy.editDeviceActionDesc,
-                                    isDestructive = false,
-                                    onClick = { showRenameDialog = true }
-                                )
                             }
 
                             Spacer(Modifier.height(14.dp))
@@ -384,42 +385,6 @@ fun ConnectedDeviceActionScreen(
     }
 }
 }
-
-    // Rename Modal Dialog
-    if (showRenameDialog) {
-        SyncSwiftBottomSheet(
-            onDismissRequest = { showRenameDialog = false },
-            title = copy.editDeviceDialogTitle,
-            titleIcon = { EditVectorIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue) },
-            confirmText = copy.saveChanges,
-            confirmColor = PillButtonBg,
-            confirmTextColor = PillButtonText,
-            onConfirm = {
-                if (nicknameInput.isNotBlank()) {
-                    showNativeToast(copy.deviceNameUpdatedToast)
-                }
-                showRenameDialog = false
-            },
-            dismissText = copy.otpCancelAction,
-            onDismiss = { showRenameDialog = false }
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Text(
-                    text = copy.editDeviceActionDesc,
-                    color = Mist,
-                    fontSize = 13.sp
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = nicknameInput,
-                    onValueChange = { nicknameInput = it },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-        }
-    }
 }
 
 @Composable

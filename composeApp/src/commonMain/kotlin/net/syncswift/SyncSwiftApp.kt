@@ -1,4 +1,4 @@
-﻿package net.syncswift
+package net.syncswift
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -904,7 +904,8 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
                                             // Persistent Ad Banner across main tabs
                                             val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
-                                            if (!isProUser) {
+                                            val isModalOpen by net.syncswift.ui.components.AdBannerManager.isModalOpen.collectAsState()
+                                            if (!isProUser && !isModalOpen) {
                                                 net.syncswift.ui.components.AdBannerView(
                                                     modifier = Modifier.fillMaxWidth()
                                                 )

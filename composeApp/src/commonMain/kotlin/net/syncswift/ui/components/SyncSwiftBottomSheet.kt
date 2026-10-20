@@ -66,6 +66,17 @@ fun SyncSwiftBottomSheet(
         }
     }
 
+    DisposableEffect(isVisible) {
+        if (isVisible) {
+            AdBannerManager.incrementModalCount()
+            onDispose {
+                AdBannerManager.decrementModalCount()
+            }
+        } else {
+            onDispose {}
+        }
+    }
+
     val handleDismiss: () -> Unit = {
         scope.launch {
             isVisible = false

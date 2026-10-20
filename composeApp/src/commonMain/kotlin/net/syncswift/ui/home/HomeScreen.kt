@@ -1003,7 +1003,10 @@ fun HomeScreen(
                         isPairingRequestInFlight = false
                         when (result) {
                             PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                            PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
+                            PairResult.REJECTED -> {
+                                ConnectionManager.disconnectDevice(target, notifyPeer = false)
+                                showNativeToast(copy.connectionRejected)
+                            }
                             PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
                             PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
                             PairResult.PENDING_APPROVAL -> {}
@@ -1170,6 +1173,17 @@ private fun DeviceListBottomSheet(
     val isDark = LocalSyncSwiftColors.current.isDark
     val scope = rememberCoroutineScope()
     var isVisible by remember { mutableStateOf(true) }
+
+    DisposableEffect(isVisible) {
+        if (isVisible) {
+            net.syncswift.ui.components.AdBannerManager.incrementModalCount()
+            onDispose {
+                net.syncswift.ui.components.AdBannerManager.decrementModalCount()
+            }
+        } else {
+            onDispose {}
+        }
+    }
 
     val handleDismiss: () -> Unit = {
         scope.launch {

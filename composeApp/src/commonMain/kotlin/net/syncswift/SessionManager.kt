@@ -49,6 +49,13 @@ expect object SessionManager {
     fun saveClipboardHistoryJson(json: String)
     fun getSavedClipboardHistoryJson(): String?
 
+    fun saveWorkspacesJson(json: String)
+    fun getSavedWorkspacesJson(): String?
+    fun saveWorkspaceFoldersJson(json: String)
+    fun getSavedWorkspaceFoldersJson(): String?
+    fun saveWorkspaceFilesJson(json: String)
+    fun getSavedWorkspaceFilesJson(): String?
+
     fun saveProStatus(isPro: Boolean)
     fun getSavedProStatus(): Boolean
     fun saveProStartDateMillis(millis: Long)

@@ -77,7 +77,20 @@ private class ServiceResolverDelegate(
         }
 
         if (!hostIp.isNullOrBlank()) {
-            val os = when {
+            val txtData = sender.TXTRecordData()
+            var resolvedPushToken: String? = null
+            var resolvedOs: String? = null
+            if (txtData != null) {
+                val dict = NSNetService.dictionaryFromTXTRecordData(txtData)
+                (dict["pushToken"] as? NSData)?.let {
+                    resolvedPushToken = NSString.create(it, NSUTF8StringEncoding)?.toString()?.ifBlank { null }
+                }
+                (dict["osType"] as? NSData)?.let {
+                    resolvedOs = NSString.create(it, NSUTF8StringEncoding)?.toString()?.ifBlank { null }
+                }
+            }
+
+            val os = resolvedOs ?: when {
                 cleanName.contains("Mac", ignoreCase = true) || rawName.contains("macOS", ignoreCase = true) -> "macOS"
                 cleanName.contains("iPhone", ignoreCase = true) || cleanName.contains("iPad", ignoreCase = true) -> "iOS"
                 cleanName.contains("Windows", ignoreCase = true) || cleanName.contains("PC", ignoreCase = true) -> "Windows"
@@ -91,7 +104,8 @@ private class ServiceResolverDelegate(
                 port = if (port > 0) port else 52424,
                 osType = os,
                 isSelf = false,
-                isOnline = true
+                isOnline = true,
+                pushToken = resolvedPushToken
             )
             onResolved(dev)
         }
@@ -205,8 +219,19 @@ actual object DeviceDiscoveryManager {
                     port = DEFAULT_PORT
                 )
                 netService = service
+
+                val txtDict = mutableMapOf<Any?, Any?>()
+                if (!savedPushToken.isNullOrBlank()) {
+                    (savedPushToken as NSString).dataUsingEncoding(NSUTF8StringEncoding)?.let { txtDict["pushToken"] = it }
+                }
+                ("iOS" as NSString).dataUsingEncoding(NSUTF8StringEncoding)?.let { txtDict["osType"] = it }
+                (UIDevice.currentDevice.model as NSString).dataUsingEncoding(NSUTF8StringEncoding)?.let { txtDict["model"] = it }
+                val txtData = NSNetService.dataFromTXTRecordDictionary(txtDict)
+                service.setTXTRecordData(txtData)
+
                 service.scheduleInRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
                 service.publish()
+                startUdpHeartbeat()
 
                 // 2. Start browsing for other devices on main runloop
                 val b = NSNetServiceBrowser()
@@ -240,12 +265,10 @@ actual object DeviceDiscoveryManager {
                             val cleanDevName = cleanDeviceDisplayName(dev.name)
                             val matches = !dev.isRemote && (dev.name == lostName || dev.id == lostService.name || cleanDevName == lostName)
                             if (matches) {
-                                changed = true
                                 val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                                if (isConnected) {
+                                if (!isConnected) {
+                                    changed = true
                                     iterator.set(dev.copy(isOnline = false))
-                                } else {
-                                    iterator.remove()
                                 }
                             }
                         }
@@ -265,9 +288,51 @@ actual object DeviceDiscoveryManager {
         }
     }
 
+    private var heartbeatJob: Job? = null
+
+    @OptIn(ExperimentalForeignApi::class)
+    private fun startUdpHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch(Dispatchers.Default) {
+            val sock = socket(AF_INET, SOCK_DGRAM, 0)
+            if (sock < 0) return@launch
+            try {
+                memScoped {
+                    val broadcastOpt = alloc<IntVar>()
+                    broadcastOpt.value = 1
+                    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, broadcastOpt.ptr, sizeOf<IntVar>().convert())
+
+                    val addr = alloc<sockaddr_in>()
+                    addr.sin_family = AF_INET.convert()
+                    addr.sin_port = htons(DEFAULT_PORT.toUShort())
+                    addr.sin_addr.s_addr = 0xFFFFFFFFu.convert() // 255.255.255.255
+
+                    while (isActive) {
+                        val self = getSelfDevice()
+                        val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
+                        val selfId = self?.id ?: "self-$selfServiceName"
+                        val model = UIDevice.currentDevice.model
+                        val msg = "SS_BEAT:v1:$selfId:$selfName:$DEFAULT_PORT:iOS:$model"
+                        val bytes = msg.encodeToByteArray()
+                        bytes.usePinned { pinned ->
+                            sendto(sock, pinned.addressOf(0), bytes.size.convert(), 0, addr.ptr.reinterpret(), sizeOf<sockaddr_in>().convert())
+                        }
+                        delay(2500)
+                    }
+                }
+            } catch (_: Throwable) {
+            } finally {
+                close(sock)
+            }
+        }
+    }
+
     actual fun stopDiscovery() {
         scope.launch(Dispatchers.Main) {
             try {
+                heartbeatJob?.cancel()
+                heartbeatJob = null
+
                 browser?.stop()
                 browser = null
                 browserDelegate = null
@@ -299,7 +364,12 @@ actual object DeviceDiscoveryManager {
             cleanDeviceDisplayName(it.name) == clean
         }
         if (idx >= 0) {
-            current[idx] = device.copy(name = clean, isOnline = true)
+            val existing = current[idx]
+            current[idx] = device.copy(
+                name = clean,
+                isOnline = true,
+                pushToken = device.pushToken ?: existing.pushToken
+            )
         } else {
             current.add(device.copy(name = clean, isOnline = true))
         }

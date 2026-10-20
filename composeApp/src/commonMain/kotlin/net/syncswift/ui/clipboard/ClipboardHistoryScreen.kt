@@ -617,6 +617,12 @@ private fun AddTemplateDialog(
         containerColor = CardSurface,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
+        DisposableEffect(Unit) {
+            net.syncswift.ui.components.AdBannerManager.incrementModalCount()
+            onDispose {
+                net.syncswift.ui.components.AdBannerManager.decrementModalCount()
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -743,6 +749,12 @@ private fun ClearHistoryDialog(
         containerColor = CardSurface,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
+        DisposableEffect(Unit) {
+            net.syncswift.ui.components.AdBannerManager.incrementModalCount()
+            onDispose {
+                net.syncswift.ui.components.AdBannerManager.decrementModalCount()
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()

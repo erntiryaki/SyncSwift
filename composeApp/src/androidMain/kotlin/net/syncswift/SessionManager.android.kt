@@ -204,6 +204,30 @@ actual object SessionManager {
         return getPrefs()?.getString("clipboard_history_json", null)
     }
 
+    actual fun saveWorkspacesJson(json: String) {
+        getPrefs()?.edit()?.putString("workspaces_json", json)?.apply()
+    }
+
+    actual fun getSavedWorkspacesJson(): String? {
+        return getPrefs()?.getString("workspaces_json", null)
+    }
+
+    actual fun saveWorkspaceFoldersJson(json: String) {
+        getPrefs()?.edit()?.putString("workspace_folders_json", json)?.apply()
+    }
+
+    actual fun getSavedWorkspaceFoldersJson(): String? {
+        return getPrefs()?.getString("workspace_folders_json", null)
+    }
+
+    actual fun saveWorkspaceFilesJson(json: String) {
+        getPrefs()?.edit()?.putString("workspace_files_json", json)?.apply()
+    }
+
+    actual fun getSavedWorkspaceFilesJson(): String? {
+        return getPrefs()?.getString("workspace_files_json", null)
+    }
+
     actual fun saveProStatus(isPro: Boolean) {
         getPrefs()?.edit()?.putBoolean("is_pro_member", isPro)?.apply()
     }
