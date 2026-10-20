@@ -21,8 +21,7 @@ import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.showNativeToast
 import platform.Foundation.*
-import platform.UIKit.UIDevice
-import platform.UIKit.UIPasteboard
+import platform.UIKit.*
 import platform.darwin.*
 import platform.posix.*
 import kotlin.coroutines.resume

@@ -12,8 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -603,6 +602,7 @@ private fun ClipboardItemCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddTemplateDialog(
     copy: Copy,
@@ -612,183 +612,206 @@ private fun AddTemplateDialog(
     var labelInput by remember { mutableStateOf("") }
     var textInput by remember { mutableStateOf("") }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .clickable { onDismiss() },
-        contentAlignment = Alignment.Center
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = CardSurface,
-            border = BorderStroke(1.dp, InputBorder),
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .clickable(enabled = false) {}
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .navigationBarsPadding()
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = copy.addQuickTemplate,
+                color = Cloud,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            // Label field
+            Text(
+                text = copy.clipboardTagLabel,
+                color = Cloud,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            BasicTextField(
+                value = labelInput,
+                onValueChange = { labelInput = it },
+                textStyle = TextStyle(color = Cloud, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                singleLine = true,
+                cursorBrush = SolidColor(Blue),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(InputBg)
+                    .border(1.2.dp, InputBorder, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                decorationBox = { inner ->
+                    if (labelInput.isEmpty()) Text(copy.clipboardTagLabel, color = Mist, fontSize = 15.sp)
+                    inner()
+                }
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            // Text field
+            Text(
+                text = copy.clipboardContentLabel,
+                color = Cloud,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            BasicTextField(
+                value = textInput,
+                onValueChange = { textInput = it },
+                textStyle = TextStyle(color = Cloud, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                cursorBrush = SolidColor(Blue),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 90.dp, max = 160.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(InputBg)
+                    .border(1.2.dp, InputBorder, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                decorationBox = { inner ->
+                    if (textInput.isEmpty()) Text(copy.clipboardContentLabel, color = Mist, fontSize = 15.sp)
+                    inner()
+                }
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    if (textInput.isNotBlank()) onAdd(labelInput, textInput)
+                },
+                enabled = textInput.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Blue,
+                    disabledContainerColor = InputBorder
+                )
+            ) {
                 Text(
-                    text = copy.addQuickTemplate,
-                    color = Cloud,
-                    fontSize = 18.sp,
+                    text = copy.accept,
+                    color = if (textInput.isNotBlank()) Color.White else Mist,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
-
-                Spacer(Modifier.height(14.dp))
-
-                // Label field
-                Text(text = copy.clipboardTagLabel, color = Mist, fontSize = 12.sp)
-                Spacer(Modifier.height(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = InputBg,
-                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))
-                ) {
-                    BasicTextField(
-                        value = labelInput,
-                        onValueChange = { labelInput = it },
-                        textStyle = TextStyle(color = Cloud, fontSize = 14.sp),
-                        singleLine = true,
-                        cursorBrush = SolidColor(Blue),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(10.dp)
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // Text field
-                Text(text = copy.clipboardContentLabel, color = Mist, fontSize = 12.sp)
-                Spacer(Modifier.height(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = InputBg,
-                    border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.5f))
-                ) {
-                    BasicTextField(
-                        value = textInput,
-                        onValueChange = { textInput = it },
-                        textStyle = TextStyle(color = Cloud, fontSize = 14.sp),
-                        cursorBrush = SolidColor(Blue),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 80.dp, max = 140.dp)
-                            .padding(10.dp)
-                    )
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = InputBg,
-                        modifier = Modifier.clickable { onDismiss() }
-                    ) {
-                        Text(
-                            text = copy.decline,
-                            color = Mist,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Blue,
-                        modifier = Modifier.clickable {
-                            if (textInput.isNotBlank()) onAdd(labelInput, textInput)
-                        }
-                    ) {
-                        Text(
-                            text = copy.accept,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-                }
             }
+
+            Spacer(Modifier.height(10.dp))
+
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+            ) {
+                Text(
+                    text = copy.decline,
+                    color = Mist,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ClearHistoryDialog(
     copy: Copy,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .clickable { onDismiss() },
-        contentAlignment = Alignment.Center
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = CardSurface,
-            border = BorderStroke(1.dp, InputBorder),
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .clickable(enabled = false) {}
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .navigationBarsPadding()
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = copy.clearHistory,
-                    color = Cloud,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = copy.confirmClearHistory,
-                    color = Mist,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                )
-                Spacer(Modifier.height(18.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(ErrorRed.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = InputBg,
-                        modifier = Modifier.clickable { onDismiss() }
-                    ) {
-                        Text(
-                            text = copy.decline,
-                            color = Mist,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = ErrorRed,
-                        modifier = Modifier.clickable { onConfirm() }
-                    ) {
-                        Text(
-                            text = copy.clearHistory,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
+                    WarningVectorIcon(Modifier.size(24.dp), color = ErrorRed)
+                }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = copy.clearHistory,
+                        color = Cloud,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = copy.confirmClearHistory,
+                        color = Mist,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
                 }
             }
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = onConfirm,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+            ) {
+                Text(
+                    text = copy.clearHistory,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+            ) {
+                Text(
+                    text = copy.decline,
+                    color = Mist,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

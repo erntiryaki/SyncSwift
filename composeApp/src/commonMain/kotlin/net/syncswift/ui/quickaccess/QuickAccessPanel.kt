@@ -157,13 +157,13 @@ fun QuickAccessPanel(
                         Spacer(Modifier.height(8.dp))
 
                         // Large formatted code
-                        val codeFormatted = "${session.code.take(3)}  ${session.code.drop(3)}"
+                        val codeFormatted = session.code
                         Text(
                             text = codeFormatted,
                             fontSize = 38.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             fontFamily = FontFamily.Monospace,
-                            letterSpacing = 2.sp,
+                            letterSpacing = 4.sp,
                             color = primaryBlue
                         )
 
@@ -235,30 +235,46 @@ fun QuickAccessPanel(
 
                         Spacer(Modifier.height(18.dp))
 
-                        // Actions
-                        Row(
+                        // Actions (Stacked vertically with full width to guarantee no text wrapping)
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            OutlinedButton(
+                            Button(
                                 onClick = {
                                     clipboardManager.setText(AnnotatedString(session.code))
                                     showNativeToast(copy.codeCopiedToast)
                                 },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, borderColor)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
                             ) {
-                                Text(copy.copyCodeAction, fontSize = 13.sp, color = primaryBlue)
+                                Text(
+                                    text = copy.copyCodeAction,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
                             }
 
-                            Button(
+                            OutlinedButton(
                                 onClick = { QuickAccessManager.cancelActiveSession() },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.2.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444))
                             ) {
-                                Text(copy.cancelSession, fontSize = 13.sp, color = Color.White)
+                                Text(
+                                    text = copy.cancelSession,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFEF4444),
+                                    maxLines = 1
+                                )
                             }
                         }
                     }
@@ -345,7 +361,7 @@ fun QuickAccessPanel(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
                             ) {
-                                Text(copy.selectFilesToShare, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(copy.selectFilesToShare, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -479,10 +495,10 @@ fun QuickAccessPanel(
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 if (enteredCode.isEmpty()) {
                                     Text(
-                                        text = "• • •   • • •",
+                                        text = "••••••",
                                         color = if (isDark) Color(0xFF475569) else Color(0xFF94A3B8),
                                         fontSize = 24.sp,
-                                        letterSpacing = 4.sp
+                                        letterSpacing = 8.sp
                                     )
                                 }
                                 innerTextField()
