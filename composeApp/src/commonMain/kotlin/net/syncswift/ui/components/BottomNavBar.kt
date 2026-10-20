@@ -22,9 +22,10 @@ import net.syncswift.ClockHistoryVectorIcon
 import net.syncswift.Copy
 import net.syncswift.HomeVectorIcon
 import net.syncswift.UserIcon
+import net.syncswift.WorkspacesVectorIcon
 import net.syncswift.ui.theme.LocalSyncSwiftColors
 
-enum class MainNavTab { Home, Transfers, ClipboardHistory, Account }
+enum class MainNavTab { Home, ClipboardHistory, Workspaces, Account, Transfers }
 
 @Composable
 fun BottomNavBar(
@@ -79,12 +80,12 @@ fun BottomNavBar(
                 modifier = Modifier.weight(1f)
             )
 
-            // 3. Transfer Geçmişi (Transfers)
+            // 3. Çalışma Alanları (Workspaces - Şifreli Ortak Kasa)
             NavBarItem(
-                selected = selectedTab == MainNavTab.Transfers,
-                label = copy.transfersTab,
-                icon = { color -> ClockHistoryVectorIcon(Modifier.size(21.dp), color = color) },
-                onClick = { onTabSelected(MainNavTab.Transfers) },
+                selected = selectedTab == MainNavTab.Workspaces,
+                label = copy.workspacesTab,
+                icon = { color -> WorkspacesVectorIcon(Modifier.size(21.dp), color = color) },
+                onClick = { onTabSelected(MainNavTab.Workspaces) },
                 isDark = isDark,
                 modifier = Modifier.weight(1f)
             )

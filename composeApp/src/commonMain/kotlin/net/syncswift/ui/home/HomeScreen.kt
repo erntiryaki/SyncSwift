@@ -77,6 +77,7 @@ fun HomeScreen(
     val connectedKeys by ConnectionManager.connectedDeviceKeys.collectAsState()
     val allTransfers by TransferEngine.transfers.collectAsState()
 
+    var homeTopTab by remember { mutableStateOf(0) } // 0: Cihazlarım, 1: Hızlı Erişim
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilterChip by remember { mutableStateOf(0) } // 0: Tümü, 1: Yakındaki, 2: Bağlı, 3: Bağlı Olmayan
@@ -392,15 +393,64 @@ fun HomeScreen(
 
         // CONTENT AREA (Normal vs Search)
         if (!isSearchActive) {
-            net.syncswift.ui.components.ElegantPullToRefreshLayout(
-                isRefreshing = isRefreshingHome,
-                onRefresh = ::triggerHomeRefresh,
+            // Home Top Tabs: Cihazlarım vs Hızlı Erişim (Faz 1 & 2)
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                refreshingText = copy.scanningNetworkDevices,
-                canScrollBackward = { scrollState.value > 0 }
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 6.dp)
+                    .height(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isDark) Color(0xFF131B28) else Color(0xFFF1F5F9))
+                    .padding(3.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // 0: Cihazlarım
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (homeTopTab == 0) (if (isDark) Color(0xFF1E293B) else Color.White) else Color.Transparent)
+                        .clickable { homeTopTab = 0 },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = copy.myDevicesTab,
+                        fontSize = 13.sp,
+                        fontWeight = if (homeTopTab == 0) FontWeight.Bold else FontWeight.Medium,
+                        color = if (homeTopTab == 0) LocalSyncSwiftColors.current.blue else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
+                    )
+                }
+
+                // 1: Hızlı Erişim
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (homeTopTab == 1) (if (isDark) Color(0xFF1E293B) else Color.White) else Color.Transparent)
+                        .clickable { homeTopTab = 1 },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = copy.quickAccessTab,
+                        fontSize = 13.sp,
+                        fontWeight = if (homeTopTab == 1) FontWeight.Bold else FontWeight.Medium,
+                        color = if (homeTopTab == 1) LocalSyncSwiftColors.current.blue else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
+                    )
+                }
+            }
+
+            if (homeTopTab == 0) {
+                net.syncswift.ui.components.ElegantPullToRefreshLayout(
+                    isRefreshing = isRefreshingHome,
+                    onRefresh = ::triggerHomeRefresh,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    refreshingText = copy.scanningNetworkDevices,
+                    canScrollBackward = { scrollState.value > 0 }
+                ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -780,6 +830,19 @@ fun HomeScreen(
             }
         }
     } else {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+        ) {
+            net.syncswift.ui.quickaccess.QuickAccessPanel(
+                copy = copy,
+                onSelectFileToShare = onSendClick
+            )
+        }
+    }
+} else {
             // DYNAMIC SEARCH VIEW (Phone 3 in Image 2)
             val filteredDevices = remember(searchQuery, allDeviceItems) {
                 if (searchQuery.isBlank()) allDeviceItems

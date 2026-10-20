@@ -326,6 +326,25 @@ fun HomeVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(
 }
 
 @Composable
+fun WorkspacesVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val s = Stroke(size.minDimension * 0.075f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val folderPath = Path().apply {
+        moveTo(w * 0.14f, h * 0.32f)
+        lineTo(w * 0.38f, h * 0.32f)
+        lineTo(w * 0.48f, h * 0.42f)
+        lineTo(w * 0.86f, h * 0.42f)
+        lineTo(w * 0.86f, h * 0.78f)
+        lineTo(w * 0.14f, h * 0.78f)
+        close()
+    }
+    drawPath(folderPath, color, style = s)
+    // Small inner lock/shield line
+    drawLine(color, Offset(w * 0.35f, h * 0.60f), Offset(w * 0.65f, h * 0.60f), strokeWidth = s.width, cap = StrokeCap.Round)
+}
+
+@Composable
 fun SettingsIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
     val w = size.width
     val h = size.height
