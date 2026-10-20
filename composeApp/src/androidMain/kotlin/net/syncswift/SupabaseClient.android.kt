@@ -1108,12 +1108,17 @@ actual object SupabaseNetwork {
             conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
             conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
 
+            val safeDeviceId = try {
+                java.util.UUID.fromString(sessionId).toString()
+            } catch (_: Exception) {
+                java.util.UUID.nameUUIDFromBytes(sessionId.toByteArray()).toString()
+            }
             val safeText = (textContent ?: "").replace("\"", "\\\"").replace("\n", "\\n")
             val devName = "$senderName:::$fileName:::$fileSize:::$safeText"
             val expiresAt = java.time.Instant.now().plusSeconds(600).toString()
             val json = org.json.JSONObject().apply {
                 put("code", code)
-                put("device_id", sessionId)
+                put("device_id", safeDeviceId)
                 put("device_name", devName)
                 put("device_type", "QuickAccess")
                 put("host", host)
@@ -1181,15 +1186,24 @@ actual object SupabaseNetwork {
             conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
             conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
 
+            val safeWsId = try {
+                java.util.UUID.fromString(workspaceId).toString()
+            } catch (_: Exception) {
+                java.util.UUID.nameUUIDFromBytes(workspaceId.toByteArray()).toString()
+            }
+            val expiresAt = java.time.Instant.now().plus(7, java.time.temporal.ChronoUnit.DAYS).toString()
+            val safeName = workspaceName.replace("\"", "\\\"").replace("\n", " ")
+            val devName = "$safeName:::$ownerEmail"
+
             val json = org.json.JSONObject().apply {
                 put("code", code)
-                put("device_id", workspaceId)
-                put("device_name", workspaceName)
+                put("device_id", safeWsId)
+                put("device_name", devName)
                 put("device_type", "WorkspaceInvite")
                 put("host", workspaceDesc)
                 put("port", memberCount)
-                put("user_id", ownerEmail)
                 put("push_token", "")
+                put("expires_at", expiresAt)
             }
             conn.outputStream.use { it.write(json.toString().toByteArray()) }
             conn.responseCode in 200..299
@@ -1215,13 +1229,16 @@ actual object SupabaseNetwork {
                 val arr = org.json.JSONArray(body)
                 if (arr.length() > 0) {
                     val obj = arr.getJSONObject(0)
+                    val rawName = obj.optString("device_name", "")
+                    val wsName = if (rawName.contains(":::")) rawName.substringBefore(":::") else rawName
+                    val ownerEmailFromDev = if (rawName.contains(":::")) rawName.substringAfter(":::") else obj.optString("user_id", "")
                     val result = mutableMapOf<String, String>()
                     result["code"] = obj.optString("code", clean)
                     result["workspaceId"] = obj.optString("device_id", "")
-                    result["name"] = obj.optString("device_name", "")
+                    result["name"] = wsName
                     result["desc"] = obj.optString("host", "")
                     result["memberCount"] = obj.optInt("port", 1).toString()
-                    result["ownerEmail"] = obj.optString("user_id", "")
+                    result["ownerEmail"] = ownerEmailFromDev
                     result["pushToken"] = obj.optString("push_token", "")
                     return@withContext result
                 }
@@ -1292,7 +1309,12 @@ actual object SupabaseNetwork {
     actual suspend fun fetchWorkspaceMembers(workspaceId: String): List<Map<String, String>> = withContext(Dispatchers.IO) {
         if (workspaceId.isBlank()) return@withContext emptyList()
         try {
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?device_id=eq.$workspaceId&device_type=eq.WorkspaceInvite&select=push_token,port&order=created_at.desc")
+            val safeWsId = try {
+                java.util.UUID.fromString(workspaceId).toString()
+            } catch (_: Exception) {
+                java.util.UUID.nameUUIDFromBytes(workspaceId.toByteArray()).toString()
+            }
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?device_id=eq.$safeWsId&device_type=eq.WorkspaceInvite&select=push_token,port,device_name&order=created_at.desc")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 6000

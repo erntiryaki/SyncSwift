@@ -34,6 +34,10 @@ import net.syncswift.workspace.*
 @Composable
 fun WorkspaceScreen(
     copy: Copy,
+    userEmail: String = "",
+    firstName: String = "",
+    lastName: String = "",
+    provider: IdentityProvider = IdentityProvider.Local,
     onUploadFileClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -1014,17 +1018,15 @@ fun WorkspaceScreen(
                     }
                 }
 
-                val isUserLoggedIn = SessionManager.isLoggedIn()
-                val currentUserName = if (isUserLoggedIn) {
-                    val first = SessionManager.getUserFirstName().trim()
-                    val last = SessionManager.getUserLastName().trim()
-                    val full = "$first $last".trim()
-                    if (full.isNotBlank()) full else (SessionManager.getLoggedInEmail() ?: "Hesap Sahibi")
+                val isLocal = provider == IdentityProvider.Local || userEmail.isBlank()
+                val currentUserName = if (isLocal) {
+                    copy.localUser
                 } else {
-                    "Yerel Kullanıcı"
+                    val full = "$firstName $lastName".trim()
+                    if (full.isNotBlank()) full else userEmail.substringBefore("@")
                 }
 
-                val allDisplayMembers = remember(members, selectedWorkspace, currentUserName) {
+                val allDisplayMembers = remember(members, selectedWorkspace, currentUserName, isLocal) {
                     val list = members.toMutableList()
                     val ownerIdx = list.indexOfFirst { it.role == WorkspaceRole.OWNER }
                     if (ownerIdx >= 0) {
@@ -1032,12 +1034,18 @@ fun WorkspaceScreen(
                     } else {
                         list.add(0, WorkspaceMember(
                             id = "owner_${selectedWorkspace?.id ?: "ws"}",
-                            email = selectedWorkspace?.ownerEmail ?: "",
+                            email = selectedWorkspace?.ownerEmail ?: userEmail,
                             displayName = currentUserName,
                             role = WorkspaceRole.OWNER
                         ))
                     }
-                    list
+                    list.map { m ->
+                        val resolved = if (m.displayName.isNotBlank()) m.displayName
+                        else if (m.email.isNotBlank()) m.email.substringBefore("@")
+                        else if (m.role == WorkspaceRole.OWNER) currentUserName
+                        else copy.roleMember
+                        m.copy(displayName = resolved)
+                    }
                 }
 
                 Spacer(Modifier.height(20.dp))
@@ -1063,7 +1071,11 @@ fun WorkspaceScreen(
                             UserIcon(Modifier.size(18.dp), color = primaryBlue)
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                text = m.displayName,
+                                text = m.displayName.ifBlank {
+                                    if (m.email.isNotBlank()) m.email.substringBefore("@")
+                                    else if (isLocal) copy.localUser
+                                    else copy.roleMember
+                                },
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Cloud,

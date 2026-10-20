@@ -955,16 +955,20 @@ actual object SupabaseNetwork {
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
+            val isUuid = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").matches(sessionId)
+            val safeDevId = if (isUuid) sessionId else platform.Foundation.NSUUID().UUIDString
             val safeText = (textContent ?: "").replace("\"", "\\\"").replace("\n", "\\n")
             val devName = "$senderName:::$fileName:::$fileSize:::$safeText"
+            val expiresAt = platform.Foundation.NSISO8601DateFormatter().stringFromDate(platform.Foundation.NSDate().dateByAddingTimeInterval(600.0))
             val body = """
                 {
                     "code": "$code",
-                    "device_id": "$sessionId",
+                    "device_id": "$safeDevId",
                     "device_name": "$devName",
                     "device_type": "QuickAccess",
                     "host": "$host",
-                    "port": $port
+                    "port": $port,
+                    "expires_at": "$expiresAt"
                 }
             """.trimIndent()
             val resp = executeRequest(
@@ -1036,18 +1040,22 @@ actual object SupabaseNetwork {
         val serviceKey = effectiveKey
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
         try {
+            val isUuid = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").matches(workspaceId)
+            val safeWsId = if (isUuid) workspaceId else platform.Foundation.NSUUID().UUIDString
             val safeName = workspaceName.replace("\"", "\\\"").replace("\n", " ")
             val safeDesc = workspaceDesc.replace("\"", "\\\"").replace("\n", " ")
+            val devName = "$safeName:::$ownerEmail"
+            val expiresAt = platform.Foundation.NSISO8601DateFormatter().stringFromDate(platform.Foundation.NSDate().dateByAddingTimeInterval(7.0 * 24 * 3600))
             val body = """
                 {
                     "code": "$code",
-                    "device_id": "$workspaceId",
-                    "device_name": "$safeName",
+                    "device_id": "$safeWsId",
+                    "device_name": "$devName",
                     "device_type": "WorkspaceInvite",
                     "host": "$safeDesc",
                     "port": $memberCount,
-                    "user_id": "$ownerEmail",
-                    "push_token": ""
+                    "push_token": "",
+                    "expires_at": "$expiresAt"
                 }
             """.trimIndent()
             val resp = executeRequest(
@@ -1087,10 +1095,11 @@ actual object SupabaseNetwork {
                 if (body.isBlank() || body == "[]") return null
                 val codeMatch = Regex(""""code"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: clean
                 val wsId = Regex(""""device_id"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
-                val wsName = Regex(""""device_name"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val rawName = Regex(""""device_name"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val wsName = if (rawName.contains(":::")) rawName.substringBefore(":::") else rawName
+                val ownerFromDev = if (rawName.contains(":::")) rawName.substringAfter(":::") else Regex(""""user_id"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
                 val wsDesc = Regex(""""host"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
                 val count = Regex(""""port"\s*:\s*([0-9]+)""").find(body)?.groupValues?.get(1) ?: "1"
-                val owner = Regex(""""user_id"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
                 val pushToken = Regex(""""push_token"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
 
                 return mapOf(
@@ -1099,7 +1108,7 @@ actual object SupabaseNetwork {
                     "name" to wsName,
                     "desc" to wsDesc,
                     "memberCount" to count,
-                    "ownerEmail" to owner,
+                    "ownerEmail" to ownerFromDev,
                     "pushToken" to pushToken
                 )
             }

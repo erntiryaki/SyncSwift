@@ -838,6 +838,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                         net.syncswift.ui.components.MainNavTab.Workspaces -> {
                                                             net.syncswift.ui.workspace.WorkspaceScreen(
                                                                 copy = copy,
+                                                                userEmail = email,
+                                                                firstName = firstName,
+                                                                lastName = lastName,
+                                                                provider = authProvider,
                                                                 onUploadFileClick = {
                                                                     filePickDestination = FilePickDestination.WORKSPACE
                                                                     pickFile()

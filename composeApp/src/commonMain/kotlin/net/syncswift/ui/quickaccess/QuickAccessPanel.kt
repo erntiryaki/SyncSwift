@@ -357,7 +357,12 @@ fun QuickAccessPanel(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
                             ) {
-                                Text(copy.selectFilesToShare, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = copy.selectFilesToShare,
+                                    color = Color.White,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 

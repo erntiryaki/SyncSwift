@@ -103,9 +103,13 @@ object WorkspaceManager {
 
     init {
         loadSavedState()
+        val email = SessionManager.getLoggedInEmail() ?: ""
+        val first = SessionManager.getUserFirstName().trim()
+        val last = SessionManager.getUserLastName().trim()
+        val full = "$first $last".trim()
+        val myName = if (full.isNotBlank()) full else (if (email.isNotBlank()) email.substringBefore("@") else cleanDeviceDisplayName(SessionManager.getMyDeviceName()))
+
         if (_workspaces.value.isEmpty()) {
-            val email = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
-            val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
             val defaultWs = WorkspaceItem(
                 id = "ws_primary",
                 name = "Kişisel Kasa",
@@ -121,8 +125,6 @@ object WorkspaceManager {
             )
             saveState()
         } else {
-            val email = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
-            val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
             _members.value = listOf(
                 WorkspaceMember(id = "mem_1", email = email, displayName = myName, role = WorkspaceRole.OWNER)
             )
@@ -318,8 +320,11 @@ object WorkspaceManager {
     suspend fun joinWorkspaceByCode(code: String): Boolean {
         val clean = code.trim().replace(" ", "")
         if (clean.length != 6) return false
-        val myEmail = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
-        val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
+        val myEmail = SessionManager.getLoggedInEmail() ?: ""
+        val first = SessionManager.getUserFirstName().trim()
+        val last = SessionManager.getUserLastName().trim()
+        val full = "$first $last".trim()
+        val myName = if (full.isNotBlank()) full else (if (myEmail.isNotBlank()) myEmail.substringBefore("@") else cleanDeviceDisplayName(SessionManager.getMyDeviceName()))
 
         // 1. Check local session cache (same device or local test)
         val local = localWorkspaceInvites[clean]

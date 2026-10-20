@@ -89,8 +89,10 @@ fun AuthPage(
                 .imePadding()
                 .navigationBarsPadding()
         ) {
-            // Hero Image starts seamlessly from top edge, with balanced breathing room and soft fade gradients
+            // Hero Image starts with balanced breathing room and soft fade gradients
             if (showHero) {
+                Spacer(Modifier.height(if (isIos) 28.dp else 22.dp))
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
