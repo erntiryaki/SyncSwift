@@ -53,7 +53,7 @@ fun FileDeviceSelectScreen(
     var registeredAccountDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
     LaunchedEffect(loggedInEmail) {
         if (!loggedInEmail.isNullOrBlank()) {
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.Default) {
                 try {
                     registeredAccountDevices = net.syncswift.SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
                 } catch (_: Exception) {}

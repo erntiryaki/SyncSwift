@@ -1,5 +1,6 @@
 package net.syncswift
 
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.launch
 import net.syncswift.discovery.cleanDeviceDisplayName
 import platform.Foundation.NSDate
@@ -7,6 +8,13 @@ import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.preferredLanguages
 import platform.Foundation.currentLocale
 import platform.Foundation.countryCode
+import platform.UIKit.UIActivityViewController
+import platform.UIKit.UIDocumentInteractionController
+import platform.UIKit.UIDocumentInteractionControllerDelegateProtocol
+import platform.UIKit.UIViewController
+import platform.UIKit.UIWindow
+import platform.UIKit.UIApplication
+import platform.UIKit.popoverPresentationController
 
 actual fun currentPlatform(): PlatformFlavor = PlatformFlavor.Ios
 actual fun currentTimeMs(): Long = (NSDate().timeIntervalSince1970 * 1000).toLong()
@@ -135,6 +143,7 @@ private fun resolveFileUrl(filePathOrUri: String?, fileName: String): platform.F
     return null
 }
 
+@OptIn(ExperimentalForeignApi::class)
 actual fun openFile(filePathOrUri: String?, fileName: String, mimeType: String) {
     println("[SyncSwift iOS] Opening file $fileName at $filePathOrUri")
     platform.darwin.dispatch_async(platform.darwin.dispatch_get_main_queue()) {
@@ -142,7 +151,7 @@ actual fun openFile(filePathOrUri: String?, fileName: String, mimeType: String) 
             val url = resolveFileUrl(filePathOrUri, fileName) ?: return@dispatch_async
             val topVc = getTopViewController() ?: return@dispatch_async
 
-            val docController = platform.UIKit.UIDocumentInteractionController.interactionControllerWithURL(url)
+            val docController = UIDocumentInteractionController.interactionControllerWithURL(url)
             val previewDelegate = DocPreviewDelegate(topVc)
             activeDocController = docController
             activeDocPreviewDelegate = previewDelegate
@@ -150,14 +159,12 @@ actual fun openFile(filePathOrUri: String?, fileName: String, mimeType: String) 
 
             val presented = docController.presentPreviewAnimated(true)
             if (!presented) {
-                val rect = platform.CoreGraphics.CGRectMake(topVc.view.bounds.size.width / 2, topVc.view.bounds.size.height / 2, 0.0, 0.0)
-                val success = docController.presentOptionsMenuFromRect(rect, inView = topVc.view, animated = true)
+                val success = docController.presentOptionsMenuFromRect(topVc.view.bounds, inView = topVc.view, animated = true)
                 if (!success) {
-                    val activityVc = platform.UIKit.UIActivityViewController(listOf(url), null)
-                    activityVc.popoverPresentationController?.apply {
-                        sourceView = topVc.view
-                        sourceRect = rect
-                        permittedArrowDirections = 0uL
+                    val activityVc = UIActivityViewController(listOf(url), null)
+                    activityVc.popoverPresentationController?.let { popover ->
+                        popover.sourceView = topVc.view
+                        popover.sourceRect = topVc.view.bounds
                     }
                     topVc.presentViewController(activityVc, animated = true, completion = null)
                 }
@@ -168,6 +175,7 @@ actual fun openFile(filePathOrUri: String?, fileName: String, mimeType: String) 
     }
 }
 
+@OptIn(ExperimentalForeignApi::class)
 actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
     println("[SyncSwift iOS] Showing file location/share sheet for $fileName at $filePathOrUri")
     platform.darwin.dispatch_async(platform.darwin.dispatch_get_main_queue()) {
@@ -175,12 +183,10 @@ actual fun showFileLocation(filePathOrUri: String?, fileName: String) {
             val url = resolveFileUrl(filePathOrUri, fileName) ?: return@dispatch_async
             val topVc = getTopViewController() ?: return@dispatch_async
 
-            val activityVc = platform.UIKit.UIActivityViewController(listOf(url), null)
-            val rect = platform.CoreGraphics.CGRectMake(topVc.view.bounds.size.width / 2, topVc.view.bounds.size.height / 2, 0.0, 0.0)
-            activityVc.popoverPresentationController?.apply {
-                sourceView = topVc.view
-                sourceRect = rect
-                permittedArrowDirections = 0uL
+            val activityVc = UIActivityViewController(listOf(url), null)
+            activityVc.popoverPresentationController?.let { popover ->
+                popover.sourceView = topVc.view
+                popover.sourceRect = topVc.view.bounds
             }
             topVc.presentViewController(activityVc, animated = true, completion = null)
         } catch (e: Exception) {
