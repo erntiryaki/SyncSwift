@@ -176,7 +176,7 @@ export const App: React.FC = () => {
     const localUser: UserProfile = {
       email: '',
       firstName: 'Local',
-      lastName: 'User',
+      lastName: 'Kullanıcı',
       provider: 'local',
       isPro: false
     };

@@ -94,6 +94,22 @@ fun ConnectDesktopScreen(
         }
     }
 
+    var isRefreshingMyDevices by remember { mutableStateOf(false) }
+    fun triggerMyDevicesRefresh() {
+        if (isRefreshingMyDevices) return
+        isRefreshingMyDevices = true
+        scope.launch {
+            try {
+                net.syncswift.discovery.DeviceDiscoveryManager.triggerDiscoveryPing()
+                net.syncswift.discovery.DeviceDiscoveryManager.startDiscovery()
+                refreshDevices()
+                kotlinx.coroutines.delay(1800)
+            } finally {
+                isRefreshingMyDevices = false
+            }
+        }
+    }
+
     // Ekran açıkken her 3 saniyede bir cihaz listesini güncelle (masaüstü çıkış yaptığında anında mobilde silinsin)
     LaunchedEffect(userEmail) {
         while (true) {
@@ -117,18 +133,27 @@ fun ConnectDesktopScreen(
         (currentDeviceName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(currentDeviceName), ignoreCase = true) || dev.name.equals(currentDeviceName, ignoreCase = true)))
     }
 
-    // Sadece kullanıcının kendi Supabase hesabında kayıtlı olan cihazları listele
-    val otherLinkedDevices = remember(registeredDevices, currentDeviceId, selfDevice) {
-        registeredDevices.filter { !isCurrentSelfDevice(it) }.distinctBy {
-            it.id.ifBlank { "${it.host}:${it.port}" }
-        }
+    // Kullanıcının kayıtlı ve eşleşmiş cihazları (kendi telefonu kesinlikle hariç tutulur)
+    val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
+    val otherLinkedDevices = remember(registeredDevices, discoveredDevices, currentDeviceId, selfDevice) {
+        val list = mutableListOf<DiscoveredDevice>()
+        // 1. Supabase hesabına kayıtlı cihazlar (mevcut telefon hariç)
+        registeredDevices.filter { !isCurrentSelfDevice(it) }.forEach { list.add(it) }
+
+        // 2. Yerel / eşleşmiş masaüstü cihazları (mevcut telefon hariç, sadece desktop olanlar)
+        discoveredDevices.filter { dev ->
+            !isCurrentSelfDevice(dev) && isDesktopDevice(dev) &&
+            list.none { it.id == dev.id || (it.host.isNotBlank() && it.host == dev.host && it.name == dev.name) }
+        }.forEach { list.add(it) }
+
+        list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }
     }
 
     val linkedMobileDevices = remember(otherLinkedDevices) {
         otherLinkedDevices.filter { isMobileDevice(it) }
     }
 
-    // Masaüstü cihazları doğrudan kullanıcının Supabase hesabındaki kayıtlı cihazlardan gelir
+    // Masaüstü cihazları (mevcut telefon hariç)
     val linkedDesktopDevices = remember(otherLinkedDevices) {
         otherLinkedDevices.filter { isDesktopDevice(it) }
     }
@@ -263,13 +288,22 @@ fun ConnectDesktopScreen(
             }
 
             // SCROLLABLE CONTENT
-            Column(
+            val scrollState = rememberScrollState()
+            net.syncswift.ui.components.ElegantPullToRefreshLayout(
+                isRefreshing = isRefreshingMyDevices,
+                onRefresh = ::triggerMyDevicesRefresh,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .fillMaxWidth(),
+                refreshingText = copy.scanningNearbyDevices,
+                canScrollBackward = { scrollState.value > 0 }
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                ) {
                 // ==========================================
                 // SECTION 1: MOBİL CİHAZLARIM (TOP)
                 // ==========================================
@@ -768,6 +802,7 @@ fun ConnectDesktopScreen(
 
                 Spacer(Modifier.height(24.dp))
             }
+        }
         }
 
         // Remove Device Confirmation Bottom Sheet

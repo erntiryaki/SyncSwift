@@ -67,6 +67,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        net.syncswift.discovery.DeviceDiscoveryManager.broadcastGoodbye()
+    }
+
     override fun onStop() {
         super.onStop()
         net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()

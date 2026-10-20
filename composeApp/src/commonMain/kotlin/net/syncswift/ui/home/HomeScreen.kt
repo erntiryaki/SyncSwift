@@ -47,7 +47,7 @@ import net.syncswift.SheetSystemBars
 import net.syncswift.ui.theme.*
 
 enum class DeviceSectionType {
-    NEARBY, CONNECTED
+    NEARBY, CONNECTED, MY_DEVICES
 }
 
 data class UiDeviceItem(
@@ -86,6 +86,22 @@ fun HomeScreen(
     var deviceForAction by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var viewAllSection by remember { mutableStateOf<DeviceSectionType?>(null) }
     var isTransfersExpanded by remember { mutableStateOf(true) }
+
+    var isRefreshingHome by remember { mutableStateOf(false) }
+    val refreshScope = rememberCoroutineScope()
+    fun triggerHomeRefresh() {
+        if (isRefreshingHome) return
+        isRefreshingHome = true
+        refreshScope.launch {
+            try {
+                DeviceDiscoveryManager.triggerDiscoveryPing()
+                DeviceDiscoveryManager.startDiscovery()
+                kotlinx.coroutines.delay(1800)
+            } finally {
+                isRefreshingHome = false
+            }
+        }
+    }
 
     val selfDevice = remember(discoveredDevices) { DeviceDiscoveryManager.getSelfDevice() }
     val myName = cleanDeviceDisplayName(selfDevice?.name ?: SessionManager.getMyDeviceName())
@@ -141,7 +157,7 @@ fun HomeScreen(
                     connectedKeys.contains(dev.host) ||
                     connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                     ConnectionManager.isDeviceConnected(dev)
-            !isConn
+            !isConn && dev.isLoggedIn && dev.isOnline
         }.map { dev ->
             val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
@@ -155,8 +171,51 @@ fun HomeScreen(
         }
     }
 
-    val allDeviceItems = remember(nearbyDevices, connectedDevices) {
-        nearbyDevices + connectedDevices
+    val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
+        val t = dev.osType.lowercase()
+        t.contains("windows") || t.contains("mac") || t.contains("desktop") || t.contains("pc")
+    }
+
+    var registeredAccountDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
+    val loggedInEmail = remember { SessionManager.getLoggedInEmail() ?: "" }
+
+    LaunchedEffect(loggedInEmail) {
+        while (true) {
+            if (loggedInEmail.isNotBlank()) {
+                try {
+                    registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                } catch (_: Exception) {}
+            }
+            kotlinx.coroutines.delay(4000)
+        }
+    }
+
+    val myDevices = remember(registeredAccountDevices, realOtherDevices, connectedKeys) {
+        val list = mutableListOf<DiscoveredDevice>()
+        // 1. Supabase kayıtlı cihazlar (giriş yapılı bu telefon KESİNLİKLE hariç tutulur)
+        registeredAccountDevices.filter { !isDeviceSelf(it) }.forEach { list.add(it) }
+
+        // 2. Local oturumda veya aynı ağda eşleşmiş / bulunan masaüstü cihazları (bu telefon KESİNLİKLE hariç tutulur)
+        realOtherDevices.filter { dev ->
+            !isDeviceSelf(dev) && isDesktopDevice(dev) &&
+            list.none { it.id == dev.id || (it.host.isNotBlank() && it.host == dev.host && it.name == dev.name) }
+        }.forEach { list.add(it) }
+
+        list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }.map { dev ->
+            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
+            UiDeviceItem(
+                id = dev.id.ifBlank { dev.host },
+                name = cleanDeviceDisplayName(dev.name),
+                os = devModel,
+                isOnline = dev.isOnline,
+                section = DeviceSectionType.MY_DEVICES,
+                realDevice = dev
+            )
+        }
+    }
+
+    val allDeviceItems = remember(nearbyDevices, connectedDevices, myDevices) {
+        nearbyDevices + connectedDevices + myDevices
     }
 
     fun handleDeviceSelection(item: UiDeviceItem) {
@@ -320,13 +379,21 @@ fun HomeScreen(
 
         // CONTENT AREA (Normal vs Search)
         if (!isSearchActive) {
-            Column(
+            net.syncswift.ui.components.ElegantPullToRefreshLayout(
+                isRefreshing = isRefreshingHome,
+                onRefresh = ::triggerHomeRefresh,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp)
+                    .fillMaxWidth(),
+                refreshingText = copy.scanningNetworkDevices,
+                canScrollBackward = { scrollState.value > 0 }
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp)
+                ) {
                 Spacer(Modifier.height(8.dp))
 
                 // SECTION 1: YAKINDAKİ CİHAZLAR (Horizontal Cards)
@@ -444,7 +511,47 @@ fun HomeScreen(
                     }
                 }
 
+                Spacer(Modifier.height(20.dp))
 
+                // SECTION 3: KENDİ CİHAZLARIM (Giriş yapılı mevcut telefon hariç tutulur)
+                SectionHeaderRow(
+                    title = copy.myDevicesTitle,
+                    count = myDevices.size,
+                    copy = copy,
+                    onViewAllClick = { viewAllSection = DeviceSectionType.MY_DEVICES }
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                if (myDevices.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        myDevices.take(4).forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Text(
+                            text = copy.noLinkedDesktop,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(20.dp))
 
@@ -689,7 +796,8 @@ fun HomeScreen(
 
                 Spacer(Modifier.height(28.dp))
             }
-        } else {
+        }
+    } else {
             // DYNAMIC SEARCH VIEW (Phone 3 in Image 2)
             val filteredDevices = remember(searchQuery, allDeviceItems) {
                 if (searchQuery.isBlank()) allDeviceItems
@@ -706,6 +814,9 @@ fun HomeScreen(
             }
             val searchConnected = remember(filteredDevices) {
                 filteredDevices.filter { it.section == DeviceSectionType.CONNECTED }
+            }
+            val searchMyDevices = remember(filteredDevices) {
+                filteredDevices.filter { it.section == DeviceSectionType.MY_DEVICES }
             }
 
             Column(
@@ -742,6 +853,12 @@ fun HomeScreen(
                         selected = selectedFilterChip == 2,
                         onClick = { selectedFilterChip = 2 }
                     )
+                    FilterChipPill(
+                        label = copy.myDevicesTitle,
+                        count = searchMyDevices.size,
+                        selected = selectedFilterChip == 3,
+                        onClick = { selectedFilterChip = 3 }
+                    )
                 }
 
                 Spacer(Modifier.height(18.dp))
@@ -767,6 +884,21 @@ fun HomeScreen(
                     Spacer(Modifier.height(10.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         searchConnected.forEach { dev ->
+                            DeviceListRowCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
+
+                // 3. My Devices Search Results
+                if ((selectedFilterChip == 0 || selectedFilterChip == 3) && searchMyDevices.isNotEmpty()) {
+                    SearchSectionHeader(title = copy.myDevicesTitle, count = searchMyDevices.size)
+                    Spacer(Modifier.height(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        searchMyDevices.forEach { dev ->
                             DeviceListRowCard(
                                 item = dev,
                                 onClick = { handleDeviceSelection(dev) }
@@ -896,6 +1028,7 @@ fun HomeScreen(
             val (sheetTitle, sheetList) = when (section) {
                 DeviceSectionType.NEARBY -> copy.nearbyDevicesSection to nearbyDevices
                 DeviceSectionType.CONNECTED -> copy.connectedDevicesSectionTitle to connectedDevices
+                DeviceSectionType.MY_DEVICES -> copy.myDevicesTitle to myDevices
             }
             DeviceListBottomSheet(
                 title = sheetTitle,

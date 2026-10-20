@@ -124,13 +124,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {currentUser && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
               <div className="w-6 h-6 rounded-full bg-[#4D90FE]/20 text-[#4D90FE] flex items-center justify-center text-xs font-bold">
-                {currentUser.firstName?.[0] || 'U'}
+                {currentUser.provider === 'local' || !currentUser.email ? 'L' : (currentUser.firstName?.[0] || 'U')}
               </div>
               <div className="text-left">
                 <span className="text-xs font-bold leading-none block">
-                  {currentUser.firstName} {currentUser.lastName}
+                  {currentUser.provider === 'local' || !currentUser.email
+                    ? 'Local Kullanıcı'
+                    : `${currentUser.firstName} ${currentUser.lastName}`.trim() || 'Kullanıcı'}
                 </span>
-                <span className="text-[10px] text-slate-400 block">{currentUser.email || 'Local User'}</span>
+                {currentUser.provider !== 'local' && currentUser.email ? (
+                  <span className="text-[10px] text-slate-400 block">{currentUser.email}</span>
+                ) : null}
               </div>
               {currentUser.isPro ? (
                 <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-[#4D90FE]/20 text-[#4D90FE] border border-[#4D90FE]/30">
@@ -138,7 +142,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </span>
               ) : (
                 <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-500/20 text-slate-400">
-                  FREE
+                  {currentUser.provider === 'local' || !currentUser.email ? 'LOCAL' : 'FREE'}
                 </span>
               )}
             </div>

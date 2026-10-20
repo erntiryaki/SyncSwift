@@ -283,6 +283,10 @@ actual object DeviceDiscoveryManager {
         }
     }
 
+    actual fun broadcastGoodbye() {
+        stopDiscovery()
+    }
+
     private fun addOrUpdateDevice(device: DiscoveredDevice) {
         val selfIp = getLocalWifiIp()
         if (device.host == selfIp || device.host == "127.0.0.1") return

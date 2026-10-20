@@ -515,7 +515,7 @@ class Copy {
     var adBadge: String = "AD"
     var adSubtitle: String = "Unlimited transfers & ad-free experience"
     var adAction: String = "Explore"
-    var connectedDevicesSectionTitle: String = "Locally Connected Devices"
+    var connectedDevicesSectionTitle: String = "Connected Devices"
 
     // Modern Redesign Keys
     var filterAll: String = "All"

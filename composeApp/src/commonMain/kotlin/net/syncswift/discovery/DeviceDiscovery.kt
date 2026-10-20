@@ -13,7 +13,8 @@ data class DiscoveredDevice(
     val isRemote: Boolean = false,
     val pushToken: String? = null,
     val language: String? = null,
-    val modelCode: String = ""
+    val modelCode: String = "",
+    val isLoggedIn: Boolean = true
 )
 
 expect object DeviceDiscoveryManager {
@@ -25,6 +26,7 @@ expect object DeviceDiscoveryManager {
     fun addManualDevice(host: String, port: Int = 52424, name: String = "SyncSwift Device", osType: String = "Other"): DiscoveredDevice
     fun removeManualDevice(host: String)
     fun triggerDiscoveryPing()
+    fun broadcastGoodbye()
 }
 
 fun cleanDeviceDisplayName(rawName: String): String {

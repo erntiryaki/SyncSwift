@@ -1071,12 +1071,13 @@ actual object ConnectionManager {
 
                                     val rawEmail = SessionManager.getLoggedInEmail()?.trim().orEmpty()
                                     val rawUserId = SessionManager.getLoggedInUserId()?.trim().orEmpty()
-                                    val effectiveIdentifier = if (rawEmail.isNotBlank()) {
+                                    val isLocal = !SessionManager.isLoggedIn() || (rawEmail.isBlank() && rawUserId.isBlank()) || SessionManager.getLoggedInProvider() == net.syncswift.IdentityProvider.Local
+                                    val effectiveIdentifier = if (isLocal) {
+                                        "local_user"
+                                    } else if (rawEmail.isNotBlank()) {
                                         rawEmail
-                                    } else if (rawUserId.isNotBlank()) {
-                                        rawUserId
                                     } else {
-                                        "mobile-ios@syncswift.net"
+                                        rawUserId
                                     }
 
                                     val patchUrl = NSURL.URLWithString("$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean")
@@ -1086,12 +1087,13 @@ actual object ConnectionManager {
                                         patchReq.setValue("application/json", forHTTPHeaderField = "Content-Type")
                                         patchReq.setValue(serviceKey, forHTTPHeaderField = "apikey")
                                         patchReq.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
-                                        val patchBody = """{"push_token": "$effectiveIdentifier"}"""
+                                        val userField = if (!isLocal && rawUserId.isNotBlank()) """"$rawUserId"""" else "null"
+                                        val patchBody = """{"push_token": "$effectiveIdentifier", "user_id": $userField}"""
                                         patchReq.setHTTPBody((patchBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
                                         NSURLSession.sharedSession.dataTaskWithRequest(patchReq).resume()
                                     }
 
-                                    if (!devId.isNullOrBlank()) {
+                                    if (!devId.isNullOrBlank() && !isLocal) {
                                         scope.launch(Dispatchers.Default) {
                                             try {
                                                 SupabaseNetwork.registerDeviceInSupabase(

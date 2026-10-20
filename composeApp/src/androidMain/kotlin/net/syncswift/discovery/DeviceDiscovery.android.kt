@@ -219,7 +219,8 @@ actual object DeviceDiscoveryManager {
             isPing -> "SS_DISC:v1"
             else -> "SS_BEAT:v1"
         }
-        return "$prefix:$id:$name:$port:$os:$model"
+        val isAuth = if (SessionManager.isLoggedIn()) "1" else "0"
+        return "$prefix:$id:$name:$port:$os:$model:$isAuth"
     }
 
     private fun sendUdpPacket(message: String, targetAddress: InetAddress? = null) {
@@ -262,6 +263,12 @@ actual object DeviceDiscoveryManager {
         val port = parts[4].toIntOrNull() ?: DEFAULT_PORT
         val os = parts[5]
         val model = if (parts.size >= 7) parts[6] else ""
+        val isDeviceLoggedIn = if (parts.size >= 8) (parts[7] == "1") else true
+
+        // Yalnızca giriş yapılmış (local veya hesap oturumlu) cihazlar kabul edilir
+        if (!isDeviceLoggedIn) {
+            return
+        }
 
         val cleanName = cleanDeviceDisplayName(name)
 
@@ -270,26 +277,16 @@ actual object DeviceDiscoveryManager {
             lastSeenTimestamps.remove(id)
             lastSeenTimestamps.remove(name)
             lastSeenTimestamps.remove(cleanName)
+            net.syncswift.connection.ConnectionManager.markDeviceDisconnected(id)
+            if (senderHost.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderHost)
+            net.syncswift.connection.ConnectionManager.markDeviceDisconnected(cleanName)
             val current = _devices.value.toMutableList()
-            val iterator = current.listIterator()
-            var changed = false
-            while (iterator.hasNext()) {
-                val dev = iterator.next()
-                val matches = (senderHost.isNotBlank() && dev.host == senderHost) ||
-                        dev.id == id ||
-                        cleanDeviceDisplayName(dev.name) == cleanName
-                if (matches) {
-                    val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                    if (isConnected) {
-                        iterator.set(dev.copy(isOnline = false))
-                        changed = true
-                    } else {
-                        iterator.remove()
-                        changed = true
-                    }
-                }
+            val removed = current.removeAll { dev ->
+                (senderHost.isNotBlank() && dev.host == senderHost) ||
+                dev.id == id ||
+                cleanDeviceDisplayName(dev.name) == cleanName
             }
-            if (changed) {
+            if (removed) {
                 _devices.value = current
                 saveManualDevices()
             }
@@ -302,8 +299,8 @@ actual object DeviceDiscoveryManager {
         lastSeenTimestamps[name] = now
         lastSeenTimestamps[cleanName] = now
 
-        // If peer sent a discovery ping, reply immediately directly to them
-        if (tag == "SS_DISC") {
+        // If peer sent a discovery ping, reply immediately directly to them (only if logged in)
+        if (tag == "SS_DISC" && SessionManager.isLoggedIn()) {
             sendUdpPacket(buildSelfAnnouncement(isPing = false), senderAddress)
         }
 
@@ -315,7 +312,8 @@ actual object DeviceDiscoveryManager {
             osType = os,
             isSelf = false,
             isOnline = true,
-            modelCode = model
+            modelCode = model,
+            isLoggedIn = true
         )
 
         val current = _devices.value.toMutableList()
@@ -374,14 +372,18 @@ actual object DeviceDiscoveryManager {
 
         // 2. Launch UDP Heartbeat broadcaster (instant broadcast on start, then every 2.8s)
         udpHeartbeatJob = scope.launch(Dispatchers.IO) {
-            // Instant discovery ping
-            sendUdpPacket(buildSelfAnnouncement(isPing = true))
-            delay(500)
-            sendUdpPacket(buildSelfAnnouncement(isPing = false))
+            // Instant discovery ping (only if logged in)
+            if (SessionManager.isLoggedIn()) {
+                sendUdpPacket(buildSelfAnnouncement(isPing = true))
+                delay(500)
+                sendUdpPacket(buildSelfAnnouncement(isPing = false))
+            }
 
             while (isActive) {
                 delay(2800)
-                sendUdpPacket(buildSelfAnnouncement(isPing = false))
+                if (SessionManager.isLoggedIn()) {
+                    sendUdpPacket(buildSelfAnnouncement(isPing = false))
+                }
             }
         }
     }
@@ -420,23 +422,28 @@ actual object DeviceDiscoveryManager {
                         ?: 0L
 
                     val age = now - lastSeen
-                    // Heartbeat is sent every 2.8s. If seen within 15s -> online
-                    if (lastSeen > 0L && age < 15000L) {
+                    // Heartbeat is sent every 2.8s. If seen within 6s -> online
+                    if (lastSeen > 0L && age < 6000L) {
                         if (!dev.isOnline) {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else if (lastSeen > 0L && age >= 15000L) {
+                    } else if (lastSeen > 0L && age >= 6000L) {
                         val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                        if (isConnected || age < 40000L) {
+                        if (!isConnected) {
+                            // Non-connected nearby device not seen for 6s -> remove immediately
+                            iterator.remove()
+                            changed = true
+                        } else {
                             if (dev.isOnline) {
                                 iterator.set(dev.copy(isOnline = false))
                                 changed = true
                             }
-                        } else {
-                            // Non-connected nearby device not seen for 40s -> remove
-                            iterator.remove()
-                            changed = true
+                            if (age >= 10000L) {
+                                net.syncswift.connection.ConnectionManager.markDeviceDisconnected(dev.id)
+                                iterator.remove()
+                                changed = true
+                            }
                         }
                     }
                 }
@@ -496,6 +503,27 @@ actual object DeviceDiscoveryManager {
             }
             _isScanning.value = false
         }
+    }
+
+    actual fun broadcastGoodbye() {
+        try {
+            val packet = buildSelfAnnouncement(isPing = false, isGoodbye = true)
+            Thread {
+                try {
+                    val bytes = packet.toByteArray(Charsets.UTF_8)
+                    val socket = DatagramSocket()
+                    socket.broadcast = true
+                    for (bcast in getBroadcastAddresses()) {
+                        try {
+                            val p = DatagramPacket(bytes, bytes.size, bcast, UDP_DISCOVERY_PORT)
+                            socket.send(p)
+                            socket.send(p)
+                        } catch (_: Exception) {}
+                    }
+                    socket.close()
+                } catch (_: Exception) {}
+            }.start()
+        } catch (_: Exception) {}
     }
 
     actual fun getSelfDevice(): DiscoveredDevice? {

@@ -547,13 +547,13 @@ actual object ConnectionManager {
 
                         val rawEmail = SessionManager.getLoggedInEmail()?.trim().orEmpty()
                         val rawUserId = SessionManager.getLoggedInUserId()?.trim().orEmpty()
-                        val selfDev = DeviceDiscoveryManager.getSelfDevice()
-                        val effectiveIdentifier = if (rawEmail.isNotBlank()) {
+                        val isLocal = !SessionManager.isLoggedIn() || (rawEmail.isBlank() && rawUserId.isBlank()) || SessionManager.getLoggedInProvider() == net.syncswift.IdentityProvider.Local
+                        val effectiveIdentifier = if (isLocal) {
+                            "local_user"
+                        } else if (rawEmail.isNotBlank()) {
                             rawEmail
-                        } else if (rawUserId.isNotBlank()) {
-                            rawUserId
                         } else {
-                            "mobile-${(selfDev?.id ?: Build.MODEL).take(12).replace(" ", "_")}@syncswift.net"
+                            rawUserId
                         }
 
                         // Await PATCH so desktop receives pairing signal before mobile returns ACCEPTED
@@ -569,7 +569,8 @@ actual object ConnectionManager {
                                 patchConn.setRequestProperty("apikey", key)
                                 patchConn.setRequestProperty("Authorization", "Bearer $key")
                                 patchConn.outputStream.use { os ->
-                                    os.write("""{"push_token": "$effectiveIdentifier"}""".toByteArray())
+                                    val userField = if (!isLocal && rawUserId.isNotBlank()) """"$rawUserId"""" else "null"
+                                    os.write("""{"push_token": "$effectiveIdentifier", "user_id": $userField}""".toByteArray())
                                     os.flush()
                                 }
                                 val patchCode = patchConn.responseCode
@@ -578,7 +579,7 @@ actual object ConnectionManager {
                                 Log.e("ConnectionManager", "PATCH pairing_codes error: ${e.message}")
                             }
 
-                            if (deviceId.isNotBlank()) {
+                            if (deviceId.isNotBlank() && !isLocal) {
                                 try {
                                     SupabaseNetwork.registerDeviceInSupabase(
                                         email = effectiveIdentifier,

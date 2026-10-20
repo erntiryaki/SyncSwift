@@ -246,35 +246,6 @@ fun ConnectedDevicesScreen(
         }
     )
 
-    val nestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < 0 && pullOffset > 0f) {
-                    val consumed = available.y.coerceAtLeast(-pullOffset)
-                    pullOffset += consumed
-                    return Offset(0f, consumed)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.UserInput && available.y > 0 && scrollState.value == 0 && !isRefreshing) {
-                    pullOffset = (pullOffset + available.y * 0.4f).coerceAtMost(250f)
-                    return Offset(0f, available.y)
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                if (pullOffset >= 150f && !isRefreshing) {
-                    triggerScan()
-                }
-                pullOffset = 0f
-                return Velocity.Zero
-            }
-        }
-    }
-
     Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -282,72 +253,51 @@ fun ConnectedDevicesScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            Column(
+            net.syncswift.ui.components.ElegantPullToRefreshLayout(
+                isRefreshing = isRefreshing,
+                onRefresh = ::triggerScan,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .nestedScroll(nestedScrollConnection)
-                    .padding(horizontal = 24.dp)
-                    .verticalScroll(scrollState)
-            ) {
-                Spacer(Modifier.height(16.dp))
-
-            // Top Bar with Back Button & Title
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(InputBg)
-                        .clickable(onClick = onBack),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ChevronLeftIcon(Modifier.size(18.dp), color = Cloud)
-                }
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    text = copy.connectedDevicesTitle,
-                    color = Cloud,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.4).sp
-                )
-            }
-
-            // Modern Pull-to-Refresh: circular indicator with text underneath, no dots, no box
-            AnimatedVisibility(
-                visible = isRefreshing,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                    .fillMaxWidth(),
+                refreshingText = copy.scanningNearbyDevices,
+                canScrollBackward = { scrollState.value > 0 }
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        .padding(horizontal = 24.dp)
+                        .verticalScroll(scrollState)
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = Blue,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = copy.scanningNearbyDevices,
-                        color = Mist,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
+                    Spacer(Modifier.height(16.dp))
 
-            Spacer(Modifier.height(16.dp))
+                    // Top Bar with Back Button & Title
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(InputBg)
+                                .clickable(onClick = onBack),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ChevronLeftIcon(Modifier.size(18.dp), color = Cloud)
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            text = copy.connectedDevicesTitle,
+                            color = Cloud,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.4).sp
+                        )
+                    }
+
+                    Spacer(Modifier.height(16.dp))
 
             val otherDevices = discoveredDevices.filter { dev ->
                 !dev.isSelf &&
@@ -679,6 +629,7 @@ fun ConnectedDevicesScreen(
 
             Spacer(Modifier.height(24.dp))
         }
+    }
 
         val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
         if (!isProUser) {

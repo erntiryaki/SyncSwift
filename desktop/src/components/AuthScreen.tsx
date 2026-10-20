@@ -207,49 +207,65 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 }).catch(() => {});
               }
 
-              // Profil bilgilerini al
-              let profile: any = null;
-              try {
-                profile = await fetchUserProfile(pairedIdentifier);
-              } catch (_) {}
+              // Yerel oturum mu yoksa gerçek hesap mı kontrol et
+              const isLocal = pairedIdentifier === 'local' ||
+                              pairedIdentifier === 'local_user' ||
+                              pairedIdentifier.startsWith('mobile-') ||
+                              pairedIdentifier.endsWith('@syncswift.net');
 
-              const userEmail = profile?.email || (pairedIdentifier.includes('@') ? pairedIdentifier : 'user@syncswift.net');
-              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-              const resolvedUserId = (profile?.id && uuidRegex.test(profile.id))
-                ? profile.id
-                : (uuidRegex.test(pairedIdentifier) ? pairedIdentifier : null);
+              if (isLocal) {
+                // ANINDA Yerel Kullanıcı olarak giriş yap (e-posta gösterilmez)
+                onLoginSuccess({
+                  id: undefined,
+                  email: '',
+                  firstName: 'Local',
+                  lastName: 'Kullanıcı',
+                  provider: 'local',
+                  isPro: false
+                });
+              } else {
+                // Profil bilgilerini al
+                let profile: any = null;
+                try {
+                  profile = await fetchUserProfile(pairedIdentifier);
+                } catch (_) {}
 
-              // Masaüstü cihazını Supabase devices tablosuna kaydet
-              const deviceBody: any = {
-                id: deviceId,
-                device_name: isMac() ? 'SyncSwift Mac' : 'SyncSwift Windows',
-                device_type: isMac() ? 'macOS' : 'Windows',
-                is_online: true
-              };
-              if (resolvedUserId) {
-                deviceBody.user_id = resolvedUserId;
+                const userEmail = profile?.email || (pairedIdentifier.includes('@') ? pairedIdentifier : '');
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                const resolvedUserId = (profile?.id && uuidRegex.test(profile.id))
+                  ? profile.id
+                  : (uuidRegex.test(pairedIdentifier) ? pairedIdentifier : null);
+
+                // Masaüstü cihazını Supabase devices tablosuna kaydet
+                if (resolvedUserId) {
+                  fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/devices`, {
+                    method: 'POST',
+                    headers: {
+                      'apikey': key,
+                      'Authorization': `Bearer ${key}`,
+                      'Content-Type': 'application/json',
+                      'Prefer': 'resolution=merge-duplicates'
+                    },
+                    body: JSON.stringify({
+                      id: deviceId,
+                      device_name: isMac() ? 'SyncSwift Mac' : 'SyncSwift Windows',
+                      device_type: isMac() ? 'macOS' : 'Windows',
+                      user_id: resolvedUserId,
+                      is_online: true
+                    })
+                  }).catch(() => {});
+                }
+
+                // ANINDA masaüstünde gerçek hesapla giriş yap
+                onLoginSuccess({
+                  id: resolvedUserId || undefined,
+                  email: userEmail,
+                  firstName: profile?.firstName || (userEmail ? userEmail.split('@')[0] : 'User'),
+                  lastName: profile?.lastName || '',
+                  provider: profile?.provider || 'email',
+                  isPro: profile?.isPro ?? true
+                });
               }
-
-              fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/devices`, {
-                method: 'POST',
-                headers: {
-                  'apikey': key,
-                  'Authorization': `Bearer ${key}`,
-                  'Content-Type': 'application/json',
-                  'Prefer': 'resolution=merge-duplicates'
-                },
-                body: JSON.stringify(deviceBody)
-              }).catch(() => {});
-
-              // ANINDA masaüstünde giriş yap
-              onLoginSuccess({
-                id: resolvedUserId || undefined,
-                email: userEmail,
-                firstName: profile?.firstName || userEmail.split('@')[0],
-                lastName: profile?.lastName || '',
-                provider: profile?.provider || (pairedIdentifier.includes('@') ? 'email' : 'local'),
-                isPro: profile?.isPro ?? true
-              });
             }
           }
         }
