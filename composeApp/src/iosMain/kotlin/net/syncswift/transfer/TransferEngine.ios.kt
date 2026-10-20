@@ -372,6 +372,7 @@ actual object TransferEngine {
 
                             val savedPath = saveIncomingStream(fileName, fileSize, transferId, clientSock)
                             if (savedPath != null) {
+                                handleSavedFile(fileName, mimeType, savedPath)
                                 updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED, savedPath)
                                 val ackByte = byteArrayOf(ACK)
                                 ackByte.usePinned { pinned ->
@@ -408,6 +409,7 @@ actual object TransferEngine {
 
                             val savedPath = saveIncomingStream(fileName, fileSize, transferId, clientSock)
                             if (savedPath != null) {
+                                handleSavedFile(fileName, mimeType, savedPath)
                                 updateTransferProgress(transferId, fileSize, TransferStatus.COMPLETED, savedPath)
                                 val ackByte = byteArrayOf(ACK)
                                 ackByte.usePinned { pinned ->
@@ -521,6 +523,23 @@ actual object TransferEngine {
             return null
         } finally {
             fclose(filePtr)
+        }
+    }
+
+    private fun handleSavedFile(fileName: String, mimeType: String, savedPath: String) {
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        val isImage = mimeType.startsWith("image/", ignoreCase = true) ||
+                      ext in listOf("jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp")
+        if (isImage) {
+            try {
+                val img = UIImage.imageWithContentsOfFile(savedPath)
+                if (img != null) {
+                    UIImageWriteToSavedPhotosAlbum(img, null, null, null)
+                    println("[SyncSwift iOS] Image successfully saved to Photos Gallery: $fileName")
+                }
+            } catch (e: Exception) {
+                println("[SyncSwift iOS] Failed to save image to Photos Gallery: ${e.message}")
+            }
         }
     }
 
@@ -1331,6 +1350,7 @@ actual object TransferEngine {
 
                     if (savedPath != null) {
                         updateTransferProgress(transferId, finalSize, TransferStatus.COMPLETED, savedPath)
+                        handleSavedFile(fileName, "", savedPath)
                         dispatch_async(dispatch_get_main_queue()) {
                             val copy = currentAppCopy()
                             showNativeToast(copy.fileReceivedSuccessfully.replace("%s", fileName))

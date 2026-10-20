@@ -550,15 +550,38 @@ actual object TransferEngine {
         var outputStream: OutputStream? = null
         var fallbackPath: String? = null
 
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        val isImage = mimeType.startsWith("image/", ignoreCase = true) ||
+                      ext in listOf("jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp")
+        val effectiveMime = if (isImage && !mimeType.startsWith("image/", ignoreCase = true)) {
+            when (ext) {
+                "png" -> "image/png"
+                "gif" -> "image/gif"
+                "webp" -> "image/webp"
+                "heic" -> "image/heic"
+                "bmp" -> "image/bmp"
+                else -> "image/jpeg"
+            }
+        } else if (mimeType.isNotBlank()) mimeType else "application/octet-stream"
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, if (mimeType.isNotBlank()) mimeType else "application/octet-stream")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/SyncSwift")
+                    put(MediaStore.MediaColumns.MIME_TYPE, effectiveMime)
+                    if (isImage) {
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/SyncSwift")
+                    } else {
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/SyncSwift")
+                    }
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
-                targetUri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                val collectionUri = if (isImage) {
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                } else {
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                }
+                targetUri = ctx.contentResolver.insert(collectionUri, contentValues)
                 if (targetUri != null) {
                     outputStream = ctx.contentResolver.openOutputStream(targetUri)
                 }
@@ -566,10 +589,11 @@ actual object TransferEngine {
 
             if (outputStream == null) {
                 // Fallback to app-accessible storage or legacy directory
+                val dirType = if (isImage) Environment.DIRECTORY_PICTURES else Environment.DIRECTORY_DOWNLOADS
                 val targetDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "SyncSwift").apply { mkdirs() }
+                    File(ctx.getExternalFilesDir(dirType), "SyncSwift").apply { mkdirs() }
                 } else {
-                    File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "SyncSwift").apply { mkdirs() }
+                    File(Environment.getExternalStoragePublicDirectory(dirType), "SyncSwift").apply { mkdirs() }
                 }
                 val destFile = File(targetDir, fileName)
                 fallbackPath = destFile.absolutePath
@@ -604,8 +628,18 @@ actual object TransferEngine {
 
             val isOk = if (fileSize > 0) totalRead == fileSize else totalRead > 0
             if (isOk) {
+                if (isImage && fallbackPath != null) {
+                    try {
+                        android.media.MediaScannerConnection.scanFile(
+                            ctx,
+                            arrayOf(fallbackPath),
+                            arrayOf(effectiveMime),
+                            null
+                        )
+                    } catch (_: Exception) {}
+                }
                 val savedLocation = targetUri?.toString() ?: fallbackPath
-                showFileCompletedNotification(fileName, mimeType, savedLocation)
+                showFileCompletedNotification(fileName, effectiveMime, savedLocation)
                 return savedLocation
             }
             return null

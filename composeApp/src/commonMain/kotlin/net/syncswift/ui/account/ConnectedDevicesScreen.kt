@@ -854,14 +854,6 @@ fun ConnectedDevicesScreen(
                 onSendRequest = {
                     if (isPairingInFlight) return@SendPairRequestScreen
                     isPairingInFlight = true
-                    if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
-                        deviceToPair = null
-                        isPairingInFlight = false
-                        net.syncswift.subscription.SubscriptionManager.triggerPaywall(
-                            net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
-                        )
-                        return@SendPairRequestScreen
-                    }
                     deviceToPair = null
                     showNativeToast(copy.sendingConnectionRequest)
                     ConnectionManager.requestPairing(target) { result ->

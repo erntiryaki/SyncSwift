@@ -1,4 +1,4 @@
-package net.syncswift
+﻿package net.syncswift
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 
 enum class AuthAlertState { None, WrongPassword, CrossProviderEmailToGoogle }
+enum class FilePickDestination { DIRECT_SEND, QUICK_ACCESS, WORKSPACE }
 
 @Composable
 fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Unit = {}) {
@@ -184,6 +185,10 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     var pendingClipboardToSend by remember { mutableStateOf<String?>(null) }
     var showDeviceSelectModal by remember { mutableStateOf(false) }
 
+    var filePickDestination by remember { mutableStateOf(FilePickDestination.DIRECT_SEND) }
+    var stagedQuickFileName by remember { mutableStateOf<String?>(null) }
+    var stagedQuickFileSize by remember { mutableStateOf<Long?>(null) }
+
     val pickFile = net.syncswift.transfer.rememberFilePicker { fileName, bytes, mimeType ->
         if (!net.syncswift.subscription.SubscriptionManager.canTransferFileSize(bytes.size.toLong())) {
             net.syncswift.subscription.SubscriptionManager.triggerPaywall(
@@ -191,22 +196,39 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
             )
             return@rememberFilePicker
         }
-        if (targetedDevice != null) {
-            val target = targetedDevice!!
-            targetedDevice = null
-            net.syncswift.transfer.TransferEngine.sendFile(
-                targetHost = target.host,
-                targetPort = target.port,
-                targetDeviceName = target.name,
-                fileName = fileName,
-                fileBytes = bytes,
-                mimeType = mimeType
-            )
-        } else if (selectableDevicesForTransfer.isEmpty()) {
-            showNativeToast(copy.noDevicesOnNetwork)
-        } else {
-            pendingFileToSend = Triple(fileName, bytes, mimeType)
-            showDeviceSelectModal = true
+        when (filePickDestination) {
+            FilePickDestination.QUICK_ACCESS -> {
+                stagedQuickFileName = fileName
+                stagedQuickFileSize = bytes.size.toLong()
+                showNativeToast(fileName)
+            }
+            FilePickDestination.WORKSPACE -> {
+                net.syncswift.workspace.WorkspaceManager.uploadFile(
+                    name = fileName,
+                    size = bytes.size.toLong(),
+                    mimeType = mimeType
+                )
+                showNativeToast(copy.fileUploadedToast)
+            }
+            FilePickDestination.DIRECT_SEND -> {
+                if (targetedDevice != null) {
+                    val target = targetedDevice!!
+                    targetedDevice = null
+                    net.syncswift.transfer.TransferEngine.sendFile(
+                        targetHost = target.host,
+                        targetPort = target.port,
+                        targetDeviceName = target.name,
+                        fileName = fileName,
+                        fileBytes = bytes,
+                        mimeType = mimeType
+                    )
+                } else if (selectableDevicesForTransfer.isEmpty()) {
+                    showNativeToast(copy.noDevicesOnNetwork)
+                } else {
+                    pendingFileToSend = Triple(fileName, bytes, mimeType)
+                    showDeviceSelectModal = true
+                }
+            }
         }
     }
 
@@ -739,6 +761,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             onBack = { inConnectedDevices = false },
                                             onSendFileToDevice = { dev ->
                                                 inConnectedDevices = false
+                                                filePickDestination = FilePickDestination.DIRECT_SEND
                                                 targetedDevice = dev
                                                 pickFile()
                                             }
@@ -764,6 +787,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                             HomeScreen(
                                                                 copy = copy,
                                                                 onSendClick = {
+                                                                    filePickDestination = FilePickDestination.DIRECT_SEND
                                                                     targetedDevice = null
                                                                     pickFile()
                                                                 },
@@ -784,8 +808,19 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                     }
                                                                 },
                                                                 onDeviceClick = { dev ->
+                                                                    filePickDestination = FilePickDestination.DIRECT_SEND
                                                                     targetedDevice = dev
                                                                     pickFile()
+                                                                },
+                                                                onQuickAccessPickFile = {
+                                                                    filePickDestination = FilePickDestination.QUICK_ACCESS
+                                                                    pickFile()
+                                                                },
+                                                                stagedQuickFileName = stagedQuickFileName,
+                                                                stagedQuickFileSize = stagedQuickFileSize,
+                                                                onClearQuickAccessFile = {
+                                                                    stagedQuickFileName = null
+                                                                    stagedQuickFileSize = null
                                                                 },
                                                                 onViewAllTransfers = {
                                                                     mainTab = net.syncswift.ui.components.MainNavTab.Transfers
@@ -816,6 +851,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                             net.syncswift.ui.workspace.WorkspaceScreen(
                                                                 copy = copy,
                                                                 onUploadFileClick = {
+                                                                    filePickDestination = FilePickDestination.WORKSPACE
                                                                     pickFile()
                                                                 }
                                                             )

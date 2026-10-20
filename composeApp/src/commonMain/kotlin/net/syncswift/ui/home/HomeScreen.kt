@@ -65,6 +65,10 @@ fun HomeScreen(
     onSendClick: () -> Unit = {},
     onClipboardClick: () -> Unit = {},
     onDeviceClick: (DiscoveredDevice) -> Unit = {},
+    onQuickAccessPickFile: () -> Unit = {},
+    stagedQuickFileName: String? = null,
+    stagedQuickFileSize: Long? = null,
+    onClearQuickAccessFile: () -> Unit = {},
     onViewAllTransfers: () -> Unit = {},
     onOpenNotifications: () -> Unit = {}
 ) {
@@ -262,7 +266,7 @@ fun HomeScreen(
     ) {
         // TOP BAR
         if (!isSearchActive) {
-            // Normal Top Bar (SyncSwift Brand Logo on Left, Search 🔍, Bell 🔔 with blue dot)
+            // Normal Top Bar (SyncSwift Brand Logo on Left, Search, Bell with blue dot)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -838,7 +842,10 @@ fun HomeScreen(
         ) {
             net.syncswift.ui.quickaccess.QuickAccessPanel(
                 copy = copy,
-                onSelectFileToShare = onSendClick
+                onSelectFileToShare = onQuickAccessPickFile,
+                stagedFileName = stagedQuickFileName,
+                stagedFileSize = stagedQuickFileSize,
+                onClearStagedFile = onClearQuickAccessFile
             )
         }
     }

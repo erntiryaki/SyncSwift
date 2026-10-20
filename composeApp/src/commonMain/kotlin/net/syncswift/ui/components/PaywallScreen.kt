@@ -26,6 +26,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.Copy
+import net.syncswift.CheckIcon
 import net.syncswift.subscription.PaywallReason
 import net.syncswift.subscription.SubscriptionManager
 import net.syncswift.ui.theme.*
@@ -109,7 +110,7 @@ fun PaywallScreen(
                 ) {
                     Text(
                         text = copy.cancelAction,
-                        color = primaryButtonBg,
+                        color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
@@ -162,13 +163,9 @@ fun PaywallScreen(
                             verticalAlignment = Alignment.Top,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "✔",
-                                color = themeColor,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(end = 10.dp, top = 1.dp)
-                            )
+                            Box(modifier = Modifier.padding(end = 10.dp, top = 2.dp)) {
+                                CheckIcon(Modifier.size(15.dp), color = themeColor)
+                            }
                             Text(
                                 text = benefit,
                                 color = Cloud.copy(alpha = 0.95f),
@@ -258,11 +255,9 @@ fun PaywallScreen(
                                             .background(softGold),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "✓",
-                                            color = DeepInk,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.ExtraBold
+                                        CheckIcon(
+                                            modifier = Modifier.size(13.dp),
+                                            color = DeepInk
                                         )
                                     }
                                 } else {
@@ -327,11 +322,9 @@ fun PaywallScreen(
                                         .background(themeColor),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "✓",
-                                        color = DeepInk,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.ExtraBold
+                                    CheckIcon(
+                                        modifier = Modifier.size(13.dp),
+                                        color = DeepInk
                                     )
                                 }
                             } else {

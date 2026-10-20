@@ -3,6 +3,7 @@ package net.syncswift.ui.workspace
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,7 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.syncswift.*
-import net.syncswift.ui.theme.LocalSyncSwiftColors
+import net.syncswift.ui.theme.*
 import net.syncswift.workspace.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,10 +37,6 @@ fun WorkspaceScreen(
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalSyncSwiftColors.current.isDark
-    val bg = if (isDark) Color(0xFF090D14) else Color(0xFFF8FAFC)
-    val cardBg = if (isDark) Color(0xFF131B28) else Color(0xFFFFFFFF)
-    val inputBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
-    val borderColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
     val primaryBlue = LocalSyncSwiftColors.current.blue
     val clipboardManager = LocalClipboardManager.current
 
@@ -71,150 +68,165 @@ fun WorkspaceScreen(
         allFiles.filter { it.workspaceId == wsId && it.folderId == currentFolderId }
     }
 
-    Scaffold(
-        containerColor = bg,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showPlusActionMenu = true },
-                containerColor = primaryBlue,
-                contentColor = Color.White,
-                shape = CircleShape
-            ) {
-                Text("+", fontSize = 28.sp, fontWeight = FontWeight.Light)
-            }
-        }
-    ) { padding ->
+    Box(modifier = modifier.fillMaxSize().background(Night)) {
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .statusBarsPadding()
         ) {
-            // TOP HEADER: Workspace title & Member avatars
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = cardBg,
-                border = BorderStroke(0.5.dp, borderColor)
+            // TOP HEADER: Consistent with other screens
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
             ) {
-                Column(
+                Spacer(Modifier.height(16.dp))
+
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .height(52.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = selectedWorkspace?.name ?: copy.workspacesTitle,
+                            color = Cloud,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.6).sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = selectedWorkspace?.description?.ifBlank { copy.workspacesSubtitle } ?: copy.workspacesSubtitle,
+                            fontSize = 12.5.sp,
+                            color = Mist,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Members pill
+                    Surface(
+                        shape = CircleShape,
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder),
+                        modifier = Modifier.clickable { showMembersDialog = true }
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            UsersVectorIcon(Modifier.size(15.dp), color = Mist)
+                            Spacer(Modifier.width(6.dp))
                             Text(
-                                text = selectedWorkspace?.name ?: copy.workspacesTitle,
-                                fontSize = 20.sp,
+                                text = "${selectedWorkspace?.memberCount ?: 1}",
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isDark) Color.White else Color(0xFF0F172A),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                color = Cloud
                             )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = selectedWorkspace?.description?.ifBlank { copy.workspacesSubtitle } ?: copy.workspacesSubtitle,
-                                fontSize = 12.sp,
-                                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                                maxLines = 1
-                            )
-                        }
-
-                        // Members pill & invite
-                        Surface(
-                            shape = CircleShape,
-                            color = inputBg,
-                            modifier = Modifier.clickable { showMembersDialog = true }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("👥", fontSize = 12.sp)
-                                Spacer(Modifier.width(5.dp))
-                                Text(
-                                    text = "${selectedWorkspace?.memberCount ?: 1}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isDark) Color.White else Color(0xFF0F172A)
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.width(10.dp))
-
-                        // Switcher button
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(inputBg)
-                                .clickable { showCreateWorkspaceDialog = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("＋", fontSize = 18.sp, color = primaryBlue, fontWeight = FontWeight.Bold)
                         }
                     }
 
-                    // Breadcrumb folder indicator if inside folder
-                    if (currentFolderId != null) {
-                        Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.width(10.dp))
+
+                    // New Workspace button
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(CardSurface)
+                            .border(1.dp, InputBorder, CircleShape)
+                            .clickable { showCreateWorkspaceDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AddPlusVectorIcon(Modifier.size(16.dp), color = primaryBlue)
+                    }
+                }
+
+                // Breadcrumb folder indicator if inside folder
+                if (currentFolderId != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder),
+                        modifier = Modifier.clickable { WorkspaceManager.navigateIntoFolder(null) }
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(inputBg)
-                                .clickable { WorkspaceManager.navigateIntoFolder(null) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            Text("←", fontSize = 14.sp, color = primaryBlue)
+                            ChevronLeftIcon(Modifier.size(14.dp), color = primaryBlue)
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 text = allFolders.find { it.id == currentFolderId }?.name ?: "Klasör",
-                                fontSize = 12.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = primaryBlue
                             )
                         }
                     }
                 }
+
+                Spacer(Modifier.height(14.dp))
             }
 
             // CONTENT: Folders & Files
             if (currentFolders.isEmpty() && currentFiles.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("📁", fontSize = 48.sp)
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = copy.emptyFolder,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color.White else Color(0xFF0F172A)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = copy.emptyFolderDesc,
-                            fontSize = 13.sp,
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                            lineHeight = 18.sp
-                        )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(primaryBlue.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                FolderVectorIcon(Modifier.size(36.dp), color = primaryBlue)
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                text = copy.emptyFolder,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Cloud
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = copy.emptyFolderDesc,
+                                fontSize = 13.sp,
+                                color = Mist,
+                                lineHeight = 19.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                     }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp),
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Folders
@@ -222,10 +234,11 @@ fun WorkspaceScreen(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
                                 .clickable { WorkspaceManager.navigateIntoFolder(folder.id) },
-                            shape = RoundedCornerShape(14.dp),
-                            color = cardBg,
-                            border = BorderStroke(1.dp, borderColor)
+                            shape = RoundedCornerShape(16.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -233,22 +246,31 @@ fun WorkspaceScreen(
                                     .padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("📁", fontSize = 24.sp)
-                                Spacer(Modifier.width(12.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(primaryBlue.copy(alpha = 0.14f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    FolderVectorIcon(Modifier.size(24.dp), color = primaryBlue)
+                                }
+                                Spacer(Modifier.width(14.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = folder.name,
-                                        fontSize = 14.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (isDark) Color.White else Color(0xFF0F172A)
+                                        color = Cloud
                                     )
+                                    Spacer(Modifier.height(2.dp))
                                     Text(
                                         text = copy.newFolder,
-                                        fontSize = 11.sp,
-                                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                        fontSize = 11.5.sp,
+                                        color = Mist
                                     )
                                 }
-                                Text("›", fontSize = 20.sp, color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8))
+                                ChevronRightIcon(Modifier.size(16.dp), color = Mist)
                             }
                         }
                     }
@@ -258,10 +280,11 @@ fun WorkspaceScreen(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
                                 .clickable { selectedFileForAction = file },
-                            shape = RoundedCornerShape(14.dp),
-                            color = cardBg,
-                            border = BorderStroke(1.dp, borderColor)
+                            shape = RoundedCornerShape(16.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -269,14 +292,31 @@ fun WorkspaceScreen(
                                     .padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("📄", fontSize = 24.sp)
-                                Spacer(Modifier.width(12.dp))
+                                val isPdf = file.name.endsWith(".pdf", ignoreCase = true) || file.mimeType.contains("pdf", ignoreCase = true)
+                                val isZip = file.name.endsWith(".zip", ignoreCase = true) || file.name.endsWith(".rar", ignoreCase = true) || file.mimeType.contains("zip", ignoreCase = true)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isPdf) Color(0xFFEF4444).copy(alpha = 0.14f) else (if (isZip) Color(0xFFF59E0B).copy(alpha = 0.14f) else primaryBlue.copy(alpha = 0.14f))),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isPdf) {
+                                        FilePdfIcon(Modifier.size(28.dp))
+                                    } else if (isZip) {
+                                        FileZipIcon(Modifier.size(28.dp))
+                                    } else {
+                                        DocumentVectorIcon(Modifier.size(24.dp), color = primaryBlue)
+                                    }
+                                }
+                                Spacer(Modifier.width(14.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = file.name,
-                                        fontSize = 14.sp,
+                                        fontSize = 14.5.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (isDark) Color.White else Color(0xFF0F172A),
+                                        color = Cloud,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -284,13 +324,13 @@ fun WorkspaceScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = net.syncswift.transfer.formatBytes(file.size),
-                                            fontSize = 11.sp,
-                                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                            fontSize = 11.5.sp,
+                                            color = Mist
                                         )
                                         Text(
                                             text = " • " + copy.uploadedBy.replace("%s", file.uploaderName),
-                                            fontSize = 11.sp,
-                                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                            fontSize = 11.5.sp,
+                                            color = Mist,
                                             maxLines = 1
                                         )
                                     }
@@ -304,7 +344,7 @@ fun WorkspaceScreen(
                                 }
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = visColor.copy(alpha = 0.12f)
+                                    color = visColor.copy(alpha = 0.14f)
                                 ) {
                                     Text(
                                         text = visLabel,
@@ -320,13 +360,26 @@ fun WorkspaceScreen(
                 }
             }
         }
+
+        // Floating Action Button
+        FloatingActionButton(
+            onClick = { showPlusActionMenu = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(24.dp),
+            containerColor = primaryBlue,
+            contentColor = Color.White,
+            shape = CircleShape
+        ) {
+            AddPlusVectorIcon(Modifier.size(20.dp), color = Color.White)
+        }
     }
 
     // MODAL 1: + ACTION MENU
     if (showPlusActionMenu) {
         ModalBottomSheet(
             onDismissRequest = { showPlusActionMenu = false },
-            containerColor = cardBg
+            containerColor = CardSurface
         ) {
             Column(
                 modifier = Modifier
@@ -335,9 +388,9 @@ fun WorkspaceScreen(
             ) {
                 Text(
                     text = copy.filesAndFolders,
-                    fontSize = 17.sp,
+                    fontSize = 17.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color(0xFF0F172A)
+                    color = Cloud
                 )
                 Spacer(Modifier.height(16.dp))
 
@@ -345,27 +398,32 @@ fun WorkspaceScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             showPlusActionMenu = false
                             onUploadFileClick?.invoke()
-                            // Sample file upload trigger
-                            WorkspaceManager.uploadFile("Proje_Raporu.pdf", 2450000L, "application/pdf")
-                            showNativeToast(copy.fileUploadedToast)
                         }
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("📱", fontSize = 22.sp)
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(primaryBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        SmartphoneVectorIcon(Modifier.size(22.dp), color = primaryBlue)
+                    }
                     Spacer(Modifier.width(14.dp))
-                    Text(copy.uploadFromThisDevice, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(copy.uploadFromThisDevice, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
                 }
 
                 // 2. Diğer cihazımdan getir (Faz 6: Görev Devretme)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             showPlusActionMenu = false
                             showTaskDelegationDialog = true
@@ -373,14 +431,22 @@ fun WorkspaceScreen(
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("💻", fontSize = 22.sp)
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(primaryBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        DesktopVectorIcon(Modifier.size(22.dp), color = primaryBlue)
+                    }
                     Spacer(Modifier.width(14.dp))
                     Column {
-                        Text(copy.fetchFromOtherDevice, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(copy.fetchFromOtherDevice, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
                         Text(
                             text = copy.delegateTaskSubtitle,
-                            fontSize = 11.sp,
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                            fontSize = 11.5.sp,
+                            color = Mist
                         )
                     }
                 }
@@ -389,7 +455,7 @@ fun WorkspaceScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             showPlusActionMenu = false
                             showNewFolderDialog = true
@@ -397,9 +463,17 @@ fun WorkspaceScreen(
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("📁", fontSize = 22.sp)
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(primaryBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        FolderVectorIcon(Modifier.size(22.dp), color = primaryBlue)
+                    }
                     Spacer(Modifier.width(14.dp))
-                    Text(copy.newFolder, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(copy.newFolder, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
                 }
             }
         }
@@ -412,41 +486,42 @@ fun WorkspaceScreen(
 
         AlertDialog(
             onDismissRequest = { showTaskDelegationDialog = false },
-            title = { Text(copy.delegateTaskTitle, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(copy.delegateTaskTitle, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Cloud) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(copy.delegateTaskSubtitle, fontSize = 13.sp, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
+                    Text(copy.delegateTaskSubtitle, fontSize = 13.sp, color = Mist)
                     Spacer(Modifier.height(14.dp))
 
-                    Text(copy.selectTargetDesktop, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(copy.selectTargetDesktop, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
                     Spacer(Modifier.height(6.dp))
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
-                        color = inputBg
+                        color = InputBg,
+                        border = BorderStroke(1.dp, InputBorder)
                     ) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("🖥️", fontSize = 16.sp)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Eren Windows PC (Ofis)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            DesktopVectorIcon(Modifier.size(18.dp), color = primaryBlue)
+                            Spacer(Modifier.width(10.dp))
+                            Text("Eren Windows PC (Ofis)", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Cloud)
                         }
                     }
 
                     Spacer(Modifier.height(12.dp))
-                    Text(copy.allowedFolders, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(copy.allowedFolders, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("Documents", "Downloads", "MatMatbaa").forEach { fld ->
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (selectedFolder == fld) primaryBlue.copy(alpha = 0.15f) else inputBg,
-                                border = if (selectedFolder == fld) BorderStroke(1.dp, primaryBlue) else null,
+                                color = if (selectedFolder == fld) primaryBlue.copy(alpha = 0.15f) else InputBg,
+                                border = if (selectedFolder == fld) BorderStroke(1.dp, primaryBlue) else BorderStroke(1.dp, InputBorder),
                                 modifier = Modifier.clickable { selectedFolder = fld }
                             ) {
                                 Text(
                                     text = fld,
                                     fontSize = 12.sp,
-                                    color = if (selectedFolder == fld) primaryBlue else (if (isDark) Color.White else Color(0xFF0F172A)),
+                                    color = if (selectedFolder == fld) primaryBlue else Cloud,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                 )
                             }
@@ -454,7 +529,7 @@ fun WorkspaceScreen(
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    Text(copy.selectFileFromRemote, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(copy.selectFileFromRemote, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
                     Spacer(Modifier.height(6.dp))
                     BasicTextField(
                         value = remoteFileName,
@@ -462,9 +537,10 @@ fun WorkspaceScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(inputBg)
+                            .background(InputBg)
+                            .border(1.dp, InputBorder, RoundedCornerShape(10.dp))
                             .padding(10.dp),
-                        textStyle = TextStyle(color = if (isDark) Color.White else Color(0xFF0F172A), fontSize = 13.sp),
+                        textStyle = TextStyle(color = Cloud, fontSize = 13.sp),
                         cursorBrush = SolidColor(primaryBlue)
                     )
                 }
@@ -499,7 +575,7 @@ fun WorkspaceScreen(
         var newFolderName by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showNewFolderDialog = false },
-            title = { Text(copy.newFolder, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(copy.newFolder, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Cloud) },
             text = {
                 BasicTextField(
                     value = newFolderName,
@@ -507,12 +583,13 @@ fun WorkspaceScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(inputBg)
+                        .background(InputBg)
+                        .border(1.dp, InputBorder, RoundedCornerShape(10.dp))
                         .padding(12.dp),
-                    textStyle = TextStyle(color = if (isDark) Color.White else Color(0xFF0F172A), fontSize = 14.sp),
+                    textStyle = TextStyle(color = Cloud, fontSize = 14.sp),
                     cursorBrush = SolidColor(primaryBlue),
                     decorationBox = { inner ->
-                        if (newFolderName.isEmpty()) Text(copy.folderName, color = Color.Gray, fontSize = 14.sp)
+                        if (newFolderName.isEmpty()) Text(copy.folderName, color = Mist, fontSize = 14.sp)
                         inner()
                     }
                 )
@@ -543,19 +620,19 @@ fun WorkspaceScreen(
         val file = selectedFileForAction!!
         ModalBottomSheet(
             onDismissRequest = { selectedFileForAction = null },
-            containerColor = cardBg
+            containerColor = CardSurface
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
-                Text(file.name, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(file.name, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Cloud, maxLines = 1)
                 Spacer(Modifier.height(4.dp))
-                Text(net.syncswift.transfer.formatBytes(file.size), fontSize = 12.sp, color = Color.Gray)
+                Text(net.syncswift.transfer.formatBytes(file.size), fontSize = 12.sp, color = Mist)
 
                 Spacer(Modifier.height(16.dp))
-                Text(copy.fileVisibilityTitle, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(copy.fileVisibilityTitle, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
                 Spacer(Modifier.height(8.dp))
 
                 // 3 Visibility Choices
@@ -578,7 +655,7 @@ fun WorkspaceScreen(
                     ) {
                         RadioButton(selected = file.visibility == vis, onClick = null)
                         Spacer(Modifier.width(10.dp))
-                        Text(label, fontSize = 14.sp)
+                        Text(label, fontSize = 14.sp, color = Cloud)
                     }
                 }
 
@@ -593,7 +670,7 @@ fun WorkspaceScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(copy.deleteFile)
+                    Text(copy.deleteFile, color = Color.White)
                 }
             }
         }
@@ -604,7 +681,7 @@ fun WorkspaceScreen(
         val wsId = selectedWorkspace?.id ?: ""
         AlertDialog(
             onDismissRequest = { showMembersDialog = false },
-            title = { Text(copy.workspaceMembers, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(copy.workspaceMembers, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Cloud) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Invite Code generator
@@ -636,7 +713,7 @@ fun WorkspaceScreen(
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    Text(copy.workspaceMembers + " (${members.size})", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(copy.workspaceMembers + " (${members.size})", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
                     Spacer(Modifier.height(8.dp))
                     members.forEach { m ->
                         Row(
@@ -645,13 +722,13 @@ fun WorkspaceScreen(
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("👤", fontSize = 16.sp)
-                            Spacer(Modifier.width(8.dp))
-                            Text(m.displayName, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            UserIcon(Modifier.size(16.dp), color = primaryBlue)
+                            Spacer(Modifier.width(10.dp))
+                            Text(m.displayName, fontSize = 13.sp, color = Cloud, modifier = Modifier.weight(1f))
                             Text(
                                 text = if (m.role == WorkspaceRole.OWNER) copy.roleOwner else copy.roleMember,
                                 fontSize = 11.sp,
-                                color = Color.Gray
+                                color = Mist
                             )
                         }
                     }
@@ -670,7 +747,7 @@ fun WorkspaceScreen(
 
         AlertDialog(
             onDismissRequest = { showCreateWorkspaceDialog = false },
-            title = { Text(copy.createWorkspace, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(copy.createWorkspace, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Cloud) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     BasicTextField(
@@ -679,12 +756,13 @@ fun WorkspaceScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(inputBg)
+                            .background(InputBg)
+                            .border(1.dp, InputBorder, RoundedCornerShape(10.dp))
                             .padding(12.dp),
-                        textStyle = TextStyle(color = if (isDark) Color.White else Color(0xFF0F172A), fontSize = 14.sp),
+                        textStyle = TextStyle(color = Cloud, fontSize = 14.sp),
                         cursorBrush = SolidColor(primaryBlue),
                         decorationBox = { inner ->
-                            if (newWsName.isEmpty()) Text(copy.workspaceName, color = Color.Gray, fontSize = 14.sp)
+                            if (newWsName.isEmpty()) Text(copy.workspaceName, color = Mist, fontSize = 14.sp)
                             inner()
                         }
                     )
@@ -695,12 +773,13 @@ fun WorkspaceScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(inputBg)
+                            .background(InputBg)
+                            .border(1.dp, InputBorder, RoundedCornerShape(10.dp))
                             .padding(12.dp),
-                        textStyle = TextStyle(color = if (isDark) Color.White else Color(0xFF0F172A), fontSize = 14.sp),
+                        textStyle = TextStyle(color = Cloud, fontSize = 14.sp),
                         cursorBrush = SolidColor(primaryBlue),
                         decorationBox = { inner ->
-                            if (newWsDesc.isEmpty()) Text(copy.workspaceDesc, color = Color.Gray, fontSize = 14.sp)
+                            if (newWsDesc.isEmpty()) Text(copy.workspaceDesc, color = Mist, fontSize = 14.sp)
                             inner()
                         }
                     )

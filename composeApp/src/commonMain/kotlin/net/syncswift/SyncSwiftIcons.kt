@@ -2044,3 +2044,134 @@ fun BrokenLinkIcon(modifier: Modifier = Modifier, color: Color = Color(0xFFEF444
     drawLine(color, Offset(w * 0.32f, h * 0.32f), Offset(w * 0.68f, h * 0.68f), strokeWidth = sw * 1.2f, cap = StrokeCap.Round)
 }
 
+@Composable
+fun FolderVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val sw = size.minDimension * 0.085f
+    val s = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val path = Path().apply {
+        moveTo(w * 0.12f, h * 0.28f)
+        lineTo(w * 0.38f, h * 0.28f)
+        lineTo(w * 0.48f, h * 0.38f)
+        lineTo(w * 0.88f, h * 0.38f)
+        cubicTo(w * 0.92f, h * 0.38f, w * 0.92f, h * 0.42f, w * 0.92f, h * 0.46f)
+        lineTo(w * 0.92f, h * 0.78f)
+        cubicTo(w * 0.92f, h * 0.84f, w * 0.86f, h * 0.84f, w * 0.82f, h * 0.84f)
+        lineTo(w * 0.18f, h * 0.84f)
+        cubicTo(w * 0.12f, h * 0.84f, w * 0.08f, h * 0.80f, w * 0.08f, h * 0.74f)
+        lineTo(w * 0.08f, h * 0.34f)
+        cubicTo(w * 0.08f, h * 0.28f, w * 0.12f, h * 0.28f, w * 0.12f, h * 0.28f)
+        close()
+    }
+    drawPath(path, color = color, style = s)
+}
+
+@Composable
+fun DocumentVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val sw = size.minDimension * 0.085f
+    val s = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val path = Path().apply {
+        moveTo(w * 0.20f, h * 0.12f)
+        lineTo(w * 0.58f, h * 0.12f)
+        lineTo(w * 0.80f, h * 0.34f)
+        lineTo(w * 0.80f, h * 0.88f)
+        cubicTo(w * 0.80f, h * 0.92f, w * 0.76f, h * 0.92f, w * 0.72f, h * 0.92f)
+        lineTo(w * 0.20f, h * 0.92f)
+        cubicTo(w * 0.16f, h * 0.92f, w * 0.14f, h * 0.88f, w * 0.14f, h * 0.84f)
+        lineTo(w * 0.14f, h * 0.18f)
+        cubicTo(w * 0.14f, h * 0.12f, w * 0.18f, h * 0.12f, w * 0.20f, h * 0.12f)
+        close()
+    }
+    drawPath(path, color = color, style = s)
+    val fold = Path().apply {
+        moveTo(w * 0.58f, h * 0.12f)
+        lineTo(w * 0.58f, h * 0.34f)
+        lineTo(w * 0.80f, h * 0.34f)
+    }
+    drawPath(fold, color = color, style = s)
+    drawLine(color, Offset(w * 0.28f, h * 0.52f), Offset(w * 0.68f, h * 0.52f), strokeWidth = sw * 0.85f, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.28f, h * 0.66f), Offset(w * 0.68f, h * 0.66f), strokeWidth = sw * 0.85f, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.28f, h * 0.80f), Offset(w * 0.50f, h * 0.80f), strokeWidth = sw * 0.85f, cap = StrokeCap.Round)
+}
+
+@Composable
+fun UsersVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val sw = size.minDimension * 0.08f
+    val s = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.40f, h * 0.30f), style = s)
+    val body = Path().apply {
+        moveTo(w * 0.14f, h * 0.82f)
+        cubicTo(w * 0.14f, h * 0.58f, w * 0.66f, h * 0.58f, w * 0.66f, h * 0.82f)
+    }
+    drawPath(body, color = color, style = s)
+    drawArc(color, -70f, 140f, false, topLeft = Offset(w * 0.52f, h * 0.18f), size = Size(w * 0.26f, h * 0.26f), style = s)
+    val body2 = Path().apply {
+        moveTo(w * 0.68f, h * 0.62f)
+        cubicTo(w * 0.82f, h * 0.64f, w * 0.88f, h * 0.74f, w * 0.88f, h * 0.82f)
+    }
+    drawPath(body2, color = color, style = s)
+}
+
+@Composable
+fun SmartphoneVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val sw = size.minDimension * 0.08f
+    val s = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(w * 0.22f, h * 0.10f),
+        size = Size(w * 0.56f, h * 0.80f),
+        cornerRadius = CornerRadius(w * 0.10f),
+        style = s
+    )
+    drawLine(color, Offset(w * 0.42f, h * 0.20f), Offset(w * 0.58f, h * 0.20f), strokeWidth = sw, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.40f, h * 0.80f), Offset(w * 0.60f, h * 0.80f), strokeWidth = sw, cap = StrokeCap.Round)
+}
+
+@Composable
+fun DownloadVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val sw = size.minDimension * 0.085f
+    val s = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val tray = Path().apply {
+        moveTo(w * 0.16f, h * 0.60f)
+        lineTo(w * 0.16f, h * 0.82f)
+        lineTo(w * 0.84f, h * 0.82f)
+        lineTo(w * 0.84f, h * 0.60f)
+    }
+    drawPath(tray, color = color, style = s)
+    drawLine(color, Offset(w * 0.50f, h * 0.16f), Offset(w * 0.50f, h * 0.64f), strokeWidth = sw, cap = StrokeCap.Round)
+    val arrow = Path().apply {
+        moveTo(w * 0.32f, h * 0.46f)
+        lineTo(w * 0.50f, h * 0.64f)
+        lineTo(w * 0.68f, h * 0.46f)
+    }
+    drawPath(arrow, color = color, style = s)
+}
+
+@Composable
+fun AddPlusVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val sw = size.minDimension * 0.10f
+    drawLine(color, Offset(w * 0.20f, h * 0.50f), Offset(w * 0.80f, h * 0.50f), strokeWidth = sw, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.50f, h * 0.20f), Offset(w * 0.50f, h * 0.80f), strokeWidth = sw, cap = StrokeCap.Round)
+}
+
+@Composable
+fun WarningVectorIcon(modifier: Modifier = Modifier, color: Color = Color(0xFFEF4444)) = Canvas(modifier) {
+    val w = size.width; val h = size.height
+    val sw = size.minDimension * 0.085f
+    val s = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val tri = Path().apply {
+        moveTo(w * 0.50f, h * 0.14f)
+        lineTo(w * 0.88f, h * 0.82f)
+        lineTo(w * 0.12f, h * 0.82f)
+        close()
+    }
+    drawPath(tri, color = color, style = s)
+    drawLine(color, Offset(w * 0.50f, h * 0.38f), Offset(w * 0.50f, h * 0.58f), strokeWidth = sw, cap = StrokeCap.Round)
+    drawCircle(color, radius = sw * 0.6f, center = Offset(w * 0.50f, h * 0.70f))
+}
+

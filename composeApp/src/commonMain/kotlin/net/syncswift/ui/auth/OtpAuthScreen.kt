@@ -229,7 +229,7 @@ fun OtpAuthScreen(
                     .background(Color(0xFFEF4444).copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("⚠", fontSize = 26.sp, color = Color(0xFFEF4444))
+                WarningVectorIcon(Modifier.size(26.dp), color = Color(0xFFEF4444))
             }
 
             Spacer(Modifier.height(14.dp))
@@ -289,7 +289,7 @@ fun OtpAuthScreen(
                     .background(AuthColors.button.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("✉", fontSize = 24.sp, color = AuthColors.button)
+                EmailIcon(Modifier.size(24.dp), color = AuthColors.button)
             }
 
             Spacer(Modifier.height(14.dp))

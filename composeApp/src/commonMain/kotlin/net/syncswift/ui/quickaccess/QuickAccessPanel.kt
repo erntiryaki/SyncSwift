@@ -201,7 +201,7 @@ fun QuickAccessPanel(
                                     .background(primaryBlue.copy(alpha = 0.15f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("📄", fontSize = 18.sp)
+                                DocumentVectorIcon(Modifier.size(20.dp), color = primaryBlue)
                             }
                             Spacer(Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -309,7 +309,7 @@ fun QuickAccessPanel(
                                         .background(primaryBlue.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("📁", fontSize = 20.sp)
+                                    FolderVectorIcon(Modifier.size(20.dp), color = primaryBlue)
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
@@ -569,7 +569,7 @@ fun QuickAccessPanel(
                                         .padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("📥", fontSize = 18.sp)
+                                    DownloadVectorIcon(Modifier.size(20.dp), color = primaryBlue)
                                     Spacer(Modifier.width(10.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
@@ -600,12 +600,16 @@ fun QuickAccessPanel(
                                     )
                                 } else if (session.state == QuickSessionState.COMPLETED) {
                                     Spacer(Modifier.height(12.dp))
-                                    Text(
-                                        text = "✓ " + copy.transferCompletedTitle,
-                                        color = Color(0xFF10B981),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CheckIcon(Modifier.size(16.dp), color = Color(0xFF10B981))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = copy.transferCompletedTitle,
+                                            color = Color(0xFF10B981),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
 
                                 Spacer(Modifier.height(14.dp))

@@ -57,6 +57,8 @@
 	<string>SyncSwift uses your local network to discover and transfer files directly between your devices.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SyncSwift needs access to your photos to let you select and transfer media.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SyncSwift saves received photos and images directly to your Photos Gallery.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

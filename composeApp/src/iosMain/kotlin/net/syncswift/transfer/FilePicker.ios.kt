@@ -68,6 +68,11 @@ actual fun rememberFilePicker(
 ): () -> Unit {
     return remember(onFileSelected) {
         {
+            val photoStatus = platform.Photos.PHPhotoLibrary.authorizationStatus()
+            if (photoStatus == platform.Photos.PHAuthorizationStatusNotDetermined) {
+                platform.Photos.PHPhotoLibrary.requestAuthorization { _ -> }
+            }
+
             val delegate = DocumentPickerDelegate(onFileSelected)
             activePickerDelegate = delegate
             val picker = UIDocumentPickerViewController(

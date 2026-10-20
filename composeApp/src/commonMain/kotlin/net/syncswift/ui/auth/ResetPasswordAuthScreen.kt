@@ -201,7 +201,7 @@ fun ResetPasswordAuthScreen(
                     .background(Color(0xFFEF4444).copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("⚠", fontSize = 26.sp, color = Color(0xFFEF4444))
+                WarningVectorIcon(Modifier.size(26.dp), color = Color(0xFFEF4444))
             }
 
             Spacer(Modifier.height(14.dp))
@@ -273,7 +273,7 @@ private fun ResetRequirementItem(
             contentAlignment = Alignment.Center
         ) {
             if (fulfilled) {
-                Text("✓", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                CheckIcon(Modifier.size(10.dp), color = Color.White)
             }
         }
         Text(

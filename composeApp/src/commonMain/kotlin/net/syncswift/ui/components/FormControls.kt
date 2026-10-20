@@ -121,7 +121,7 @@ private fun RequirementRow(label: String, fulfilled: Boolean) {
             contentAlignment = Alignment.Center
         ) {
             if (fulfilled) {
-                Text("✓", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                CheckIcon(Modifier.size(10.dp), color = Color.White)
             }
         }
         Text(
