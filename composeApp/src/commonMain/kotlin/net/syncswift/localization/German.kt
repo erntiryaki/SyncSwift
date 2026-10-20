@@ -6,6 +6,7 @@ val GermanCopy = Copy().apply {
     welcome = "Willkommen"
     tagline = "Deine Geräte. Ein Fluss."
     continueText = "Weiter"
+    checkInternetConnection = "Bitte überprüfen Sie Ihre Internetverbindung."
     emailTitle = "Mit E-Mail fortfahren"
     emailHint = "E-Mail-Adresse"
     passwordTitle = "Passwort eingeben"

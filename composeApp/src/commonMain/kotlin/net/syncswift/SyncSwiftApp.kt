@@ -451,6 +451,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
     val textAlign = if (language.isRtl) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start
 
+    val isInternetConnected by NetworkMonitor.isConnected.collectAsState()
+    var lastOfflineToastTime by remember { mutableStateOf(0L) }
+
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides LayoutDirection.Ltr) {
         SyncSwiftTheme(themeMode = themeMode) {
             Box(
@@ -458,6 +461,24 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                     .fillMaxSize()
                     .edgeSwipeToBack(enabled = BackDispatcher.canGoBack()) {
                         BackDispatcher.handleBack()
+                    }
+                    .pointerInput(isInternetConnected, language) {
+                        if (!isInternetConnected) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                    val hasDown = event.changes.any { it.pressed }
+                                    if (hasDown) {
+                                        event.changes.forEach { it.consume() }
+                                        val now = currentTimeMs()
+                                        if (now - lastOfflineToastTime > 1200L) {
+                                            lastOfflineToastTime = now
+                                            ToastNotifier.show(copy.checkInternetConnection)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
             ) {
                 CompositionLocalProvider(LocalTextStyle provides TextStyle(fontFamily = platformFontFamily(), textAlign = textAlign)) {
@@ -1365,6 +1386,28 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
+            // When offline, block all interactions across all pages and menus
+            if (!isInternetConnected) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(99999f)
+                        .pointerInput(language) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                    event.changes.forEach { it.consume() }
+                                    val now = currentTimeMs()
+                                    if (now - lastOfflineToastTime > 1200L) {
+                                        lastOfflineToastTime = now
+                                        ToastNotifier.show(copy.checkInternetConnection)
+                                    }
+                                }
+                            }
+                        }
+                )
+            }
+
             // Modern Minimalist Toast with modern contextual icon and swipe-to-dismiss
             val currentToastMessage by ToastNotifier.currentToast.collectAsState()
             var toastDragOffsetY by remember { mutableStateOf(0f) }
@@ -1384,7 +1427,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 56.dp, start = 20.dp, end = 20.dp)
-                    .zIndex(20000f)
+                    .zIndex(100000f)
             ) {
                 val msg = currentToastMessage ?: ""
                 val lower = msg.lowercase()

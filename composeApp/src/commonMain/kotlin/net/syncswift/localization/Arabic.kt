@@ -6,6 +6,7 @@ val ArabicCopy = Copy().apply {
     welcome = "مرحباً"
     tagline = "أجهزتك، بتناغم واحد."
     continueText = "متابعة"
+    checkInternetConnection = "يرجى التحقق من اتصالك بالإنترنت."
     emailTitle = "المتابعة بالبريد"
     emailHint = "البريد الإلكتروني"
     passwordTitle = "أدخل كلمة المرور"

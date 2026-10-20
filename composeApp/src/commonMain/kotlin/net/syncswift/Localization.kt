@@ -67,6 +67,7 @@ class Copy {
     var clipboardReady: String = "Ready across all your devices"
     var exitToast: String = "Press back again to exit"
     var continueLocally: String = "Continue as local user"
+    var checkInternetConnection: String = "Please check your internet connection."
     var crossProviderEmailToGoogle: String = "This email was registered with Email/Password. Please sign in with email."
     var crossProviderGoogleToEmail: String = "This email was registered with Google. Please sign in with Google."
     var otpConfirmTitle: String = "Email Verification"

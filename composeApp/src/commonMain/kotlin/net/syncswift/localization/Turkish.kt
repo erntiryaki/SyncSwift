@@ -6,6 +6,7 @@ val TurkishCopy = Copy().apply {
     welcome = "Hoş Geldin"
     tagline = "Cihazların, tek akışta."
     continueText = "Devam Et"
+    checkInternetConnection = "Lütfen internet bağlantınızı kontrol ediniz."
     emailTitle = "E-posta ile devam et"
     emailHint = "E-posta adresin"
     passwordTitle = "Şifreni gir"

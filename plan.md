@@ -23,8 +23,8 @@
 ### 2.2 Tasarım Dili (UI/UX Felsefesi)
 
 * **Flat & Minimalist:** Kesinlikle parıltılı, 3D efektli, ışıklı, neon kenarlıklı veya abartılı gölgeli bileşenler kullanılmayacaktır. Tamamen düz, sade, endüstri standardı modern kurumsal arayüz prensibi uygulanacaktır.
-* **Tipografi:** Yalnızca projedeki `/fonts` dizini altında yer alan Nunito yazı tipi ailesi (Regular, Medium, SemiBold, Bold) kullanılacaktır.
-* **Bileşen Hiyerarşisi:** Sade, modern butonlar, düz çizgi/kontur ayrımları, geniş beyaz alan (whitespace) ve içeriğe odaklanan temiz yerleşimler benimsenecektir.
+* **Tipografi:** Projedeki mobil uygulamada olduğu gibi **Manrope** modern yazı tipi ailesi (Regular, Medium, SemiBold, Bold) kullanılacaktır.
+* **Masaüstü Entegrasyonu:** Windows ve macOS için Tauri v2 tabanlı masaüstü istemcisi. Girişte sağ tarafta dinamik QR kod ve 6 haneli eşleşme kodu yer alır; sistem tepsisinde (Windows'ta sağ altta, macOS'ta sağ üstte) minimal açılır panel bulunur.
 * **Bildirimler ve Uyarılar:** Özel gösterişli alert/modal popup'lar yerine işletim sisteminin kendi native dialog/uyarı pencereleri (iOS UIAlertController, Android Material AlertDialog, macOS/Windows yerel dialog API'leri) tercih edilecektir.
 
 ### 2.3 Sosyal Medya & Alan Adı

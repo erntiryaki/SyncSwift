@@ -1069,59 +1069,54 @@ actual object ConnectionManager {
                                         }
                                     }
 
-                                    // Delete consumed pairing code so it cannot be reused
-                                    val delUrl = NSURL.URLWithString("$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean")
-                                    if (delUrl != null) {
-                                        val delReq = NSMutableURLRequest.requestWithURL(delUrl)
-                                        delReq.setHTTPMethod("DELETE")
-                                        delReq.setValue(serviceKey, forHTTPHeaderField = "apikey")
-                                        delReq.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
-                                        NSURLSession.sharedSession.dataTaskWithRequest(delReq).resume()
-                                    }
+                                    val loggedInEmail = SessionManager.getLoggedInEmail() ?: ""
+                                    if (loggedInEmail.isNotBlank()) {
+                                        val patchUrl = NSURL.URLWithString("$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean")
+                                        if (patchUrl != null) {
+                                            val patchReq = NSMutableURLRequest.requestWithURL(patchUrl)
+                                            patchReq.setHTTPMethod("PATCH")
+                                            patchReq.setValue("application/json", forHTTPHeaderField = "Content-Type")
+                                            patchReq.setValue(serviceKey, forHTTPHeaderField = "apikey")
+                                            patchReq.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
+                                            val patchBody = """{"push_token": "$loggedInEmail"}"""
+                                            patchReq.setHTTPBody((patchBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
+                                            NSURLSession.sharedSession.dataTaskWithRequest(patchReq).resume()
+                                        }
 
-                                    val cancelAction: () -> Unit = {
-                                        markRequestCancelled(clean)
-                                        if (!devId.isNullOrBlank()) markRequestCancelled(devId)
-                                        markRequestCancelled(targetHost)
-                                        markRequestCancelled(targetDevKey)
-                                        markDeviceDisconnected(targetHost)
-                                        if (!devId.isNullOrBlank()) markDeviceDisconnected(devId)
-                                        markDeviceDisconnected(targetDevKey)
-                                        DeviceDiscoveryManager.removeManualDevice(targetHost)
-                                        OutgoingStatusManager.dismiss()
-
-                                        if (pToken.isNotBlank()) {
-                                            val self = DeviceDiscoveryManager.getSelfDevice()
-                                            val selfName = cleanDeviceDisplayName(self?.name ?: UIDevice.currentDevice.name)
-                                            val selfHost = self?.host ?: ""
-                                            val selfPort = self?.port ?: 52424
-                                            val selfId = self?.id ?: UIDevice.currentDevice.identifierForVendor?.UUIDString ?: ""
+                                        if (!devId.isNullOrBlank()) {
                                             scope.launch(Dispatchers.Default) {
-                                                sendFcmNotification(
-                                                    token = pToken,
-                                                    title = "",
-                                                    body = "",
-                                                    data = mapOf(
-                                                        "type" to "pair_cancelled",
-                                                        "senderName" to selfName,
-                                                        "senderHost" to selfHost,
-                                                        "senderPort" to "$selfPort",
-                                                        "senderId" to selfId
+                                                try {
+                                                    SupabaseNetwork.registerDeviceInSupabase(
+                                                        email = loggedInEmail,
+                                                        deviceId = devId,
+                                                        deviceName = devName,
+                                                        deviceType = devType,
+                                                        pushToken = "",
+                                                        localIp = devHost,
+                                                        port = devPort,
+                                                        userId = null
                                                     )
-                                                )
+                                                } catch (_: Exception) {}
                                             }
                                         }
                                     }
 
-                                    OutgoingStatusManager.show(
-                                        type = OutgoingStatusType.CONNECTION,
-                                        deviceName = devName,
-                                        step = OutgoingStep.WAITING_APPROVAL,
-                                        message = currentAppCopy().transferNotificationSentWaiting,
-                                        onCancel = cancelAction
+                                    // Mark device locally connected
+                                    markDeviceConnected(targetHost, isRemote = true)
+                                    if (!devId.isNullOrBlank()) markDeviceConnected(devId, isRemote = true)
+                                    markDeviceConnected(targetDevKey, isRemote = true)
+                                    val newDev = DiscoveredDevice(
+                                        id = devId ?: "remote-$clean",
+                                        name = devName,
+                                        host = targetHost,
+                                        port = devPort,
+                                        osType = devType,
+                                        isRemote = true,
+                                        isOnline = true
                                     )
+                                    DeviceDiscoveryManager.addOrUpdateConnectedDevice(newDev)
 
-                                    if (cont.isActive) cont.resume(PairResult.PENDING_APPROVAL) {}
+                                    if (cont.isActive) cont.resume(PairResult.ACCEPTED) {}
                                     return@dataTaskWithRequest
                                 }
                             }

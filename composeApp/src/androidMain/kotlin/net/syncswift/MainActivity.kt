@@ -29,6 +29,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         net.syncswift.discovery.DeviceDiscoveryManager.init(this)
         net.syncswift.transfer.TransferEngine.init(this)
         net.syncswift.fcm.FcmSyncManager.init(this)
+        net.syncswift.NetworkMonitor.init(this)
         val preferences = getSharedPreferences("syncswift_preferences", MODE_PRIVATE)
         val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 

@@ -6,6 +6,7 @@ import android.os.Build
 import android.util.Log
 import net.syncswift.SessionManager
 import net.syncswift.SyncSwiftConfig
+import net.syncswift.SupabaseNetwork
 import net.syncswift.currentAppCopy
 import net.syncswift.showNativeToast
 import net.syncswift.discovery.DeviceDiscoveryManager
@@ -544,59 +545,59 @@ actual object ConnectionManager {
                             )
                         }
 
-                        // Delete consumed pairing code so it cannot be reused
-                        scope.launch {
-                            try {
-                                val delUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean")
-                                val delConn = delUrl.openConnection() as HttpURLConnection
-                                delConn.requestMethod = "DELETE"
-                                delConn.setRequestProperty("apikey", key)
-                                delConn.setRequestProperty("Authorization", "Bearer $key")
-                                delConn.responseCode
-                            } catch (_: Exception) {}
-                        }
+                        val loggedInEmail = SessionManager.getLoggedInEmail() ?: ""
+                        if (loggedInEmail.isNotBlank()) {
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean")
+                                    val patchConn = patchUrl.openConnection() as HttpURLConnection
+                                    patchConn.requestMethod = "PATCH"
+                                    patchConn.doOutput = true
+                                    patchConn.setRequestProperty("Content-Type", "application/json")
+                                    patchConn.setRequestProperty("apikey", key)
+                                    patchConn.setRequestProperty("Authorization", "Bearer $key")
+                                    patchConn.outputStream.use { os ->
+                                        os.write("""{"push_token": "$loggedInEmail"}""".toByteArray())
+                                    }
+                                    patchConn.responseCode
+                                } catch (_: Exception) {}
 
-                        val cancelAction: () -> Unit = {
-                            markRequestCancelled(clean)
-                            markRequestCancelled(deviceId)
-                            markRequestCancelled(targetHost)
-                            markRequestCancelled(targetDevKey)
-                            markDeviceDisconnected(targetHost)
-                            markDeviceDisconnected(deviceId)
-                            markDeviceDisconnected(targetDevKey)
-                            DeviceDiscoveryManager.removeManualDevice(targetHost)
-                            OutgoingStatusManager.dismiss()
-
-                            if (pushToken.isNotBlank()) {
-                                scope.launch {
-                                    val self = DeviceDiscoveryManager.getSelfDevice()
-                                    val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
-                                    val selfHost = self?.host ?: ""
-                                    val selfPort = self?.port ?: 52424
-                                    val selfId = self?.id ?: ""
-                                    sendFcmNotification(
-                                        token = pushToken,
-                                        title = "",
-                                        body = "",
-                                        data = mapOf(
-                                            "type" to "pair_cancelled",
-                                            "senderId" to selfId,
-                                            "senderName" to selfName,
-                                            "senderHost" to selfHost,
-                                            "senderPort" to "$selfPort"
+                                if (deviceId.isNotBlank()) {
+                                    try {
+                                        SupabaseNetwork.registerDeviceInSupabase(
+                                            email = loggedInEmail,
+                                            deviceId = deviceId,
+                                            deviceName = deviceName,
+                                            deviceType = deviceType,
+                                            pushToken = "",
+                                            localIp = host,
+                                            port = port,
+                                            userId = null
                                         )
-                                    )
+                                    } catch (_: Exception) {}
                                 }
                             }
                         }
 
-                        OutgoingStatusManager.show(
-                            type = OutgoingStatusType.CONNECTION,
-                            deviceName = deviceName,
-                            step = OutgoingStep.WAITING_APPROVAL,
-                            message = currentAppCopy().transferNotificationSentWaiting,
-                            onCancel = cancelAction
+                        // Mark device locally connected
+                        markDeviceConnected(targetHost, isRemote = true)
+                        if (deviceId.isNotBlank()) markDeviceConnected(deviceId, isRemote = true)
+                        markDeviceConnected(targetDevKey, isRemote = true)
+                        val newDev = DiscoveredDevice(
+                            id = deviceId,
+                            name = deviceName,
+                            host = targetHost,
+                            port = port,
+                            osType = deviceType,
+                            isRemote = true,
+                            isOnline = true
                         )
+                        DeviceDiscoveryManager.addOrUpdateConnectedDevice(newDev)
+
+                        withContext(Dispatchers.Main) {
+                            onResult(PairResult.ACCEPTED)
+                        }
+                        return@launch
 
                         withContext(Dispatchers.Main) {
                             onResult(PairResult.PENDING_APPROVAL)

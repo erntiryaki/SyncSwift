@@ -6,6 +6,7 @@ val RussianCopy = Copy().apply {
     welcome = "Добро пожаловать"
     tagline = "Все устройства в одном потоке."
     continueText = "Продолжить"
+    checkInternetConnection = "Пожалуйста, проверьте подключение к Интернету."
     emailTitle = "Войти по почте"
     emailHint = "Электронная почта"
     passwordTitle = "Введите пароль"
