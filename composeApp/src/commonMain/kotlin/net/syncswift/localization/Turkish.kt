@@ -44,6 +44,7 @@ val TurkishCopy = Copy().apply {
     termsOfService = "Üyelik Koşulları"
     termsAnd = " ve "
     privacyPolicy = "Kullanım Koşulları"
+    termsOfUse = "Kullanım Koşulları"
     termsNoticeSuffix = "'nı kabul etmiş sayılırsınız."
     termsOfServiceTitle = "Üyelik Koşulları"
     privacyPolicyTitle = "Kullanım Koşulları"
@@ -579,11 +580,15 @@ val TurkishCopy = Copy().apply {
     roleMember = "Üye"
     removeMember = "Üyelikten Çıkar"
     leaveWorkspace = "Alandan Ayrıl"
+    editWorkspace = "Alanı Düzenle"
     deleteWorkspace = "Alanı Sil"
     confirmDeleteWorkspace = "'%s' çalışma alanını silmek istediğinize emin misiniz? Alandaki tüm dosyalar silinecektir."
     confirmLeaveWorkspace = "'%s' çalışma alanından ayrılmak istediğinize emin misiniz?"
     workspaceCreatedToast = "Çalışma alanı oluşturuldu."
+    workspaceUpdatedToast = "Çalışma alanı güncellendi."
+    workspaceDeletedToast = "Çalışma alanı silindi."
     workspaceJoinedToast = "Çalışma alanına katılındı."
+    filesCountSuffix = "dosya"
 
     // PDF Features: Workspace Files & Folders
     filesAndFolders = "Dosyalar ve Klasörler"

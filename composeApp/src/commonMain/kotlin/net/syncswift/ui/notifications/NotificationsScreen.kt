@@ -101,7 +101,8 @@ fun NotificationsScreen(
             // Empty State
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
+                    .fillMaxWidth()
                     .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -129,7 +130,9 @@ fun NotificationsScreen(
         } else {
             // Notifications List
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -147,6 +150,15 @@ fun NotificationsScreen(
                     )
                 }
             }
+        }
+
+        val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+        if (!isProUser) {
+            net.syncswift.ui.components.AdBannerView(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+            )
         }
     }
 }

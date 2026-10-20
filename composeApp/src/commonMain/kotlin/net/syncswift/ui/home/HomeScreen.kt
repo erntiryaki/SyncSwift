@@ -147,6 +147,19 @@ fun HomeScreen(
                 (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken)
     }
 
+    fun formatDeviceOs(osType: String, devName: String = ""): String {
+        val lower = osType.lowercase()
+        val nameLower = devName.lowercase()
+        return when {
+            lower.contains("ios") || lower.contains("iphone") || lower.contains("ipad") || nameLower.contains("iphone") || nameLower.contains("ipad") -> "iOS"
+            lower.contains("android") || nameLower.contains("android") || nameLower.contains("galaxy") || nameLower.contains("pixel") -> "Android"
+            lower.contains("mac") || nameLower.contains("macbook") || nameLower.contains("macos") -> "macOS"
+            lower.contains("win") || nameLower.contains("windows") || nameLower.contains("pc") -> "Windows"
+            lower.contains("linux") -> "Linux"
+            else -> if (osType.isNotBlank() && !osType.contains(" ") && osType.length < 12) osType else "Android"
+        }
+    }
+
     val realOtherDevices = remember(discoveredDevices, connectedKeys) {
         discoveredDevices.filter { !isDeviceSelf(it) }.distinctBy {
             if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host
@@ -175,11 +188,10 @@ fun HomeScreen(
                     ConnectionManager.isDeviceConnected(dev)
             isConn && !isMyAccountDevice(dev)
         }.map { dev ->
-            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
                 id = dev.id.ifBlank { dev.host },
                 name = cleanDeviceDisplayName(dev.name),
-                os = devModel,
+                os = formatDeviceOs(dev.osType, dev.name),
                 isOnline = dev.isOnline,
                 section = DeviceSectionType.CONNECTED,
                 realDevice = dev
@@ -194,13 +206,12 @@ fun HomeScreen(
                     connectedKeys.contains(dev.host) ||
                     connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                     ConnectionManager.isDeviceConnected(dev)
-            !isConn && dev.isLoggedIn && dev.isOnline
+            !isConn && dev.isLoggedIn
         }.map { dev ->
-            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
                 id = dev.id.ifBlank { dev.host },
                 name = cleanDeviceDisplayName(dev.name),
-                os = devModel,
+                os = formatDeviceOs(dev.osType, dev.name),
                 isOnline = dev.isOnline,
                 section = DeviceSectionType.NEARBY,
                 realDevice = dev
@@ -220,11 +231,10 @@ fun HomeScreen(
         }.forEach { list.add(it) }
 
         list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }.map { dev ->
-            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
                 id = dev.id.ifBlank { dev.host },
                 name = cleanDeviceDisplayName(dev.name),
-                os = devModel,
+                os = formatDeviceOs(dev.osType, dev.name),
                 isOnline = dev.isOnline,
                 section = DeviceSectionType.MY_DEVICES,
                 realDevice = dev
@@ -609,7 +619,8 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 13.dp, vertical = 6.dp),
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -624,8 +635,7 @@ fun HomeScreen(
                             Spacer(Modifier.width(10.dp))
                             Column(
                                 verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.Start,
-                                modifier = Modifier.weight(1f)
+                                horizontalAlignment = Alignment.Start
                             ) {
                                 Text(
                                     text = copy.send,
@@ -662,7 +672,8 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 13.dp, vertical = 6.dp),
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -677,8 +688,7 @@ fun HomeScreen(
                             Spacer(Modifier.width(10.dp))
                             Column(
                                 verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.Start,
-                                modifier = Modifier.weight(1f)
+                                horizontalAlignment = Alignment.Start
                             ) {
                                 Text(
                                     text = copy.sendClipboardAction,

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import net.syncswift.PlatformConfig
 import net.syncswift.SessionManager
+import net.syncswift.currentTimeMs
 import platform.Foundation.*
 import platform.UIKit.UIDevice
 import platform.darwin.NSObject
@@ -130,6 +131,7 @@ actual object DeviceDiscoveryManager {
     private var browser: NSNetServiceBrowser? = null
     private var browserDelegate: ServiceBrowserDelegate? = null
     private val resolvingServices = mutableMapOf<String, Pair<NSNetService, ServiceResolverDelegate>>()
+    private val lastSeenTimestamps = mutableMapOf<String, Long>()
 
     private val selfServiceName: String
         get() = "SyncSwift-${UIDevice.currentDevice.name.replace(" ", "-")}"
@@ -181,6 +183,12 @@ actual object DeviceDiscoveryManager {
     fun addOrUpdateConnectedDevice(device: DiscoveredDevice) {
         val current = _devices.value.toMutableList()
         val clean = cleanDeviceDisplayName(device.name)
+        val now = currentTimeMs()
+        lastSeenTimestamps[device.id] = now
+        lastSeenTimestamps[device.name] = now
+        lastSeenTimestamps[clean] = now
+        if (device.host.isNotBlank()) lastSeenTimestamps[device.host] = now
+
         val idx = current.indexOfFirst {
             it.id == device.id ||
             (it.host.isNotBlank() && it.host == device.host) ||
@@ -304,7 +312,6 @@ actual object DeviceDiscoveryManager {
                 println("[SyncSwift iOS Discovery] startDiscovery error: ${e.message}")
             }
         }
-        }
     }
 
     private var heartbeatJob: Job? = null
@@ -377,6 +384,12 @@ actual object DeviceDiscoveryManager {
 
         val current = _devices.value.toMutableList()
         val clean = cleanDeviceDisplayName(device.name)
+        val now = currentTimeMs()
+        lastSeenTimestamps[device.id] = now
+        lastSeenTimestamps[device.name] = now
+        lastSeenTimestamps[clean] = now
+        if (device.host.isNotBlank()) lastSeenTimestamps[device.host] = now
+
         val idx = current.indexOfFirst {
             it.id == device.id ||
             it.host == device.host ||

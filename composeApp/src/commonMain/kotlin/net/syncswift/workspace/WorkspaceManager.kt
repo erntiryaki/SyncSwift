@@ -1,5 +1,6 @@
 package net.syncswift.workspace
 
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -96,6 +97,9 @@ object WorkspaceManager {
 
     private val _deviceJobs = MutableStateFlow<List<DeviceJob>>(emptyList())
     val deviceJobs: StateFlow<List<DeviceJob>> = _deviceJobs.asStateFlow()
+
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val localWorkspaceInvites = mutableMapOf<String, WorkspaceItem>()
 
     init {
         loadSavedState()
@@ -311,21 +315,71 @@ object WorkspaceManager {
         return ws
     }
 
-    fun joinWorkspaceByCode(code: String): Boolean {
-        if (code.length != 6) return false
-        val email = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
-        val joined = WorkspaceItem(
-            id = "ws_code_$code",
-            name = "Ekip Alanı ($code)",
-            description = "Davet kodu ile katıldınız",
-            ownerEmail = "team_owner@syncswift.net",
-            role = WorkspaceRole.MEMBER,
-            memberCount = 2
-        )
-        _workspaces.value = _workspaces.value + joined
-        _selectedWorkspace.value = joined
-        saveState()
-        return true
+    suspend fun joinWorkspaceByCode(code: String): Boolean {
+        val clean = code.trim().replace(" ", "")
+        if (clean.length != 6) return false
+        val myEmail = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
+        val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
+
+        // 1. Check local session cache (same device or local test)
+        val local = localWorkspaceInvites[clean]
+        if (local != null) {
+            val updatedCount = local.memberCount + 1
+            val joined = WorkspaceItem(
+                id = local.id,
+                name = local.name, // The owner's actual workspace name!
+                description = local.description.ifBlank { "Davet kodu ile katıldınız" },
+                ownerEmail = local.ownerEmail,
+                role = WorkspaceRole.MEMBER,
+                memberCount = updatedCount
+            )
+            val withoutExisting = _workspaces.value.filter { it.id != joined.id }
+            _workspaces.value = listOf(joined) + withoutExisting
+            _selectedWorkspace.value = joined
+            saveState()
+            return true
+        }
+
+        // 2. Query Supabase backend for the invite
+        try {
+            val remote = net.syncswift.SupabaseNetwork.queryWorkspaceInvite(clean)
+            if (remote != null) {
+                val wsName = remote["name"]?.ifBlank { null } ?: "Çalışma Alanı"
+                val wsId = remote["workspaceId"]?.ifBlank { null } ?: "ws_code_$clean"
+                val wsDesc = remote["desc"] ?: ""
+                val ownerEmail = remote["ownerEmail"]?.ifBlank { null } ?: "owner@syncswift.net"
+                val memberCount = (remote["memberCount"]?.toIntOrNull() ?: 1) + 1
+
+                val joined = WorkspaceItem(
+                    id = wsId,
+                    name = wsName, // The owner's real workspace name!
+                    description = wsDesc.ifBlank { "Davet kodu ile katıldınız" },
+                    ownerEmail = ownerEmail,
+                    role = WorkspaceRole.MEMBER,
+                    memberCount = memberCount
+                )
+
+                // Notify owner via Supabase so owner's member count and list updates
+                scope.launch {
+                    try {
+                        net.syncswift.SupabaseNetwork.notifyWorkspaceJoined(
+                            code = clean,
+                            workspaceId = wsId,
+                            joinerEmail = myEmail,
+                            joinerName = myName
+                        )
+                    } catch (_: Exception) {}
+                }
+
+                val withoutExisting = _workspaces.value.filter { it.id != joined.id }
+                _workspaces.value = listOf(joined) + withoutExisting
+                _selectedWorkspace.value = joined
+                saveState()
+                return true
+            }
+        } catch (_: Exception) {}
+
+        return false
     }
 
     fun resetForLogout() {
@@ -360,7 +414,63 @@ object WorkspaceManager {
     }
 
     fun generateInviteCode(workspaceId: String): String {
-        return Random.nextInt(100000, 999999).toString()
+        val ws = _workspaces.value.find { it.id == workspaceId } ?: _selectedWorkspace.value
+        val code = Random.nextInt(100000, 999999).toString()
+        if (ws != null) {
+            localWorkspaceInvites[code] = ws
+            scope.launch {
+                try {
+                    net.syncswift.SupabaseNetwork.publishWorkspaceInvite(
+                        code = code,
+                        workspaceId = ws.id,
+                        workspaceName = ws.name,
+                        workspaceDesc = ws.description,
+                        ownerEmail = ws.ownerEmail,
+                        memberCount = ws.memberCount
+                    )
+                } catch (_: Exception) {}
+            }
+        }
+        return code
+    }
+
+    fun refreshWorkspaceMembers(workspaceId: String) {
+        if (workspaceId.isBlank()) return
+        scope.launch {
+            try {
+                val remoteMembers = net.syncswift.SupabaseNetwork.fetchWorkspaceMembers(workspaceId)
+                if (remoteMembers.isNotEmpty()) {
+                    val currentList = _members.value.toMutableList()
+                    var added = false
+                    remoteMembers.forEach { rm ->
+                        val email = rm["email"] ?: ""
+                        val name = rm["displayName"] ?: email
+                        if (email.isNotBlank() && currentList.none { it.email == email }) {
+                            currentList.add(
+                                WorkspaceMember(
+                                    id = "mem_${email.hashCode()}",
+                                    email = email,
+                                    displayName = name,
+                                    role = WorkspaceRole.MEMBER
+                                )
+                            )
+                            added = true
+                        }
+                    }
+                    if (added) {
+                        _members.value = currentList
+                        val newCount = currentList.size
+                        _workspaces.value = _workspaces.value.map { ws ->
+                            if (ws.id == workspaceId) ws.copy(memberCount = maxOf(ws.memberCount, newCount)) else ws
+                        }
+                        if (_selectedWorkspace.value?.id == workspaceId) {
+                            _selectedWorkspace.value = _selectedWorkspace.value?.copy(memberCount = maxOf(_selectedWorkspace.value?.memberCount ?: 1, newCount))
+                        }
+                        saveState()
+                    }
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     fun createFolder(name: String) {
@@ -423,11 +533,35 @@ object WorkspaceManager {
         saveState()
     }
 
+    fun updateWorkspace(workspaceId: String, name: String, description: String = "") {
+        _workspaces.value = _workspaces.value.map { ws ->
+            if (ws.id == workspaceId) {
+                ws.copy(name = name.trim(), description = description.trim())
+            } else ws
+        }
+        if (_selectedWorkspace.value?.id == workspaceId) {
+            _selectedWorkspace.value = _workspaces.value.find { it.id == workspaceId }
+        }
+        saveState()
+    }
+
     fun deleteWorkspace(workspaceId: String) {
         _workspaces.value = _workspaces.value.filter { it.id != workspaceId }
         _folders.value = _folders.value.filter { it.workspaceId != workspaceId }
         _files.value = _files.value.filter { it.workspaceId != workspaceId }
-        if (_selectedWorkspace.value?.id == workspaceId) {
+        if (_workspaces.value.isEmpty()) {
+            val email = SessionManager.getLoggedInEmail() ?: "user@syncswift.net"
+            val defaultWs = WorkspaceItem(
+                id = "ws_${currentTimeMs()}",
+                name = "Kişisel Kasa",
+                description = "Şifreli bulut kasası ve cihazlarım",
+                ownerEmail = email,
+                role = WorkspaceRole.OWNER,
+                memberCount = 1
+            )
+            _workspaces.value = listOf(defaultWs)
+            _selectedWorkspace.value = defaultWs
+        } else if (_selectedWorkspace.value?.id == workspaceId) {
             _selectedWorkspace.value = _workspaces.value.firstOrNull()
         }
         saveState()

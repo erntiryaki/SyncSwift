@@ -92,12 +92,12 @@ fun AuthPage(
             // Hero Image starts seamlessly, with balanced breathing room and soft fade gradients
             if (showHero) {
                 Spacer(Modifier.statusBarsPadding())
-                Spacer(Modifier.height(if (isIos) 28.dp else 24.dp))
+                Spacer(Modifier.height(if (isIos) 2.dp else 0.dp))
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
+                        .height(270.dp)
                 ) {
                     AuthHeroImage(
                         isDark = isDark,
@@ -108,13 +108,13 @@ fun AuthPage(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(36.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to pageBg,
-                                    0.35f to pageBg.copy(alpha = 0.85f),
-                                    0.70f to pageBg.copy(alpha = 0.35f),
+                                    0.40f to pageBg.copy(alpha = 0.85f),
+                                    0.75f to pageBg.copy(alpha = 0.35f),
                                     1.0f to Color.Transparent
                                 )
                             )

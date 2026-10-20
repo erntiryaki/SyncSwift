@@ -101,7 +101,11 @@ actual fun SheetSystemBars(active: Boolean, isDark: Boolean) {
     val view = androidx.compose.ui.platform.LocalView.current
     if (view.isInEditMode) return
 
-    val darkBackdropColor = android.graphics.Color.parseColor("#161F30")
+    val backdropColor = if (isDark) {
+        android.graphics.Color.parseColor("#161F30")
+    } else {
+        android.graphics.Color.parseColor("#E2E8F0")
+    }
 
     val configureDialogWindow: () -> Unit = {
         var parent = view.parent
@@ -115,16 +119,17 @@ actual fun SheetSystemBars(active: Boolean, isDark: Boolean) {
                 dialogWindow.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                 dialogWindow.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
                 androidx.core.view.WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
-                dialogWindow.statusBarColor = darkBackdropColor
-                dialogWindow.navigationBarColor = darkBackdropColor
+                dialogWindow.statusBarColor = backdropColor
+                dialogWindow.navigationBarColor = backdropColor
                 dialogWindow.setLayout(
                     android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     android.view.WindowManager.LayoutParams.MATCH_PARENT
                 )
                 dialogWindow.setGravity(android.view.Gravity.BOTTOM)
                 val dialogInsets = androidx.core.view.WindowCompat.getInsetsController(dialogWindow, dialogWindow.decorView)
-                dialogInsets.isAppearanceLightStatusBars = false
-                dialogInsets.isAppearanceLightNavigationBars = false
+                // In light theme (!isDark = true), notification icons are BLACK. In dark theme (!isDark = false), they are WHITE.
+                dialogInsets.isAppearanceLightStatusBars = !isDark
+                dialogInsets.isAppearanceLightNavigationBars = !isDark
                 break
             }
             parent = parent.parent
@@ -145,10 +150,10 @@ actual fun SheetSystemBars(active: Boolean, isDark: Boolean) {
             val activity = SessionManager.getCurrentActivity()
             val actWindow = activity?.window
             if (actWindow != null) {
-                actWindow.statusBarColor = darkBackdropColor
+                actWindow.statusBarColor = backdropColor
                 val actInsets = androidx.core.view.WindowCompat.getInsetsController(actWindow, actWindow.decorView)
-                actInsets.isAppearanceLightStatusBars = false
-                actInsets.isAppearanceLightNavigationBars = false
+                actInsets.isAppearanceLightStatusBars = !isDark
+                actInsets.isAppearanceLightNavigationBars = !isDark
             }
         }
 

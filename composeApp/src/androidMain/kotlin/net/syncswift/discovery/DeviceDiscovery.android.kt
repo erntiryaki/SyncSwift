@@ -281,12 +281,19 @@ actual object DeviceDiscoveryManager {
             if (senderHost.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderHost)
             net.syncswift.connection.ConnectionManager.markDeviceDisconnected(cleanName)
             val current = _devices.value.toMutableList()
-            val removed = current.removeAll { dev ->
-                (senderHost.isNotBlank() && dev.host == senderHost) ||
-                dev.id == id ||
-                cleanDeviceDisplayName(dev.name) == cleanName
+            var changed = false
+            for (i in current.indices) {
+                val dev = current[i]
+                if ((senderHost.isNotBlank() && dev.host == senderHost) ||
+                    dev.id == id ||
+                    cleanDeviceDisplayName(dev.name) == cleanName) {
+                    if (dev.isOnline) {
+                        current[i] = dev.copy(isOnline = false)
+                        changed = true
+                    }
+                }
             }
-            if (removed) {
+            if (changed) {
                 _devices.value = current
                 saveManualDevices()
             }
@@ -429,21 +436,9 @@ actual object DeviceDiscoveryManager {
                             changed = true
                         }
                     } else if (lastSeen > 0L && age >= 15000L) {
-                        val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
-                        if (!isConnected) {
-                            if (age >= 60000L) {
-                                iterator.remove()
-                                changed = true
-                            } else if (dev.isOnline && age >= 20000L) {
-                                iterator.set(dev.copy(isOnline = false))
-                                changed = true
-                            }
-                        } else {
-                            // User-connected devices must STAY connected. We NEVER disconnect or remove them due to transient discovery silence!
-                            if (age >= 60000L && dev.isOnline) {
-                                iterator.set(dev.copy(isOnline = false))
-                                changed = true
-                            }
+                        if (dev.isOnline) {
+                            iterator.set(dev.copy(isOnline = false))
+                            changed = true
                         }
                     }
                 }

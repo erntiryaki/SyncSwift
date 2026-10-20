@@ -57,7 +57,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
         net.syncswift.SessionManager.init(applicationContext)
         val copy = net.syncswift.currentAppCopy()
         val data = remoteMessage.data
-        val type = data["type"] ?: ""
+        val type = data["type"] ?: data["action"] ?: ""
         val senderName = data["senderName"]?.ifBlank { null } ?: copy.deviceSingle
 
         when (type) {
@@ -304,7 +304,15 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                     isRemote = true
                 )
                 ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
-                // Quietly disconnect - NO toast or alert as requested by user
+                val clean = cleanDeviceDisplayName(senderName)
+                if (senderId.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderId)
+                if (senderHost.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderHost)
+                if (senderHost.isNotBlank()) ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+                if (senderName.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderName)
+                if (clean.isNotBlank()) ConnectionManager.markDeviceDisconnected(clean)
+                ConnectionManager.cancelIncomingPairRequest()
+                ConnectionManager.cancelIncomingTransferRequest()
+                net.syncswift.connection.OutgoingStatusManager.dismiss()
                 return
             }
             "file_completed", "file_accepted" -> {

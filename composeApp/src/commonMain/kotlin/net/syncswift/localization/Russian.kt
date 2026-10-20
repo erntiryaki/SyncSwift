@@ -33,12 +33,18 @@ val RussianCopy = Copy().apply {
     passwordDetail = "Этот аккаунт использует пароль для входа."
     otpDetail = "Мы отправили 6-значный код подтверждения на вашу почту."
     profileDetail = "Последний шаг перед синхронизацией ваших устройств."
+    authHeroHeadline = "Все ваши устройства всегда синхронизированы"
+    authHeroSubtitle = "Файлы, уведомления, звонки, демонстрация экрана и многое другое всегда с вами везде."
+    enterPasswordTitle = "Введите пароль"
     resetPasswordTitle = "Установить новый пароль"
     resetPasswordDetail = "Введите новый пароль для вашей учетной записи."
+    editEmail = "Изменить"
+    selectLanguageTitle = "Выбрать язык"
     termsNoticePrefix = "Регистрируясь, вы соглашаетесь с "
     termsOfService = "Условиями использования"
     termsAnd = " и "
     privacyPolicy = "Политикой конфиденциальности"
+    termsOfUse = "Условия использования"
     termsNoticeSuffix = "."
     termsOfServiceTitle = "Условия использования"
     privacyPolicyTitle = "Политика конфиденциальности"
@@ -574,10 +580,13 @@ val RussianCopy = Copy().apply {
     roleMember = "Участник"
     removeMember = "Удалить участника"
     leaveWorkspace = "Покинуть пространство"
+    editWorkspace = "Редактировать пространство"
     deleteWorkspace = "Удалить пространство"
     confirmDeleteWorkspace = "Вы уверены, что хотите удалить '%s'? Все файлы будут удалены."
     confirmLeaveWorkspace = "Вы уверены, что хотите покинуть '%s'?"
     workspaceCreatedToast = "Пространство создано."
+    workspaceUpdatedToast = "Пространство обновлено."
+    workspaceDeletedToast = "Пространство удалено."
     workspaceJoinedToast = "Вы присоединились к пространству."
 
     // PDF Features: Workspace Files & Folders
@@ -620,4 +629,5 @@ val RussianCopy = Copy().apply {
     // PDF Features: Clipboard History Clear
     clearClipboardHistory = "Очистить историю"
     clearClipboardConfirm = "Вы уверены, что хотите очистить всю историю буфера обмена?"
+    filesCountSuffix = "файлов"
 }

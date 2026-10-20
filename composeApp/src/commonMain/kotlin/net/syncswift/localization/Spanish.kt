@@ -33,12 +33,18 @@ val SpanishCopy = Copy().apply {
     passwordDetail = "Esta cuenta de correo utiliza contraseña para iniciar sesión."
     otpDetail = "Hemos enviado un código de verificación de 6 dígitos a tu correo."
     profileDetail = "Un último paso antes de sincronizar tus dispositivos."
+    authHeroHeadline = "Todos tus dispositivos, siempre sincronizados"
+    authHeroSubtitle = "Archivos, notificaciones, llamadas, pantalla compartida y más, siempre contigo en todas partes."
+    enterPasswordTitle = "Introduce tu contraseña"
     resetPasswordTitle = "Establecer nueva contraseña"
     resetPasswordDetail = "Introduce una nueva contraseña para tu cuenta."
+    editEmail = "Editar"
+    selectLanguageTitle = "Seleccionar idioma"
     termsNoticePrefix = "Al registrarte, aceptas nuestros "
     termsOfService = "Términos de servicio"
     termsAnd = " y la "
     privacyPolicy = "Política de privacidad"
+    termsOfUse = "Términos de uso"
     termsNoticeSuffix = "."
     termsOfServiceTitle = "Términos de servicio"
     privacyPolicyTitle = "Política de privacidad"
@@ -574,10 +580,13 @@ val SpanishCopy = Copy().apply {
     roleMember = "Miembro"
     removeMember = "Eliminar miembro"
     leaveWorkspace = "Salir del espacio"
+    editWorkspace = "Editar espacio de trabajo"
     deleteWorkspace = "Eliminar espacio"
     confirmDeleteWorkspace = "¿Seguro que deseas eliminar '%s'? Se eliminarán todos los archivos."
     confirmLeaveWorkspace = "¿Seguro que deseas salir de '%s'?"
     workspaceCreatedToast = "Espacio de trabajo creado."
+    workspaceUpdatedToast = "Espacio de trabajo actualizado."
+    workspaceDeletedToast = "Espacio de trabajo eliminado."
     workspaceJoinedToast = "Te has unido al espacio."
 
     // PDF Features: Workspace Files & Folders
@@ -620,4 +629,5 @@ val SpanishCopy = Copy().apply {
     // PDF Features: Clipboard History Clear
     clearClipboardHistory = "Borrar historial"
     clearClipboardConfirm = "¿Seguro que deseas borrar todo el historial del portapapeles?"
+    filesCountSuffix = "archivos"
 }

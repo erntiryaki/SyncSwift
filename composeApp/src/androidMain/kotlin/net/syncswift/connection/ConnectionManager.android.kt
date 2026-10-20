@@ -988,7 +988,7 @@ actual object ConnectionManager {
                 // 2. Try remote FCM unpair push notification
                 try {
                     val targetPushToken = (target.pushToken ?: "").ifBlank {
-                        queryPushTokenFromSupabase(target.host, target.name)
+                        queryPushTokenFromSupabase(target.host, target.name, target.id)
                     }
                     if (!targetPushToken.isNullOrBlank()) {
                         sendFcmNotification(
@@ -997,6 +997,7 @@ actual object ConnectionManager {
                             body = "",
                             data = mapOf(
                                 "type" to "unpair",
+                                "action" to "disconnect",
                                 "senderHost" to selfHost,
                                 "senderPort" to "$selfPort",
                                 "senderId" to selfId,
@@ -1011,15 +1012,28 @@ actual object ConnectionManager {
         }
     }
 
-    fun queryPushTokenFromSupabase(host: String, name: String): String? {
+    fun queryPushTokenFromSupabase(host: String, name: String, deviceId: String = ""): String? {
         return try {
             val cleanName = cleanDeviceDisplayName(name)
             val encodedName = java.net.URLEncoder.encode(cleanName, "UTF-8")
-            val queryParam = if (host.isNotBlank() && !host.startsWith("remote-")) {
-                val encodedHost = java.net.URLEncoder.encode(host, "UTF-8")
-                "or=(local_ip.eq.$encodedHost,device_name.eq.$encodedName)"
-            } else {
-                "device_name=eq.$encodedName"
+            val validDevId = if (deviceId.isNotBlank() && !deviceId.startsWith("manual-") && !deviceId.startsWith("remote-")) deviceId else ""
+            val queryParam = when {
+                validDevId.isNotBlank() && host.isNotBlank() && !host.startsWith("remote-") -> {
+                    val encodedHost = java.net.URLEncoder.encode(host, "UTF-8")
+                    val encodedId = java.net.URLEncoder.encode(validDevId, "UTF-8")
+                    "or=(device_id.eq.$encodedId,local_ip.eq.$encodedHost,device_name.eq.$encodedName)"
+                }
+                validDevId.isNotBlank() -> {
+                    val encodedId = java.net.URLEncoder.encode(validDevId, "UTF-8")
+                    "or=(device_id.eq.$encodedId,device_name.eq.$encodedName)"
+                }
+                host.isNotBlank() && !host.startsWith("remote-") -> {
+                    val encodedHost = java.net.URLEncoder.encode(host, "UTF-8")
+                    "or=(local_ip.eq.$encodedHost,device_name.eq.$encodedName)"
+                }
+                else -> {
+                    "device_name=eq.$encodedName"
+                }
             }
             val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/devices?select=push_token&$queryParam&push_token=not.is.null&push_token=neq.&order=created_at.desc&limit=1")
             val conn = url.openConnection() as HttpURLConnection
@@ -1084,6 +1098,19 @@ actual object ConnectionManager {
                 put("token", token)
                 put("title", title)
                 put("body", body)
+                put("priority", "high")
+                val apsObj = JSONObject().apply {
+                    put("content-available", 1)
+                    if (title.isNotBlank() || body.isNotBlank()) {
+                        put("sound", "default")
+                        put("badge", 1)
+                        put("alert", JSONObject().apply {
+                            put("title", title)
+                            put("body", body)
+                        })
+                    }
+                }
+                put("aps", apsObj)
                 if (title.isNotBlank() || body.isNotBlank()) {
                     val notifObj = JSONObject().apply {
                         put("title", title)
@@ -1092,16 +1119,6 @@ actual object ConnectionManager {
                         put("badge", 1)
                     }
                     put("notification", notifObj)
-                    val apsObj = JSONObject().apply {
-                        put("sound", "default")
-                        put("badge", 1)
-                        put("content-available", 1)
-                        put("alert", JSONObject().apply {
-                            put("title", title)
-                            put("body", body)
-                        })
-                    }
-                    put("aps", apsObj)
                 }
                 val dataObj = JSONObject()
                 data.forEach { (k, v) -> dataObj.put(k, v) }

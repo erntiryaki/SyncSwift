@@ -33,12 +33,18 @@ val ArabicCopy = Copy().apply {
     passwordDetail = "يستخدم هذا البريد الإلكتروني كلمة المرور لتسجيل الدخول."
     otpDetail = "لقد أرسلنا رمز تحقق من 6 أرقام إلى بريدك الإلكتروني."
     profileDetail = "خطوة أخيرة قبل مزامنة أجهزتك."
+    authHeroHeadline = "جميع أجهزتك، متزامنة دائمًا"
+    authHeroSubtitle = "الملفات، الإشعارات، المكالمات، مشاركة الشاشة والمزيد، دائمًا معك في كل مكان."
+    enterPasswordTitle = "أدخل كلمة المرور"
     resetPasswordTitle = "تعيين كلمة مرور جديدة"
     resetPasswordDetail = "أدخل كلمة مرور جديدة لحسابك."
+    editEmail = "تعديل"
+    selectLanguageTitle = "اختر اللغة"
     termsNoticePrefix = "بالتسجيل، فإنك توافق على "
     termsOfService = "شروط الخدمة"
     termsAnd = " و "
     privacyPolicy = "سياسة الخصوصية"
+    termsOfUse = "شروط الاستخدام"
     termsNoticeSuffix = "."
     termsOfServiceTitle = "شروط الخدمة"
     privacyPolicyTitle = "سياسة الخصوصية"
@@ -574,10 +580,13 @@ val ArabicCopy = Copy().apply {
     roleMember = "عضو"
     removeMember = "إزالة العضو"
     leaveWorkspace = "مغادرة المساحة"
+    editWorkspace = "تعديل مساحة العمل"
     deleteWorkspace = "حذف المساحة"
     confirmDeleteWorkspace = "هل أنت متأكد من حذف '%s'؟ سيتم حذف جميع الملفات."
     confirmLeaveWorkspace = "هل أنت متأكد من مغادرة '%s'؟"
     workspaceCreatedToast = "تم إنشاء مساحة العمل."
+    workspaceUpdatedToast = "تم تحديث مساحة العمل."
+    workspaceDeletedToast = "تم حذف مساحة العمل."
     workspaceJoinedToast = "تم الانضمام إلى مساحة العمل."
 
     // PDF Features: Workspace Files & Folders
@@ -620,4 +629,5 @@ val ArabicCopy = Copy().apply {
     // PDF Features: Clipboard History Clear
     clearClipboardHistory = "مسح السجل"
     clearClipboardConfirm = "هل أنت متأكد من مسح كل سجل الحافظة؟"
+    filesCountSuffix = "ملفات"
 }

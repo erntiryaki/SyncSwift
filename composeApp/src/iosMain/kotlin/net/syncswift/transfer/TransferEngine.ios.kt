@@ -333,7 +333,7 @@ actual object TransferEngine {
                                     val peeked = pollBuf.usePinned { pinned ->
                                         recv(clientSock, pinned.addressOf(0), 1.convert(), MSG_PEEK or MSG_DONTWAIT)
                                     }
-                                    if (peeked == 0) {
+                                    if (peeked == 0L) {
                                         ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                                         dispatch_async(dispatch_get_main_queue()) {
                                             showNativeToast(currentAppCopy().transferCancelledBySender)
@@ -467,7 +467,7 @@ actual object TransferEngine {
                                     val peeked = pollBuf.usePinned { pinned ->
                                         recv(clientSock, pinned.addressOf(0), 1.convert(), MSG_PEEK or MSG_DONTWAIT)
                                     }
-                                    if (peeked == 0) {
+                                    if (peeked == 0L) {
                                         ConnectionManager.cancelIncomingTransferRequest(transferRequest.requestId)
                                         dispatch_async(dispatch_get_main_queue()) {
                                             showNativeToast(currentAppCopy().transferCancelledBySender)
@@ -498,11 +498,11 @@ actual object TransferEngine {
 
                             // Confirm sender socket is still alive before applying clipboard
                             val ackByte = byteArrayOf(RESP_ACCEPTED)
-                            var sentAcc = 0
+                            var sentAcc: Long = 0L
                             ackByte.usePinned { pinned ->
-                                sentAcc = send(clientSock, pinned.addressOf(0), 1.convert(), 0)
+                                sentAcc = send(clientSock, pinned.addressOf(0), 1.convert(), 0).toLong()
                             }
-                            if (sentAcc <= 0) {
+                            if (sentAcc <= 0L) {
                                 dispatch_async(dispatch_get_main_queue()) {
                                     showNativeToast(currentAppCopy().transferCancelledBySender)
                                 }
@@ -547,9 +547,9 @@ actual object TransferEngine {
         val targetPath = targetUrl.path ?: return null
 
         val filePtr = fopen(targetPath, "wb") ?: return null
+        var totalRead = 0L
         try {
             val chunk = ByteArray(64 * 1024)
-            var totalRead = 0L
             while (totalRead < fileSize) {
                 val toRead = minOf(chunk.size.toLong(), fileSize - totalRead).toInt()
                 val r = chunk.usePinned { pinned ->

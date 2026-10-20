@@ -255,17 +255,30 @@ actual object ConnectionManager {
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
     }
 
-    suspend fun queryPushTokenFromSupabase(host: String, name: String): String? = suspendCancellableCoroutine { continuation ->
+    suspend fun queryPushTokenFromSupabase(host: String, name: String, deviceId: String = ""): String? = suspendCancellableCoroutine { continuation ->
         try {
             val cleanName = cleanDeviceDisplayName(name)
             val supabaseUrl = PlatformConfig.supabaseUrl
             val anonKey = PlatformConfig.supabaseAnonKey
             val encodedName = (cleanName as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: cleanName
-            val queryParam = if (host.isNotBlank() && !host.startsWith("remote-")) {
-                val encodedHost = (host as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: host
-                "or=(local_ip.eq.$encodedHost,device_name.eq.$encodedName)"
-            } else {
-                "device_name=eq.$encodedName"
+            val validDevId = if (deviceId.isNotBlank() && !deviceId.startsWith("manual-") && !deviceId.startsWith("remote-")) deviceId else ""
+            val queryParam = when {
+                validDevId.isNotBlank() && host.isNotBlank() && !host.startsWith("remote-") -> {
+                    val encodedHost = (host as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: host
+                    val encodedId = (validDevId as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: validDevId
+                    "or=(device_id.eq.$encodedId,local_ip.eq.$encodedHost,device_name.eq.$encodedName)"
+                }
+                validDevId.isNotBlank() -> {
+                    val encodedId = (validDevId as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: validDevId
+                    "or=(device_id.eq.$encodedId,device_name.eq.$encodedName)"
+                }
+                host.isNotBlank() && !host.startsWith("remote-") -> {
+                    val encodedHost = (host as NSString).stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.URLQueryAllowedCharacterSet) ?: host
+                    "or=(local_ip.eq.$encodedHost,device_name.eq.$encodedName)"
+                }
+                else -> {
+                    "device_name=eq.$encodedName"
+                }
             }
             val url = NSURL.URLWithString("$supabaseUrl/rest/v1/devices?select=push_token&$queryParam&push_token=not.is.null&push_token=neq.&order=created_at.desc&limit=1")
             if (url == null) {
@@ -327,8 +340,10 @@ actual object ConnectionManager {
                 val escBody = escapeJson(body)
                 val notifPart = if (title.isNotBlank() || body.isNotBlank()) {
                     """"notification":{"title":"$escTitle","body":"$escBody","sound":"default","badge":1},"aps":{"sound":"default","badge":1,"content-available":1,"alert":{"title":"$escTitle","body":"$escBody"}},"""
-                } else ""
-                val jsonBody = """{"targetToken":"${escapeJson(token)}","token":"${escapeJson(token)}","title":"$escTitle","body":"$escBody",$notifPart"data":{$dataPairs}}"""
+                } else {
+                    """"aps":{"content-available":1},"""
+                }
+                val jsonBody = """{"targetToken":"${escapeJson(token)}","token":"${escapeJson(token)}","priority":"high","title":"$escTitle","body":"$escBody",$notifPart"data":{$dataPairs}}"""
                 val bodyData = (jsonBody as NSString).dataUsingEncoding(NSUTF8StringEncoding)
                 req.setHTTPBody(bodyData)
 
@@ -667,7 +682,7 @@ actual object ConnectionManager {
                 // 2. Try remote FCM unpair push notification
                 try {
                     val targetPushToken = (target.pushToken ?: "").ifBlank {
-                        queryPushTokenFromSupabase(target.host, target.name) ?: ""
+                        queryPushTokenFromSupabase(target.host, target.name, target.id) ?: ""
                     }
                     if (targetPushToken.isNotBlank()) {
                         sendFcmNotification(
@@ -676,6 +691,7 @@ actual object ConnectionManager {
                             body = "",
                             data = mapOf(
                                 "type" to "unpair",
+                                "action" to "disconnect",
                                 "senderHost" to selfHost,
                                 "senderPort" to "$selfPort",
                                 "senderId" to selfId,

@@ -33,12 +33,18 @@ val ItalianCopy = Copy().apply {
     passwordDetail = "Questo account email utilizza una password."
     otpDetail = "Abbiamo inviato un codice a 6 cifre alla tua email."
     profileDetail = "Un ultimo passaggio prima di sincronizzare i tuoi dispositivi."
+    authHeroHeadline = "Tutti i tuoi dispositivi, sempre sincronizzati"
+    authHeroSubtitle = "File, notifiche, chiamate, condivisione schermo e altro, sempre con te ovunque."
+    enterPasswordTitle = "Inserisci la tua password"
     resetPasswordTitle = "Imposta nuova password"
     resetPasswordDetail = "Inserisci una nuova password per il tuo account."
+    editEmail = "Modifica"
+    selectLanguageTitle = "Seleziona lingua"
     termsNoticePrefix = "Registrandoti, accetti i nostri "
     termsOfService = "Termini di servizio"
     termsAnd = " e l' "
     privacyPolicy = "Informativa sulla privacy"
+    termsOfUse = "Termini di utilizzo"
     termsNoticeSuffix = "."
     termsOfServiceTitle = "Termini di servizio"
     privacyPolicyTitle = "Informativa sulla privacy"
@@ -574,10 +580,13 @@ val ItalianCopy = Copy().apply {
     roleMember = "Membro"
     removeMember = "Rimuovi membro"
     leaveWorkspace = "Abbandona spazio"
+    editWorkspace = "Modifica spazio di lavoro"
     deleteWorkspace = "Elimina spazio"
     confirmDeleteWorkspace = "Sei sicuro di voler eliminare '%s'? Tutti i file verranno rimossi."
     confirmLeaveWorkspace = "Sei sicuro di voler abbandonare '%s'?"
     workspaceCreatedToast = "Spazio di lavoro creato."
+    workspaceUpdatedToast = "Spazio di lavoro aggiornato."
+    workspaceDeletedToast = "Spazio di lavoro eliminato."
     workspaceJoinedToast = "Partecipazione avvenuta con successo."
 
     // PDF Features: Workspace Files & Folders
@@ -620,4 +629,5 @@ val ItalianCopy = Copy().apply {
     // PDF Features: Clipboard History Clear
     clearClipboardHistory = "Cancella cronologia"
     clearClipboardConfirm = "Sei sicuro di voler cancellare tutta la cronologia degli appunti?"
+    filesCountSuffix = "file"
 }

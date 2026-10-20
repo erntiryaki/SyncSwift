@@ -33,12 +33,18 @@ val GermanCopy = Copy().apply {
     passwordDetail = "Dieses E-Mail-Konto verwendet Passwort-Anmeldung."
     otpDetail = "Wir haben einen 6-stelligen Bestätigungscode an deine E-Mail gesendet."
     profileDetail = "Ein letzter Schritt, bevor deine Geräte synchronisiert sind."
+    authHeroHeadline = "Alle deine Geräte, immer synchron"
+    authHeroSubtitle = "Dateien, Benachrichtigungen, Anrufe, Bildschirmfreigabe und mehr, immer und überall bei dir."
+    enterPasswordTitle = "Passwort eingeben"
     resetPasswordTitle = "Neues Passwort festlegen"
     resetPasswordDetail = "Geben Sie ein neues Passwort für Ihr Konto ein."
+    editEmail = "Bearbeiten"
+    selectLanguageTitle = "Sprache auswählen"
     termsNoticePrefix = "Mit der Registrierung akzeptieren Sie unsere "
     termsOfService = "Nutzungsbedingungen"
     termsAnd = " und die "
     privacyPolicy = "Datenschutzrichtlinie"
+    termsOfUse = "Nutzungsbedingungen"
     termsNoticeSuffix = "."
     termsOfServiceTitle = "Nutzungsbedingungen"
     privacyPolicyTitle = "Datenschutzrichtlinie"
@@ -574,10 +580,13 @@ val GermanCopy = Copy().apply {
     roleMember = "Mitglied"
     removeMember = "Mitglied entfernen"
     leaveWorkspace = "Bereich verlassen"
+    editWorkspace = "Arbeitsbereich bearbeiten"
     deleteWorkspace = "Bereich löschen"
     confirmDeleteWorkspace = "Möchten Sie '%s' wirklich löschen? Alle Dateien werden gelöscht."
     confirmLeaveWorkspace = "Möchten Sie '%s' wirklich verlassen?"
     workspaceCreatedToast = "Arbeitsbereich erstellt."
+    workspaceUpdatedToast = "Arbeitsbereich aktualisiert."
+    workspaceDeletedToast = "Arbeitsbereich gelöscht."
     workspaceJoinedToast = "Arbeitsbereich beigetreten."
 
     // PDF Features: Workspace Files & Folders
@@ -620,5 +629,6 @@ val GermanCopy = Copy().apply {
     // PDF Features: Clipboard History Clear
     clearClipboardHistory = "Verlauf löschen"
     clearClipboardConfirm = "Möchten Sie den gesamten Verlauf der Zwischenablage wirklich löschen?"
+    filesCountSuffix = "Dateien"
 }
 

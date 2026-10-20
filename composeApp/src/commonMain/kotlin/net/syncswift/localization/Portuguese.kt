@@ -33,12 +33,18 @@ val PortugueseCopy = Copy().apply {
     passwordDetail = "Esta conta de e-mail usa login por senha."
     otpDetail = "Enviamos um código de verificação de 6 dígitos para seu e-mail."
     profileDetail = "Um último passo antes de seus aparelhos sincronizarem."
+    authHeroHeadline = "Todos os seus dispositivos, sempre sincronizados"
+    authHeroSubtitle = "Arquivos, notificações, chamadas, compartilhamento de tela e muito mais, sempre com você em qualquer lugar."
+    enterPasswordTitle = "Digite sua senha"
     resetPasswordTitle = "Definir nova senha"
     resetPasswordDetail = "Digite uma nova senha para sua conta."
+    editEmail = "Editar"
+    selectLanguageTitle = "Selecionar idioma"
     termsNoticePrefix = "Ao registrar-se, você concorda com nossos "
     termsOfService = "Termos de Serviço"
     termsAnd = " e a "
     privacyPolicy = "Política de Privacidade"
+    termsOfUse = "Termos de uso"
     termsNoticeSuffix = "."
     termsOfServiceTitle = "Termos de Serviço"
     privacyPolicyTitle = "Política de Privacidade"
@@ -574,10 +580,13 @@ val PortugueseCopy = Copy().apply {
     roleMember = "Membro"
     removeMember = "Remover membro"
     leaveWorkspace = "Sair do espaço"
+    editWorkspace = "Editar espaço de trabalho"
     deleteWorkspace = "Excluir espaço"
     confirmDeleteWorkspace = "Tem certeza de que deseja excluir '%s'? Todos os arquivos serão apagados."
     confirmLeaveWorkspace = "Tem certeza de que deseja sair de '%s'?"
     workspaceCreatedToast = "Espaço de trabalho criado."
+    workspaceUpdatedToast = "Espaço de trabalho atualizado."
+    workspaceDeletedToast = "Espaço de trabalho excluído."
     workspaceJoinedToast = "Você entrou no espaço."
 
     // PDF Features: Workspace Files & Folders
@@ -620,4 +629,5 @@ val PortugueseCopy = Copy().apply {
     // PDF Features: Clipboard History Clear
     clearClipboardHistory = "Limpar histórico"
     clearClipboardConfirm = "Tem certeza de que deseja limpar todo o histórico da área de transferência?"
+    filesCountSuffix = "arquivos"
 }

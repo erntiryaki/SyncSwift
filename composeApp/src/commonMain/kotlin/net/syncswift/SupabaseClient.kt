@@ -100,6 +100,30 @@ expect object SupabaseNetwork {
 
     /** Queries an active Quick Access session by its 6-digit code */
     suspend fun queryQuickAccessSession(code: String): Map<String, String>?
+
+    /** Publishes a 6-digit workspace invite to Supabase */
+    suspend fun publishWorkspaceInvite(
+        code: String,
+        workspaceId: String,
+        workspaceName: String,
+        workspaceDesc: String,
+        ownerEmail: String,
+        memberCount: Int
+    ): Boolean
+
+    /** Queries workspace invite details by 6-digit code */
+    suspend fun queryWorkspaceInvite(code: String): Map<String, String>?
+
+    /** Records that a user joined the workspace using the invite code */
+    suspend fun notifyWorkspaceJoined(
+        code: String,
+        workspaceId: String,
+        joinerEmail: String,
+        joinerName: String
+    ): Boolean
+
+    /** Fetches all joined members for a workspace from invite records */
+    suspend fun fetchWorkspaceMembers(workspaceId: String): List<Map<String, String>>
 }
 
 

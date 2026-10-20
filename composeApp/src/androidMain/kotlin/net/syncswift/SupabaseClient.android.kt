@@ -1110,6 +1110,7 @@ actual object SupabaseNetwork {
 
             val safeText = (textContent ?: "").replace("\"", "\\\"").replace("\n", "\\n")
             val devName = "$senderName:::$fileName:::$fileSize:::$safeText"
+            val expiresAt = java.time.Instant.now().plusSeconds(600).toString()
             val json = org.json.JSONObject().apply {
                 put("code", code)
                 put("device_id", sessionId)
@@ -1117,6 +1118,7 @@ actual object SupabaseNetwork {
                 put("device_type", "QuickAccess")
                 put("host", host)
                 put("port", port)
+                put("expires_at", expiresAt)
             }
             conn.outputStream.use { it.write(json.toString().toByteArray()) }
             conn.responseCode in 200..299
@@ -1129,7 +1131,7 @@ actual object SupabaseNetwork {
     actual suspend fun queryQuickAccessSession(code: String): Map<String, String>? = withContext(Dispatchers.IO) {
         try {
             val clean = code.trim().replace(" ", "")
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean&select=*")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean&select=*&order=created_at.desc")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 6000
@@ -1142,14 +1144,6 @@ actual object SupabaseNetwork {
                 val arr = org.json.JSONArray(body)
                 if (arr.length() > 0) {
                     val obj = arr.getJSONObject(0)
-                    val expiresAtStr = obj.optString("expires_at", "")
-                    val isExpired = try {
-                        if (expiresAtStr.isNotBlank()) {
-                            java.time.Instant.parse(expiresAtStr).isBefore(java.time.Instant.now())
-                        } else false
-                    } catch (_: Exception) { false }
-                    if (isExpired) return@withContext null
-
                     val result = mutableMapOf<String, String>()
                     result["code"] = obj.optString("code", clean)
                     result["sessionId"] = obj.optString("device_id", "")
@@ -1164,6 +1158,172 @@ actual object SupabaseNetwork {
         } catch (e: Exception) {
             Log.w("SupabaseNetwork", "queryQuickAccessSession error: ${e.message}")
             null
+        }
+    }
+
+    actual suspend fun publishWorkspaceInvite(
+        code: String,
+        workspaceId: String,
+        workspaceName: String,
+        workspaceDesc: String,
+        ownerEmail: String,
+        memberCount: Int
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+
+            val json = org.json.JSONObject().apply {
+                put("code", code)
+                put("device_id", workspaceId)
+                put("device_name", workspaceName)
+                put("device_type", "WorkspaceInvite")
+                put("host", workspaceDesc)
+                put("port", memberCount)
+                put("user_id", ownerEmail)
+                put("push_token", "")
+            }
+            conn.outputStream.use { it.write(json.toString().toByteArray()) }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.w("SupabaseNetwork", "publishWorkspaceInvite error: ${e.message}")
+            false
+        }
+    }
+
+    actual suspend fun queryWorkspaceInvite(code: String): Map<String, String>? = withContext(Dispatchers.IO) {
+        try {
+            val clean = code.trim().replace(" ", "")
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean&device_type=eq.WorkspaceInvite&select=*&order=created_at.desc")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val arr = org.json.JSONArray(body)
+                if (arr.length() > 0) {
+                    val obj = arr.getJSONObject(0)
+                    val result = mutableMapOf<String, String>()
+                    result["code"] = obj.optString("code", clean)
+                    result["workspaceId"] = obj.optString("device_id", "")
+                    result["name"] = obj.optString("device_name", "")
+                    result["desc"] = obj.optString("host", "")
+                    result["memberCount"] = obj.optInt("port", 1).toString()
+                    result["ownerEmail"] = obj.optString("user_id", "")
+                    result["pushToken"] = obj.optString("push_token", "")
+                    return@withContext result
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w("SupabaseNetwork", "queryWorkspaceInvite error: ${e.message}")
+            null
+        }
+    }
+
+    actual suspend fun notifyWorkspaceJoined(
+        code: String,
+        workspaceId: String,
+        joinerEmail: String,
+        joinerName: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val clean = code.trim().replace(" ", "")
+            // Fetch current push_token string to append
+            val getUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean&select=push_token,port")
+            val getConn = getUrl.openConnection() as HttpURLConnection
+            getConn.requestMethod = "GET"
+            getConn.connectTimeout = 6000
+            getConn.readTimeout = 6000
+            getConn.setRequestProperty("apikey", effectiveKey)
+            getConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+
+            var existingToken = ""
+            var currentCount = 1
+            if (getConn.responseCode in 200..299) {
+                val body = getConn.inputStream.bufferedReader().use { it.readText() }
+                val arr = org.json.JSONArray(body)
+                if (arr.length() > 0) {
+                    val obj = arr.getJSONObject(0)
+                    existingToken = obj.optString("push_token", "")
+                    currentCount = obj.optInt("port", 1)
+                }
+            }
+
+            val newEntry = "${joinerEmail.trim()}:::${joinerName.trim()}"
+            val updatedToken = if (existingToken.isBlank()) newEntry else "$existingToken,$newEntry"
+            val newCount = currentCount + 1
+
+            val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean")
+            val patchConn = patchUrl.openConnection() as HttpURLConnection
+            patchConn.requestMethod = "PATCH"
+            patchConn.connectTimeout = 6000
+            patchConn.readTimeout = 6000
+            patchConn.doOutput = true
+            patchConn.setRequestProperty("Content-Type", "application/json")
+            patchConn.setRequestProperty("apikey", effectiveKey)
+            patchConn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            patchConn.setRequestProperty("Prefer", "return=minimal")
+
+            val json = org.json.JSONObject().apply {
+                put("push_token", updatedToken)
+                put("port", newCount)
+            }
+            patchConn.outputStream.use { it.write(json.toString().toByteArray()) }
+            patchConn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.w("SupabaseNetwork", "notifyWorkspaceJoined error: ${e.message}")
+            false
+        }
+    }
+
+    actual suspend fun fetchWorkspaceMembers(workspaceId: String): List<Map<String, String>> = withContext(Dispatchers.IO) {
+        if (workspaceId.isBlank()) return@withContext emptyList()
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?device_id=eq.$workspaceId&device_type=eq.WorkspaceInvite&select=push_token,port&order=created_at.desc")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val arr = org.json.JSONArray(body)
+                val results = mutableListOf<Map<String, String>>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val tokens = obj.optString("push_token", "")
+                    if (tokens.isNotBlank()) {
+                        tokens.split(",").forEach { entry ->
+                            val parts = entry.split(":::")
+                            val email = parts.getOrNull(0)?.trim() ?: ""
+                            val name = parts.getOrNull(1)?.trim() ?: email
+                            if (email.isNotBlank() && results.none { it["email"] == email }) {
+                                results.add(mapOf("email" to email, "displayName" to name))
+                            }
+                        }
+                    }
+                }
+                return@withContext results
+            }
+            emptyList()
+        } catch (e: Exception) {
+            Log.w("SupabaseNetwork", "fetchWorkspaceMembers error: ${e.message}")
+            emptyList()
         }
     }
 }

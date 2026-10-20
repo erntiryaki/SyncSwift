@@ -987,11 +987,11 @@ actual object SupabaseNetwork {
     actual suspend fun queryQuickAccessSession(code: String): Map<String, String>? {
         val supabaseUrl = PlatformConfig.supabaseUrl
         val serviceKey = effectiveKey
-        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
         try {
             val clean = code.trim().replace(" ", "")
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean&select=*",
+                urlString = "$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean&select=*&order=created_at.desc",
                 method = "GET",
                 headers = mapOf(
                     "apikey" to serviceKey,
@@ -1021,6 +1021,180 @@ actual object SupabaseNetwork {
             return null
         } catch (_: Exception) {
             return null
+        }
+    }
+
+    actual suspend fun publishWorkspaceInvite(
+        code: String,
+        workspaceId: String,
+        workspaceName: String,
+        workspaceDesc: String,
+        ownerEmail: String,
+        memberCount: Int
+    ): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        try {
+            val safeName = workspaceName.replace("\"", "\\\"").replace("\n", " ")
+            val safeDesc = workspaceDesc.replace("\"", "\\\"").replace("\n", " ")
+            val body = """
+                {
+                    "code": "$code",
+                    "device_id": "$workspaceId",
+                    "device_name": "$safeName",
+                    "device_type": "WorkspaceInvite",
+                    "host": "$safeDesc",
+                    "port": $memberCount,
+                    "user_id": "$ownerEmail",
+                    "push_token": ""
+                }
+            """.trimIndent()
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/pairing_codes",
+                method = "POST",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "resolution=merge-duplicates"
+                ),
+                body = body
+            )
+            return resp.statusCode in 200..299
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    actual suspend fun queryWorkspaceInvite(code: String): Map<String, String>? {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
+        try {
+            val clean = code.trim().replace(" ", "")
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean&device_type=eq.WorkspaceInvite&select=*&order=created_at.desc",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (resp.statusCode in 200..299) {
+                val body = resp.body.trim()
+                if (body.isBlank() || body == "[]") return null
+                val codeMatch = Regex(""""code"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: clean
+                val wsId = Regex(""""device_id"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val wsName = Regex(""""device_name"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val wsDesc = Regex(""""host"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val count = Regex(""""port"\s*:\s*([0-9]+)""").find(body)?.groupValues?.get(1) ?: "1"
+                val owner = Regex(""""user_id"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                val pushToken = Regex(""""push_token"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+
+                return mapOf(
+                    "code" to codeMatch,
+                    "workspaceId" to wsId,
+                    "name" to wsName,
+                    "desc" to wsDesc,
+                    "memberCount" to count,
+                    "ownerEmail" to owner,
+                    "pushToken" to pushToken
+                )
+            }
+            return null
+        } catch (_: Exception) {
+            return null
+        }
+    }
+
+    actual suspend fun notifyWorkspaceJoined(
+        code: String,
+        workspaceId: String,
+        joinerEmail: String,
+        joinerName: String
+    ): Boolean {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        try {
+            val clean = code.trim().replace(" ", "")
+            val getResp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean&select=push_token,port",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            var existingToken = ""
+            var currentCount = 1
+            if (getResp.statusCode in 200..299) {
+                val body = getResp.body.trim()
+                existingToken = Regex(""""push_token"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1) ?: ""
+                currentCount = Regex(""""port"\s*:\s*([0-9]+)""").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            }
+
+            val newEntry = "${joinerEmail.trim()}:::${joinerName.trim()}"
+            val updatedToken = if (existingToken.isBlank()) newEntry else "$existingToken,$newEntry"
+            val newCount = currentCount + 1
+
+            val safeToken = updatedToken.replace("\"", "\\\"").replace("\n", " ")
+            val patchBody = """{"push_token":"$safeToken","port":$newCount}"""
+            val patchResp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean",
+                method = "PATCH",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Content-Type" to "application/json",
+                    "Prefer" to "return=minimal"
+                ),
+                body = patchBody
+            )
+            return patchResp.statusCode in 200..299
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    actual suspend fun fetchWorkspaceMembers(workspaceId: String): List<Map<String, String>> {
+        val supabaseUrl = PlatformConfig.supabaseUrl
+        val serviceKey = effectiveKey
+        if (supabaseUrl.isBlank() || serviceKey.isBlank() || workspaceId.isBlank()) return emptyList()
+        try {
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/pairing_codes?device_id=eq.$workspaceId&device_type=eq.WorkspaceInvite&select=push_token,port&order=created_at.desc",
+                method = "GET",
+                headers = mapOf(
+                    "apikey" to serviceKey,
+                    "Authorization" to "Bearer $serviceKey",
+                    "Accept" to "application/json"
+                )
+            )
+            if (resp.statusCode in 200..299) {
+                val body = resp.body.trim()
+                val results = mutableListOf<Map<String, String>>()
+                Regex(""""push_token"\s*:\s*"([^"]+)"""").findAll(body).forEach { match ->
+                    val tokens = match.groupValues.getOrNull(1) ?: ""
+                    if (tokens.isNotBlank()) {
+                        tokens.split(",").forEach { entry ->
+                            val parts = entry.split(":::")
+                            val email = parts.getOrNull(0)?.trim() ?: ""
+                            val name = parts.getOrNull(1)?.trim() ?: email
+                            if (email.isNotBlank() && results.none { it["email"] == email }) {
+                                results.add(mapOf("email" to email, "displayName" to name))
+                            }
+                        }
+                    }
+                }
+                return results
+            }
+            return emptyList()
+        } catch (_: Exception) {
+            return emptyList()
         }
     }
 }

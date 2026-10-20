@@ -33,12 +33,18 @@ val FrenchCopy = Copy().apply {
     passwordDetail = "Ce compte e-mail utilise un mot de passe."
     otpDetail = "Nous avons envoyé un code de vérification à 6 chiffres par e-mail."
     profileDetail = "Dernière étape avant la synchronisation de vos appareils."
+    authHeroHeadline = "Tous vos appareils, toujours synchronisés"
+    authHeroSubtitle = "Fichiers, notifications, appels, partage d'écran et plus, toujours avec vous partout."
+    enterPasswordTitle = "Entrez votre mot de passe"
     resetPasswordTitle = "Définir un nouveau mot de passe"
     resetPasswordDetail = "Entrez un nouveau mot de passe pour votre compte."
+    editEmail = "Modifier"
+    selectLanguageTitle = "Sélectionner la langue"
     termsNoticePrefix = "En vous inscrivant, vous acceptez nos "
     termsOfService = "Conditions d'utilisation"
     termsAnd = " et notre "
     privacyPolicy = "Politique de confidentialité"
+    termsOfUse = "Conditions d'utilisation"
     termsNoticeSuffix = "."
     termsOfServiceTitle = "Conditions d'utilisation"
     privacyPolicyTitle = "Politique de confidentialité"
@@ -574,10 +580,13 @@ val FrenchCopy = Copy().apply {
     roleMember = "Membre"
     removeMember = "Retirer le membre"
     leaveWorkspace = "Quitter l'espace"
+    editWorkspace = "Modifier l'espace de travail"
     deleteWorkspace = "Supprimer l'espace"
     confirmDeleteWorkspace = "Voulez-vous vraiment supprimer '%s' ? Tous les fichiers seront supprimés."
     confirmLeaveWorkspace = "Voulez-vous vraiment quitter '%s' ?"
     workspaceCreatedToast = "Espace créé."
+    workspaceUpdatedToast = "Espace de travail mis à jour."
+    workspaceDeletedToast = "Espace de travail supprimé."
     workspaceJoinedToast = "Espace rejoint."
 
     // PDF Features: Workspace Files & Folders
@@ -620,4 +629,5 @@ val FrenchCopy = Copy().apply {
     // PDF Features: Clipboard History Clear
     clearClipboardHistory = "Effacer l'historique"
     clearClipboardConfirm = "Voulez-vous vraiment effacer tout l'historique du presse-papiers ?"
+    filesCountSuffix = "fichiers"
 }

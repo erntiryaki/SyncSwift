@@ -3,6 +3,7 @@ package net.syncswift.ui.workspace
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -39,6 +40,7 @@ fun WorkspaceScreen(
     val isDark = LocalSyncSwiftColors.current.isDark
     val primaryBlue = LocalSyncSwiftColors.current.blue
     val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
 
     val workspaces by WorkspaceManager.workspaces.collectAsState()
     val selectedWorkspace by WorkspaceManager.selectedWorkspace.collectAsState()
@@ -48,10 +50,16 @@ fun WorkspaceScreen(
     val members by WorkspaceManager.members.collectAsState()
     val deviceJobs by WorkspaceManager.deviceJobs.collectAsState()
 
+    LaunchedEffect(selectedWorkspace?.id) {
+        selectedWorkspace?.id?.let { WorkspaceManager.refreshWorkspaceMembers(it) }
+    }
+
     // Modals
     var showWorkspaceSwitcher by remember { mutableStateOf(false) }
     var showCreateWorkspaceDialog by remember { mutableStateOf(false) }
     var showJoinWorkspaceDialog by remember { mutableStateOf(false) }
+    var workspaceToEdit by remember { mutableStateOf<WorkspaceItem?>(null) }
+    var workspaceToDelete by remember { mutableStateOf<WorkspaceItem?>(null) }
     var showMembersDialog by remember { mutableStateOf(false) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showPlusActionMenu by remember { mutableStateOf(false) }
@@ -179,6 +187,23 @@ fun WorkspaceScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         AddPlusVectorIcon(Modifier.size(16.dp), color = primaryBlue)
+                    }
+
+                    if (selectedWorkspace != null) {
+                        Spacer(Modifier.width(8.dp))
+
+                        // Edit Workspace button
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(CardSurface)
+                                .border(1.dp, InputBorder, CircleShape)
+                                .clickable { workspaceToEdit = selectedWorkspace },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            EditVectorIcon(Modifier.size(16.dp), color = Mist)
+                        }
                     }
                 }
 
@@ -320,48 +345,76 @@ fun WorkspaceScreen(
                     contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Folders
-                    items(currentFolders) { folder ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .clickable { WorkspaceManager.navigateIntoFolder(folder.id) },
-                            shape = RoundedCornerShape(16.dp),
-                            color = CardSurface,
-                            border = BorderStroke(1.dp, InputBorder)
+                    // Modern Folders Grid (Box tiles, 2 columns)
+                    items(currentFolders.chunked(2)) { folderPair ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
+                            folderPair.forEach { folder ->
+                                val childFileCount = allFiles.count { it.folderId == folder.id }
+                                Surface(
                                     modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(primaryBlue.copy(alpha = 0.14f)),
-                                    contentAlignment = Alignment.Center
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .clickable { WorkspaceManager.navigateIntoFolder(folder.id) },
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = CardSurface,
+                                    border = BorderStroke(1.dp, InputBorder)
                                 ) {
-                                    FolderVectorIcon(Modifier.size(24.dp), color = primaryBlue)
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(42.dp)
+                                                    .clip(RoundedCornerShape(13.dp))
+                                                    .background(primaryBlue.copy(alpha = 0.14f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                FolderVectorIcon(Modifier.size(23.dp), color = primaryBlue)
+                                            }
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(26.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isDark) Color(0x15FFFFFF) else Color(0x0A000000)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                ChevronRightIcon(Modifier.size(12.dp), color = Mist)
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(13.dp))
+
+                                        Text(
+                                            text = folder.name,
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Cloud,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(Modifier.height(3.dp))
+                                        Text(
+                                            text = if (childFileCount > 0) "$childFileCount ${copy.filesCountSuffix}" else copy.emptyFolder,
+                                            fontSize = 11.5.sp,
+                                            color = Mist,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
-                                Spacer(Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = folder.name,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Cloud
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = copy.newFolder,
-                                        fontSize = 11.5.sp,
-                                        color = Mist
-                                    )
-                                }
-                                ChevronRightIcon(Modifier.size(16.dp), color = Mist)
+                            }
+                            if (folderPair.size == 1) {
+                                Spacer(Modifier.weight(1f))
                             }
                         }
                     }
@@ -494,9 +547,12 @@ fun WorkspaceScreen(
                             showPlusActionMenu = false
                             onUploadFileClick?.invoke()
                         }
-                        .padding(14.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(copy.uploadFromThisDevice, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
+                    Spacer(Modifier.width(14.dp))
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -506,8 +562,6 @@ fun WorkspaceScreen(
                     ) {
                         SmartphoneVectorIcon(Modifier.size(22.dp), color = primaryBlue)
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Text(copy.uploadFromThisDevice, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
                 }
 
                 // 2. Diğer cihazımdan getir (Faz 6: Görev Devretme)
@@ -519,9 +573,19 @@ fun WorkspaceScreen(
                             showPlusActionMenu = false
                             showTaskDelegationDialog = true
                         }
-                        .padding(14.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(copy.fetchFromOtherDevice, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
+                        Text(
+                            text = copy.delegateTaskSubtitle,
+                            fontSize = 11.5.sp,
+                            color = Mist
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -530,15 +594,6 @@ fun WorkspaceScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         DesktopVectorIcon(Modifier.size(22.dp), color = primaryBlue)
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(copy.fetchFromOtherDevice, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
-                        Text(
-                            text = copy.delegateTaskSubtitle,
-                            fontSize = 11.5.sp,
-                            color = Mist
-                        )
                     }
                 }
 
@@ -551,9 +606,12 @@ fun WorkspaceScreen(
                             showPlusActionMenu = false
                             showNewFolderDialog = true
                         }
-                        .padding(14.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(copy.newFolder, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Cloud)
+                    Spacer(Modifier.width(14.dp))
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -563,33 +621,6 @@ fun WorkspaceScreen(
                     ) {
                         FolderVectorIcon(Modifier.size(22.dp), color = primaryBlue)
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Text(copy.newFolder, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
-                }
-
-                // 4. Koda göre çalışma alanına katıl
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable {
-                            showPlusActionMenu = false
-                            showJoinWorkspaceDialog = true
-                        }
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(primaryBlue.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        KeyVectorIcon(Modifier.size(20.dp), color = primaryBlue)
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Text(copy.joinWorkspace, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Cloud)
                 }
             }
         }
@@ -922,6 +953,9 @@ fun WorkspaceScreen(
     // MODAL 5: ÜYELER VE DAVET KODU (Modern Bottom Sheet)
     if (showMembersDialog) {
         val wsId = selectedWorkspace?.id ?: ""
+        LaunchedEffect(Unit) {
+            if (wsId.isNotBlank()) WorkspaceManager.refreshWorkspaceMembers(wsId)
+        }
         WorkspaceModalBottomSheet(
             onDismissRequest = { showMembersDialog = false },
             containerColor = CardSurface,
@@ -1012,15 +1046,41 @@ fun WorkspaceScreen(
                     }
                 }
 
+                val isUserLoggedIn = SessionManager.isLoggedIn()
+                val currentUserName = if (isUserLoggedIn) {
+                    val first = SessionManager.getUserFirstName().trim()
+                    val last = SessionManager.getUserLastName().trim()
+                    val full = "$first $last".trim()
+                    if (full.isNotBlank()) full else (SessionManager.getLoggedInEmail() ?: "Hesap Sahibi")
+                } else {
+                    "Yerel Kullanıcı"
+                }
+
+                val allDisplayMembers = remember(members, selectedWorkspace, currentUserName) {
+                    val list = members.toMutableList()
+                    val ownerIdx = list.indexOfFirst { it.role == WorkspaceRole.OWNER }
+                    if (ownerIdx >= 0) {
+                        list[ownerIdx] = list[ownerIdx].copy(displayName = currentUserName)
+                    } else {
+                        list.add(0, WorkspaceMember(
+                            id = "owner_${selectedWorkspace?.id ?: "ws"}",
+                            email = selectedWorkspace?.ownerEmail ?: "",
+                            displayName = currentUserName,
+                            role = WorkspaceRole.OWNER
+                        ))
+                    }
+                    list
+                }
+
                 Spacer(Modifier.height(20.dp))
                 Text(
-                    text = copy.workspaceMembers + " (${members.size})",
+                    text = copy.workspaceMembers + " (${allDisplayMembers.size})",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Cloud
                 )
                 Spacer(Modifier.height(10.dp))
-                members.forEach { m ->
+                allDisplayMembers.forEach { m ->
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1134,7 +1194,7 @@ fun WorkspaceScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
@@ -1151,7 +1211,7 @@ fun WorkspaceScreen(
                                         color = if (isSelected) Color.White else primaryBlue
                                     )
                                 }
-                                Spacer(Modifier.width(14.dp))
+                                Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = ws.name,
@@ -1183,83 +1243,50 @@ fun WorkspaceScreen(
                                     }
                                 }
                                 if (isSelected) {
-                                    Spacer(Modifier.width(10.dp))
+                                    Spacer(Modifier.width(4.dp))
                                     Box(
                                         modifier = Modifier
-                                            .size(26.dp)
+                                            .size(24.dp)
                                             .clip(CircleShape)
                                             .background(primaryBlue),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        CheckIcon(Modifier.size(14.dp), color = Color.White)
+                                        CheckIcon(Modifier.size(13.dp), color = Color.White)
                                     }
                                 }
+                                Spacer(Modifier.width(6.dp))
+                                // Edit button
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Night.copy(alpha = 0.7f))
+                                        .border(1.dp, InputBorder, CircleShape)
+                                        .clickable {
+                                            showWorkspaceSwitcher = false
+                                            workspaceToEdit = ws
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    EditVectorIcon(Modifier.size(14.dp), color = Mist)
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                // Delete button
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Night.copy(alpha = 0.7f))
+                                        .border(1.dp, InputBorder, CircleShape)
+                                        .clickable {
+                                            showWorkspaceSwitcher = false
+                                            workspaceToDelete = ws
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    TrashIcon(Modifier.size(14.dp), color = ErrorRed.copy(alpha = 0.9f))
+                                }
                             }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Actions: Join with Code or Create New Workspace
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Night,
-                        border = BorderStroke(1.dp, InputBorder),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable {
-                                showWorkspaceSwitcher = false
-                                showJoinWorkspaceDialog = true
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 13.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = copy.joinWorkspace,
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Cloud
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = primaryBlue,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable {
-                                showWorkspaceSwitcher = false
-                                showCreateWorkspaceDialog = true
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 13.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            AddPlusVectorIcon(Modifier.size(14.dp), color = Color.White)
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = copy.createWorkspace,
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
                         }
                     }
                 }
@@ -1379,14 +1406,16 @@ fun WorkspaceScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .clickable(enabled = inviteCodeInput.length == 6) {
-                            val joined = WorkspaceManager.joinWorkspaceByCode(inviteCodeInput.trim())
-                            if (joined) {
-                                showNativeToast(copy.workspaceJoinedToast)
-                                showJoinWorkspaceDialog = false
-                                inviteCodeInput = ""
-                                joinError = null
-                            } else {
-                                joinError = "Geçersiz davet kodu (6 hane olmalıdır)"
+                            scope.launch {
+                                val joined = WorkspaceManager.joinWorkspaceByCode(inviteCodeInput.trim())
+                                if (joined) {
+                                    showNativeToast(copy.workspaceJoinedToast)
+                                    showJoinWorkspaceDialog = false
+                                    inviteCodeInput = ""
+                                    joinError = null
+                                } else {
+                                    joinError = "Geçersiz veya süresi dolmuş davet kodu"
+                                }
                             }
                         }
                 ) {
@@ -1571,6 +1600,230 @@ fun WorkspaceScreen(
             }
         }
     }
+
+    // MODAL: ÇALIŞMA ALANINI DÜZENLEME (Edit Workspace Bottom Sheet)
+    workspaceToEdit?.let { ws ->
+        var editedName by remember(ws.id) { mutableStateOf(ws.name) }
+        var editedDesc by remember(ws.id) { mutableStateOf(ws.description) }
+
+        WorkspaceModalBottomSheet(
+            onDismissRequest = { workspaceToEdit = null },
+            containerColor = CardSurface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(primaryBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EditVectorIcon(Modifier.size(22.dp), color = primaryBlue)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = copy.editWorkspace,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            color = Cloud
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = copy.workspacesTitle,
+                            fontSize = 12.5.sp,
+                            color = Mist
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                BasicTextField(
+                    value = editedName,
+                    onValueChange = { editedName = it },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(InputBg)
+                        .border(1.2.dp, if (editedName.isNotBlank()) primaryBlue.copy(alpha = 0.5f) else InputBorder, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    textStyle = TextStyle(color = Cloud, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                    cursorBrush = SolidColor(primaryBlue),
+                    decorationBox = { inner ->
+                        if (editedName.isEmpty()) Text(copy.workspaceName, color = Mist, fontSize = 15.sp)
+                        inner()
+                    }
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                BasicTextField(
+                    value = editedDesc,
+                    onValueChange = { editedDesc = it },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(InputBg)
+                        .border(1.2.dp, InputBorder, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    textStyle = TextStyle(color = Cloud, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                    cursorBrush = SolidColor(primaryBlue),
+                    decorationBox = { inner ->
+                        if (editedDesc.isEmpty()) Text(copy.workspaceDesc, color = Mist, fontSize = 15.sp)
+                        inner()
+                    }
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                Button(
+                    onClick = {
+                        if (editedName.isNotBlank()) {
+                            WorkspaceManager.updateWorkspace(ws.id, editedName, editedDesc)
+                            workspaceToEdit = null
+                            showNativeToast(copy.workspaceUpdatedToast)
+                        }
+                    },
+                    enabled = editedName.isNotBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = primaryBlue,
+                        disabledContainerColor = InputBorder
+                    )
+                ) {
+                    Text(
+                        text = copy.continueText,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (editedName.isNotBlank()) Color.White else Mist
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                TextButton(
+                    onClick = { workspaceToEdit = null },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                ) {
+                    Text(
+                        text = copy.otpCancelAction,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Mist
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+
+    // MODAL: ÇALIŞMA ALANINI SİLME (Delete Workspace Bottom Sheet)
+    workspaceToDelete?.let { ws ->
+        WorkspaceModalBottomSheet(
+            onDismissRequest = { workspaceToDelete = null },
+            containerColor = CardSurface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(ErrorRed.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        TrashIcon(Modifier.size(22.dp), color = ErrorRed)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = copy.deleteWorkspace,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            color = Cloud
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = ws.name,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Mist,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+
+                Text(
+                    text = copy.confirmDeleteWorkspace.replace("%s", ws.name),
+                    color = Mist,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                Button(
+                    onClick = {
+                        WorkspaceManager.deleteWorkspace(ws.id)
+                        workspaceToDelete = null
+                        showNativeToast(copy.workspaceDeletedToast)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+                ) {
+                    TrashIcon(Modifier.size(16.dp), color = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                    Text(copy.deleteWorkspace, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                TextButton(
+                    onClick = { workspaceToDelete = null },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                ) {
+                    Text(
+                        text = copy.otpCancelAction,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Mist
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1581,6 +1834,9 @@ private fun WorkspaceModalBottomSheet(
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val isDark = LocalSyncSwiftColors.current.isDark
+    SheetSystemBars(active = true, isDark = isDark)
+
     DisposableEffect(Unit) {
         net.syncswift.ui.components.AdBannerManager.incrementModalCount()
         onDispose {

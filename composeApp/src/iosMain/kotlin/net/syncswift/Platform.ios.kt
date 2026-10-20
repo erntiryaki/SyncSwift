@@ -495,6 +495,15 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
                 isRemote = true
             )
             net.syncswift.connection.ConnectionManager.disconnectDevice(peerDev, notifyPeer = false)
+            val clean = net.syncswift.discovery.cleanDeviceDisplayName(senderName)
+            if (senderId.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderId)
+            if (senderHost.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderHost)
+            if (senderHost.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
+            if (senderName.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(senderName)
+            if (clean.isNotBlank()) net.syncswift.connection.ConnectionManager.markDeviceDisconnected(clean)
+            net.syncswift.connection.ConnectionManager.cancelIncomingPairRequest()
+            net.syncswift.connection.ConnectionManager.cancelIncomingTransferRequest()
+            net.syncswift.connection.OutgoingStatusManager.dismiss()
             // Quietly disconnect - NO toast or alert as requested by user
             return
         }

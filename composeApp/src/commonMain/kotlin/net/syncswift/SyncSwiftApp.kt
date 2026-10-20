@@ -485,24 +485,6 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                     .edgeSwipeToBack(enabled = BackDispatcher.canGoBack()) {
                         BackDispatcher.handleBack()
                     }
-                    .pointerInput(isInternetConnected, language) {
-                        if (!isInternetConnected) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                                    val hasDown = event.changes.any { it.pressed }
-                                    if (hasDown) {
-                                        event.changes.forEach { it.consume() }
-                                        val now = currentTimeMs()
-                                        if (now - lastOfflineToastTime > 1200L) {
-                                            lastOfflineToastTime = now
-                                            ToastNotifier.show(copy.checkInternetConnection)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
             ) {
                 CompositionLocalProvider(LocalTextStyle provides TextStyle(fontFamily = platformFontFamily(), textAlign = textAlign)) {
                     Surface(Modifier.fillMaxSize(), color = Night) {
@@ -1447,27 +1429,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
-            // When offline, block all interactions across all pages and menus
-            if (!isInternetConnected) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(99999f)
-                        .pointerInput(language) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                                    event.changes.forEach { it.consume() }
-                                    val now = currentTimeMs()
-                                    if (now - lastOfflineToastTime > 1200L) {
-                                        lastOfflineToastTime = now
-                                        ToastNotifier.show(copy.checkInternetConnection)
-                                    }
-                                }
-                            }
-                        }
-                )
-            }
+
 
             // Modern Minimalist Toast with modern contextual icon and swipe-to-dismiss
             val currentToastMessage by ToastNotifier.currentToast.collectAsState()

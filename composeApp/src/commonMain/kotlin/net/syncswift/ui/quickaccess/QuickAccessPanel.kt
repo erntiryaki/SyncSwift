@@ -63,56 +63,50 @@ fun QuickAccessPanel(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Sub-Tab Switcher (Pill style)
-        Surface(
+        // Sub-Tab Switcher (Matching Cihazlarım / Hızlı Erişim toggle style)
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(46.dp),
-            shape = RoundedCornerShape(14.dp),
-            color = if (isDark) Color(0xFF0F172A) else Color(0xFFE2E8F0),
-            border = BorderStroke(1.dp, borderColor)
+                .height(42.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isDark) Color(0xFF131B28) else Color(0xFFF1F5F9))
+                .padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            // Tab 0: Kod Oluştur
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(3.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (selectedSubTab == 0) (if (isDark) Color(0xFF1E293B) else Color.White) else Color.Transparent)
+                    .clickable { selectedSubTab = 0 },
+                contentAlignment = Alignment.Center
             ) {
-                // Tab 0: Kod Oluştur
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(if (selectedSubTab == 0) cardBg else Color.Transparent)
-                        .clickable { selectedSubTab = 0 },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = copy.quickSendTab,
-                        fontSize = 14.sp,
-                        fontWeight = if (selectedSubTab == 0) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (selectedSubTab == 0) primaryBlue else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
-                    )
-                }
+                Text(
+                    text = copy.quickSendTab,
+                    fontSize = 13.sp,
+                    fontWeight = if (selectedSubTab == 0) FontWeight.Bold else FontWeight.Medium,
+                    color = if (selectedSubTab == 0) primaryBlue else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
+                )
+            }
 
-                // Tab 1: Kod Gir
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(if (selectedSubTab == 1) cardBg else Color.Transparent)
-                        .clickable { selectedSubTab = 1 },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = copy.quickReceiveTab,
-                        fontSize = 14.sp,
-                        fontWeight = if (selectedSubTab == 1) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (selectedSubTab == 1) primaryBlue else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
-                    )
-                }
+            // Tab 1: Kod Gir
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (selectedSubTab == 1) (if (isDark) Color(0xFF1E293B) else Color.White) else Color.Transparent)
+                    .clickable { selectedSubTab = 1 },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = copy.quickReceiveTab,
+                    fontSize = 13.sp,
+                    fontWeight = if (selectedSubTab == 1) FontWeight.Bold else FontWeight.Medium,
+                    color = if (selectedSubTab == 1) primaryBlue else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
+                )
             }
         }
 
