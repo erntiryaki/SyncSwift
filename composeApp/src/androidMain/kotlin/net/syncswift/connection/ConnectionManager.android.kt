@@ -545,37 +545,52 @@ actual object ConnectionManager {
                             )
                         }
 
-                        val loggedInEmail = SessionManager.getLoggedInEmail() ?: ""
-                        if (loggedInEmail.isNotBlank()) {
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean")
-                                    val patchConn = patchUrl.openConnection() as HttpURLConnection
-                                    patchConn.requestMethod = "PATCH"
-                                    patchConn.doOutput = true
-                                    patchConn.setRequestProperty("Content-Type", "application/json")
-                                    patchConn.setRequestProperty("apikey", key)
-                                    patchConn.setRequestProperty("Authorization", "Bearer $key")
-                                    patchConn.outputStream.use { os ->
-                                        os.write("""{"push_token": "$loggedInEmail"}""".toByteArray())
-                                    }
-                                    patchConn.responseCode
-                                } catch (_: Exception) {}
+                        val rawEmail = SessionManager.getLoggedInEmail()?.trim().orEmpty()
+                        val rawUserId = SessionManager.getLoggedInUserId()?.trim().orEmpty()
+                        val selfDev = DeviceDiscoveryManager.getSelfDevice()
+                        val effectiveIdentifier = if (rawEmail.isNotBlank()) {
+                            rawEmail
+                        } else if (rawUserId.isNotBlank()) {
+                            rawUserId
+                        } else {
+                            "mobile-${(selfDev?.id ?: Build.MODEL).take(12).replace(" ", "_")}@syncswift.net"
+                        }
 
-                                if (deviceId.isNotBlank()) {
-                                    try {
-                                        SupabaseNetwork.registerDeviceInSupabase(
-                                            email = loggedInEmail,
-                                            deviceId = deviceId,
-                                            deviceName = deviceName,
-                                            deviceType = deviceType,
-                                            pushToken = "",
-                                            localIp = host,
-                                            port = port,
-                                            userId = null
-                                        )
-                                    } catch (_: Exception) {}
+                        // Await PATCH so desktop receives pairing signal before mobile returns ACCEPTED
+                        withContext(Dispatchers.IO) {
+                            try {
+                                val patchUrl = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$clean")
+                                val patchConn = patchUrl.openConnection() as HttpURLConnection
+                                patchConn.requestMethod = "PATCH"
+                                patchConn.doOutput = true
+                                patchConn.connectTimeout = 6000
+                                patchConn.readTimeout = 6000
+                                patchConn.setRequestProperty("Content-Type", "application/json")
+                                patchConn.setRequestProperty("apikey", key)
+                                patchConn.setRequestProperty("Authorization", "Bearer $key")
+                                patchConn.outputStream.use { os ->
+                                    os.write("""{"push_token": "$effectiveIdentifier"}""".toByteArray())
+                                    os.flush()
                                 }
+                                val patchCode = patchConn.responseCode
+                                Log.d("ConnectionManager", "PATCH pairing_codes code=$patchCode token=$effectiveIdentifier")
+                            } catch (e: Exception) {
+                                Log.e("ConnectionManager", "PATCH pairing_codes error: ${e.message}")
+                            }
+
+                            if (deviceId.isNotBlank()) {
+                                try {
+                                    SupabaseNetwork.registerDeviceInSupabase(
+                                        email = effectiveIdentifier,
+                                        deviceId = deviceId,
+                                        deviceName = deviceName,
+                                        deviceType = deviceType,
+                                        pushToken = "",
+                                        localIp = host,
+                                        port = port,
+                                        userId = rawUserId.ifBlank { null }
+                                    )
+                                } catch (_: Exception) {}
                             }
                         }
 

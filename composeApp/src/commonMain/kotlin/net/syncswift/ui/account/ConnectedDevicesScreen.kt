@@ -355,24 +355,15 @@ fun ConnectedDevicesScreen(
             }.distinctBy {
                 if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host else cleanDeviceDisplayName(it.name)
             }
-            val localConnected = otherDevices.filter { dev ->
-                val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
-                             connectedKeys.contains(dev.id) ||
-                             connectedKeys.contains(dev.host) ||
-                             connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
-                             ConnectionManager.isDeviceConnected(dev)
-                isConn && !ConnectionManager.isRemoteDevice(dev)
-            }
-            val remoteConnected = otherDevices.filter { dev ->
-                val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
-                             connectedKeys.contains(dev.id) ||
-                             connectedKeys.contains(dev.host) ||
-                             connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
-                             ConnectionManager.isDeviceConnected(dev)
-                isConn && ConnectionManager.isRemoteDevice(dev)
+            val allConnectedDevices = otherDevices.filter { dev ->
+                connectedKeys.contains("${dev.host}:${dev.port}") ||
+                connectedKeys.contains(dev.id) ||
+                connectedKeys.contains(dev.host) ||
+                connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                ConnectionManager.isDeviceConnected(dev)
             }
 
-            // SECTION 1: Yerel Cihazlar (Aynı Ağ)
+            // SECTION: Bağlı Cihazlar (Tümü Tek Liste)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -381,7 +372,7 @@ fun ConnectedDevicesScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = copy.localConnectedDevices,
+                    text = copy.connectedDevicesTitle,
                     color = Cloud,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -389,10 +380,10 @@ fun ConnectedDevicesScreen(
                     maxLines = 1,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                val localCount = localConnected.size
+                val connectedCount = allConnectedDevices.size
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = copy.formatDeviceCount(localCount),
+                    text = copy.formatDeviceCount(connectedCount),
                     color = Mist,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -402,8 +393,8 @@ fun ConnectedDevicesScreen(
             Spacer(Modifier.height(10.dp))
 
             Column(modifier = Modifier.fillMaxWidth()) {
-                if (localConnected.isNotEmpty()) {
-                    localConnected.forEach { dev ->
+                if (allConnectedDevices.isNotEmpty()) {
+                    allConnectedDevices.forEach { dev ->
                         val status = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
                         DeviceItemRow(
                             name = cleanDeviceDisplayName(dev.name),
@@ -418,58 +409,10 @@ fun ConnectedDevicesScreen(
                     }
                 } else {
                     Text(
-                        text = copy.noDevicesOnNetwork,
+                        text = copy.noConnectedDevicesYet,
                         color = Mist,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(vertical = 12.dp)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(28.dp))
-
-            // SECTION 2: Uzaktan Bağlı Cihazlar
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = copy.remoteConnectedDevices,
-                    color = Cloud,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.3).sp
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = copy.formatDeviceCount(remoteConnected.size),
-                    color = Mist,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                if (remoteConnected.isNotEmpty()) {
-                    remoteConnected.forEach { dev ->
-                        val status = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
-                        DeviceItemRow(
-                            name = cleanDeviceDisplayName(dev.name),
-                            details = status,
-                            badge = dev.osType,
-                            isOnline = dev.isOnline,
-                            isConnected = true,
-                            isSelf = false,
-                            onClick = { deviceForAction = dev }
-                        )
-                        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.22f))
-                    }
-                } else {
-                    Text(
-                        text = copy.noRemoteConnectedDevices,
-                        color = Mist,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(vertical = 8.dp)
                     )
                 }
             }

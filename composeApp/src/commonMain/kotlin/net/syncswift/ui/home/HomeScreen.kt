@@ -47,7 +47,7 @@ import net.syncswift.SheetSystemBars
 import net.syncswift.ui.theme.*
 
 enum class DeviceSectionType {
-    NEARBY, CONNECTED, DISCONNECTED
+    NEARBY, CONNECTED
 }
 
 data class UiDeviceItem(
@@ -116,13 +116,11 @@ fun HomeScreen(
 
     val connectedDevices = remember(realOtherDevices, connectedKeys) {
         realOtherDevices.filter { dev ->
-            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+            connectedKeys.contains("${dev.host}:${dev.port}") ||
                     connectedKeys.contains(dev.id) ||
                     connectedKeys.contains(dev.host) ||
                     connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                     ConnectionManager.isDeviceConnected(dev)
-            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev)
-            isConn && !isRemote
         }.map { dev ->
             val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
@@ -143,8 +141,7 @@ fun HomeScreen(
                     connectedKeys.contains(dev.host) ||
                     connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                     ConnectionManager.isDeviceConnected(dev)
-            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev) || dev.host.startsWith("remote-")
-            !isConn && !isRemote
+            !isConn
         }.map { dev ->
             val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
@@ -158,30 +155,8 @@ fun HomeScreen(
         }
     }
 
-    val disconnectedDevices = remember(realOtherDevices, connectedKeys) {
-        realOtherDevices.filter { dev ->
-            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
-                    connectedKeys.contains(dev.id) ||
-                    connectedKeys.contains(dev.host) ||
-                    connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
-                    ConnectionManager.isDeviceConnected(dev)
-            val isRemote = dev.isRemote || ConnectionManager.isRemoteDevice(dev) || dev.host.startsWith("remote-")
-            isRemote || (!isConn && !dev.isOnline)
-        }.map { dev ->
-            val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
-            UiDeviceItem(
-                id = dev.id.ifBlank { dev.host },
-                name = cleanDeviceDisplayName(dev.name),
-                os = devModel,
-                isOnline = dev.isOnline,
-                section = DeviceSectionType.DISCONNECTED,
-                realDevice = dev
-            )
-        }
-    }
-
-    val allDeviceItems = remember(nearbyDevices, connectedDevices, disconnectedDevices) {
-        nearbyDevices + connectedDevices + disconnectedDevices
+    val allDeviceItems = remember(nearbyDevices, connectedDevices) {
+        nearbyDevices + connectedDevices
     }
 
     fun handleDeviceSelection(item: UiDeviceItem) {
@@ -469,47 +444,7 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
 
-                // SECTION 3: UZAKTAN BAĞLI CİHAZLAR
-                SectionHeaderRow(
-                    title = copy.disconnectedDevicesSectionTitle,
-                    count = disconnectedDevices.size,
-                    copy = copy,
-                    onViewAllClick = { viewAllSection = DeviceSectionType.DISCONNECTED }
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                if (disconnectedDevices.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        disconnectedDevices.take(4).forEach { dev ->
-                            DeviceListRowCard(
-                                item = dev,
-                                onClick = { handleDeviceSelection(dev) }
-                            )
-                        }
-                    }
-                } else {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp)),
-                        shape = RoundedCornerShape(16.dp),
-                        color = CardSurface,
-                        border = BorderStroke(1.dp, InputBorder)
-                    ) {
-                        Text(
-                            text = copy.noDisconnectedDevicesYet,
-                            color = Mist,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(14.dp)
-                        )
-                    }
-                }
 
                 Spacer(Modifier.height(20.dp))
 
@@ -772,9 +707,6 @@ fun HomeScreen(
             val searchConnected = remember(filteredDevices) {
                 filteredDevices.filter { it.section == DeviceSectionType.CONNECTED }
             }
-            val searchDisconnected = remember(filteredDevices) {
-                filteredDevices.filter { it.section == DeviceSectionType.DISCONNECTED }
-            }
 
             Column(
                 modifier = Modifier
@@ -810,12 +742,6 @@ fun HomeScreen(
                         selected = selectedFilterChip == 2,
                         onClick = { selectedFilterChip = 2 }
                     )
-                    FilterChipPill(
-                        label = copy.filterDisconnected,
-                        count = searchDisconnected.size,
-                        selected = selectedFilterChip == 3,
-                        onClick = { selectedFilterChip = 3 }
-                    )
                 }
 
                 Spacer(Modifier.height(18.dp))
@@ -841,21 +767,6 @@ fun HomeScreen(
                     Spacer(Modifier.height(10.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         searchConnected.forEach { dev ->
-                            DeviceListRowCard(
-                                item = dev,
-                                onClick = { handleDeviceSelection(dev) }
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(18.dp))
-                }
-
-                // 3. Disconnected Search Results
-                if ((selectedFilterChip == 0 || selectedFilterChip == 3) && searchDisconnected.isNotEmpty()) {
-                    SearchSectionHeader(title = copy.disconnectedDevicesSectionTitle, count = searchDisconnected.size)
-                    Spacer(Modifier.height(10.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        searchDisconnected.forEach { dev ->
                             DeviceListRowCard(
                                 item = dev,
                                 onClick = { handleDeviceSelection(dev) }
@@ -985,7 +896,6 @@ fun HomeScreen(
             val (sheetTitle, sheetList) = when (section) {
                 DeviceSectionType.NEARBY -> copy.nearbyDevicesSection to nearbyDevices
                 DeviceSectionType.CONNECTED -> copy.connectedDevicesSectionTitle to connectedDevices
-                DeviceSectionType.DISCONNECTED -> copy.disconnectedDevicesSectionTitle to disconnectedDevices
             }
             DeviceListBottomSheet(
                 title = sheetTitle,

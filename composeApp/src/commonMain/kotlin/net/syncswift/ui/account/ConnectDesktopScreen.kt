@@ -117,19 +117,11 @@ fun ConnectDesktopScreen(
         (currentDeviceName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(currentDeviceName), ignoreCase = true) || dev.name.equals(currentDeviceName, ignoreCase = true)))
     }
 
-    // Merge registered remote devices with any locally connected devices (excluding current device)
-    val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
-    val otherLinkedDevices = remember(registeredDevices, discoveredDevices, currentDeviceId, selfDevice) {
-        val list = mutableListOf<DiscoveredDevice>()
-        // Remote registered devices from Supabase (excluding current device)
-        registeredDevices.filter { !isCurrentSelfDevice(it) }.forEach { list.add(it) }
-
-        // Locally connected/discovered devices (excluding self and current device)
-        discoveredDevices.filter { dev ->
-            !isCurrentSelfDevice(dev) && list.none { it.id == dev.id || (it.host == dev.host && it.name == dev.name) }
-        }.forEach { list.add(it) }
-
-        list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }
+    // Sadece kullanıcının kendi Supabase hesabında kayıtlı olan cihazları listele
+    val otherLinkedDevices = remember(registeredDevices, currentDeviceId, selfDevice) {
+        registeredDevices.filter { !isCurrentSelfDevice(it) }.distinctBy {
+            it.id.ifBlank { "${it.host}:${it.port}" }
+        }
     }
 
     val linkedMobileDevices = remember(otherLinkedDevices) {
@@ -137,8 +129,8 @@ fun ConnectDesktopScreen(
     }
 
     // Masaüstü cihazları doğrudan kullanıcının Supabase hesabındaki kayıtlı cihazlardan gelir
-    val linkedDesktopDevices = remember(registeredDevices) {
-        registeredDevices.filter { !isCurrentSelfDevice(it) && isDesktopDevice(it) }
+    val linkedDesktopDevices = remember(otherLinkedDevices) {
+        otherLinkedDevices.filter { isDesktopDevice(it) }
     }
 
     val linkedDesktopCount = remember(linkedDesktopDevices) {

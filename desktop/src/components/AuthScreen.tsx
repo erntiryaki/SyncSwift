@@ -88,14 +88,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     try {
       setIsPublishing(true);
       const clean = code.replace(/\s+/g, '');
-      // Supabase'te zaman farkından dolayı süresi dolmuş dememesi için geniş tolerans (10 dk) veriyoruz
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      const key = SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY;
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+      // Önce bu cihaza ait eski pairing_codes kayıtlarını temizleyelim
+      fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/pairing_codes?device_id=eq.${deviceId}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`
+        }
+      }).catch(() => {});
 
       await fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/pairing_codes`, {
         method: 'POST',
         headers: {
-          'apikey': SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': key,
+          'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates'
         },
@@ -146,90 +155,112 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     return () => clearInterval(interval);
   }, [timeLeft, generateNewPairCode]);
 
-  // Supabase Real-time Polling: Mobilden kod okutulduğunda otomatik giriş yap
+  // Supabase Real-time Polling: Mobilden kod okutulduğunda veya girildiğinde anında giriş yap
   useEffect(() => {
     let isCancelled = false;
     const pollInterval = setInterval(async () => {
       if (isCancelled || isPairingSuccess) return;
       const currentCode = activeCodeRef.current;
-      if (!currentCode) return;
+      if (!currentCode && !deviceId) return;
 
       try {
+        const key = SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY;
+        const queryFilter = currentCode
+          ? `or=(code.eq.${currentCode},device_id.eq.${deviceId})`
+          : `device_id.eq.${deviceId}`;
+
         const resp = await fetch(
-          `${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.${currentCode}&select=*`,
+          `${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/pairing_codes?${queryFilter}&select=*`,
           {
             headers: {
-              'apikey': SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY}`
+              'apikey': key,
+              'Authorization': `Bearer ${key}`
             }
           }
         );
         if (!resp.ok) return;
         const data = await resp.json();
         if (Array.isArray(data) && data.length > 0) {
-          const row = data[0];
-          // Mobilden eşleşildiğinde push_token veya user_id alanına kullanıcının bilgisi yazılır
-          const pairedIdentifier = (row.push_token && typeof row.push_token === 'string' && row.push_token.trim().length > 0)
-            ? row.push_token.trim()
-            : (row.user_id && typeof row.user_id === 'string' && row.user_id.trim().length > 0)
-              ? row.user_id.trim()
-              : null;
+          // Push token veya user_id alanı dolu olan kaydı bul
+          const matchedRow = data.find((r: any) =>
+            (r.push_token && typeof r.push_token === 'string' && r.push_token.trim().length > 0) ||
+            (r.user_id && typeof r.user_id === 'string' && r.user_id.trim().length > 0)
+          );
 
-          if (pairedIdentifier) {
-            setIsPairingSuccess(true);
+          if (matchedRow) {
+            const pairedIdentifier = (matchedRow.push_token && typeof matchedRow.push_token === 'string' && matchedRow.push_token.trim().length > 0)
+              ? matchedRow.push_token.trim()
+              : matchedRow.user_id?.trim();
 
-            // Tüketilen kodu sil
-            fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.${currentCode}`, {
-              method: 'DELETE',
-              headers: {
-                'apikey': SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY}`
+            if (pairedIdentifier) {
+              setIsPairingSuccess(true);
+
+              // Tüketilen kodu Supabase'den sil
+              const codeToDelete = matchedRow.code || currentCode;
+              if (codeToDelete) {
+                fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.${codeToDelete}`, {
+                  method: 'DELETE',
+                  headers: {
+                    'apikey': key,
+                    'Authorization': `Bearer ${key}`
+                  }
+                }).catch(() => {});
               }
-            }).catch(() => {});
 
-            // Profil bilgilerini alıp başarıyla giriş yap
-            const profile = await fetchUserProfile(pairedIdentifier);
-            const userEmail = profile?.email || (pairedIdentifier.includes('@') ? pairedIdentifier : 'user@syncswift.net');
-            const targetUserId = profile?.id || userEmail;
+              // Profil bilgilerini al
+              let profile: any = null;
+              try {
+                profile = await fetchUserProfile(pairedIdentifier);
+              } catch (_) {}
 
-            // Masaüstü cihazını Supabase devices tablosuna kaydet
-            fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/devices`, {
-              method: 'POST',
-              headers: {
-                'apikey': SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'resolution=merge-duplicates'
-              },
-              body: JSON.stringify({
+              const userEmail = profile?.email || (pairedIdentifier.includes('@') ? pairedIdentifier : 'user@syncswift.net');
+              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+              const resolvedUserId = (profile?.id && uuidRegex.test(profile.id))
+                ? profile.id
+                : (uuidRegex.test(pairedIdentifier) ? pairedIdentifier : null);
+
+              // Masaüstü cihazını Supabase devices tablosuna kaydet
+              const deviceBody: any = {
                 id: deviceId,
                 device_name: isMac() ? 'SyncSwift Mac' : 'SyncSwift Windows',
                 device_type: isMac() ? 'macOS' : 'Windows',
-                user_id: targetUserId,
                 is_online: true
-              })
-            }).catch(() => {});
+              };
+              if (resolvedUserId) {
+                deviceBody.user_id = resolvedUserId;
+              }
 
-            setTimeout(() => {
+              fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/devices`, {
+                method: 'POST',
+                headers: {
+                  'apikey': key,
+                  'Authorization': `Bearer ${key}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'resolution=merge-duplicates'
+                },
+                body: JSON.stringify(deviceBody)
+              }).catch(() => {});
+
+              // ANINDA masaüstünde giriş yap
               onLoginSuccess({
-                id: profile?.id,
+                id: resolvedUserId || undefined,
                 email: userEmail,
                 firstName: profile?.firstName || userEmail.split('@')[0],
                 lastName: profile?.lastName || '',
-                provider: profile?.provider || 'local',
+                provider: profile?.provider || (pairedIdentifier.includes('@') ? 'email' : 'local'),
                 isPro: profile?.isPro ?? true
               });
-            }, 600);
+            }
           }
         }
       } catch (_err) {}
-    }, 1500);
+    }, 1000);
 
     return () => {
       isCancelled = true;
       clearInterval(pollInterval);
     };
-  }, [isPairingSuccess, onLoginSuccess]);
+  }, [isPairingSuccess, onLoginSuccess, deviceId]);
 
   const cleanCodeDigits = pairCode.replace(/\s+/g, '');
   const qrPayload = `syncswift://remote?code=${cleanCodeDigits}&id=${deviceId}&name=SyncSwift%20Desktop&os=Desktop`;

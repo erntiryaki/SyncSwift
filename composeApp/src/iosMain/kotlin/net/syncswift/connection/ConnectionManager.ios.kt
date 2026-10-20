@@ -1069,35 +1069,42 @@ actual object ConnectionManager {
                                         }
                                     }
 
-                                    val loggedInEmail = SessionManager.getLoggedInEmail() ?: ""
-                                    if (loggedInEmail.isNotBlank()) {
-                                        val patchUrl = NSURL.URLWithString("$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean")
-                                        if (patchUrl != null) {
-                                            val patchReq = NSMutableURLRequest.requestWithURL(patchUrl)
-                                            patchReq.setHTTPMethod("PATCH")
-                                            patchReq.setValue("application/json", forHTTPHeaderField = "Content-Type")
-                                            patchReq.setValue(serviceKey, forHTTPHeaderField = "apikey")
-                                            patchReq.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
-                                            val patchBody = """{"push_token": "$loggedInEmail"}"""
-                                            patchReq.setHTTPBody((patchBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
-                                            NSURLSession.sharedSession.dataTaskWithRequest(patchReq).resume()
-                                        }
+                                    val rawEmail = SessionManager.getLoggedInEmail()?.trim().orEmpty()
+                                    val rawUserId = SessionManager.getLoggedInUserId()?.trim().orEmpty()
+                                    val effectiveIdentifier = if (rawEmail.isNotBlank()) {
+                                        rawEmail
+                                    } else if (rawUserId.isNotBlank()) {
+                                        rawUserId
+                                    } else {
+                                        "mobile-ios@syncswift.net"
+                                    }
 
-                                        if (!devId.isNullOrBlank()) {
-                                            scope.launch(Dispatchers.Default) {
-                                                try {
-                                                    SupabaseNetwork.registerDeviceInSupabase(
-                                                        email = loggedInEmail,
-                                                        deviceId = devId,
-                                                        deviceName = devName,
-                                                        deviceType = devType,
-                                                        pushToken = "",
-                                                        localIp = devHost,
-                                                        port = devPort,
-                                                        userId = null
-                                                    )
-                                                } catch (_: Exception) {}
-                                            }
+                                    val patchUrl = NSURL.URLWithString("$supabaseUrl/rest/v1/pairing_codes?code=eq.$clean")
+                                    if (patchUrl != null) {
+                                        val patchReq = NSMutableURLRequest.requestWithURL(patchUrl)
+                                        patchReq.setHTTPMethod("PATCH")
+                                        patchReq.setValue("application/json", forHTTPHeaderField = "Content-Type")
+                                        patchReq.setValue(serviceKey, forHTTPHeaderField = "apikey")
+                                        patchReq.setValue("Bearer $serviceKey", forHTTPHeaderField = "Authorization")
+                                        val patchBody = """{"push_token": "$effectiveIdentifier"}"""
+                                        patchReq.setHTTPBody((patchBody as NSString).dataUsingEncoding(NSUTF8StringEncoding))
+                                        NSURLSession.sharedSession.dataTaskWithRequest(patchReq).resume()
+                                    }
+
+                                    if (!devId.isNullOrBlank()) {
+                                        scope.launch(Dispatchers.Default) {
+                                            try {
+                                                SupabaseNetwork.registerDeviceInSupabase(
+                                                    email = effectiveIdentifier,
+                                                    deviceId = devId,
+                                                    deviceName = devName,
+                                                    deviceType = devType,
+                                                    pushToken = "",
+                                                    localIp = devHost,
+                                                    port = devPort,
+                                                    userId = rawUserId.ifBlank { null }
+                                                )
+                                            } catch (_: Exception) {}
                                         }
                                     }
 

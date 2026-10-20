@@ -208,6 +208,9 @@ export const App: React.FC = () => {
     const devId = localStorage.getItem('syncswift_desktop_id');
     if (!devId) return;
 
+    let deviceVerifiedInDb = false;
+    let consecutiveMissingCount = 0;
+
     const interval = setInterval(async () => {
       try {
         const key = SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY;
@@ -224,13 +227,24 @@ export const App: React.FC = () => {
           const list = await res.json();
           // Eğer mobilden cihaz silinmişse veya hesaptan ayrılmışsa masaüstünü hemen çıkış yaptır
           if (Array.isArray(list)) {
-            if (list.length === 0 || !list[0]?.user_id || list[0]?.user_id === '') {
-              handleLogout();
+            if (list.length > 0) {
+              deviceVerifiedInDb = true;
+              consecutiveMissingCount = 0;
+              // Eğer mobilden hesaptan çıkış yapılmış / user_id sıfırlanmışsa
+              if (currentUser.id && list[0]?.user_id === null) {
+                handleLogout();
+              }
+            } else if (deviceVerifiedInDb) {
+              // Cihaz veritabanında daha önce vardı ama mobilden "Cihazı Kaldır" ile silinmiş
+              consecutiveMissingCount++;
+              if (consecutiveMissingCount >= 2) {
+                handleLogout();
+              }
             }
           }
         }
       } catch (_e) {}
-    }, 3000);
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [currentUser, handleLogout]);
