@@ -1,6 +1,9 @@
 $makeappx = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
-$outputMsix = "C:\Users\btc\Desktop\SyncSwift_1.0.9.0_x64.msix"
+$outputMsix = "C:\Users\btc\Desktop\SyncSwift_1.0.10.0_x64.msix"
+
+Write-Host "Unregistering older net.syncswift.desktop package if installed..."
+Get-AppxPackage net.syncswift.desktop | Remove-AppxPackage -ErrorAction SilentlyContinue
 
 Write-Host "Copying fresh release binary to msix_package..."
 Copy-Item ".\src-tauri\target\release\syncswift.exe" ".\msix_package\SyncSwift.exe" -Force
