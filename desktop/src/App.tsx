@@ -14,8 +14,12 @@ export const App: React.FC = () => {
 
   // User Profile
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('syncswift_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('syncswift_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   // Devices state (simulated nearby and connected devices via mDNS / UDP socket)

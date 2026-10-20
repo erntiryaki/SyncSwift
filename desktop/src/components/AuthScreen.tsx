@@ -47,15 +47,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   // Desktop Device ID persistent in localStorage (Must be valid UUID for Supabase)
   const [deviceId] = useState(() => {
-    const saved = localStorage.getItem('syncswift_desktop_id');
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (saved && uuidRegex.test(saved)) return saved;
-    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-    localStorage.setItem('syncswift_desktop_id', newId);
+    try {
+      const saved = localStorage.getItem('syncswift_desktop_id');
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (saved && uuidRegex.test(saved)) return saved;
+    } catch {}
+
+    let newId = '';
+    try {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        newId = crypto.randomUUID();
+      }
+    } catch {}
+
+    if (!newId) {
+      newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    try {
+      localStorage.setItem('syncswift_desktop_id', newId);
+    } catch {}
     return newId;
   });
 
