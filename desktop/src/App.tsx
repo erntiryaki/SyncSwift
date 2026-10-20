@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { TrayPanel } from './components/TrayPanel';

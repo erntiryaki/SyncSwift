@@ -1,6 +1,6 @@
 $makeappx = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
-$outputMsix = "C:\Users\btc\Desktop\SyncSwift_1.0.11.0_x64.msix"
+$outputMsix = "C:\Users\btc\Desktop\SyncSwift_1.0.12.0_x64.msix"
 
 Write-Host "Unregistering older net.syncswift.desktop package if installed..."
 Get-AppxPackage net.syncswift.desktop | Remove-AppxPackage -ErrorAction SilentlyContinue
