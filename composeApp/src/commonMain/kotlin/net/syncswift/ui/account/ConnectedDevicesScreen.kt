@@ -107,6 +107,29 @@ fun ConnectedDevicesScreen(
     var showScanningBanner by remember { mutableStateOf(false) }
     var pullOffset by remember { mutableStateOf(0f) }
 
+    val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
+        val t = dev.osType.lowercase()
+        t.contains("windows") || t.contains("mac") || t.contains("desktop") || t.contains("pc")
+    }
+
+    var registeredAccountDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
+    val loggedInEmail = remember { SessionManager.getLoggedInEmail() ?: "" }
+
+    LaunchedEffect(loggedInEmail) {
+        if (loggedInEmail.isNotBlank()) {
+            try {
+                registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+            } catch (_: Exception) {}
+        }
+    }
+
+    val isMyAccountDevice: (DiscoveredDevice) -> Boolean = { dev ->
+        registeredAccountDevices.any {
+            (it.id.isNotBlank() && it.id == dev.id) ||
+            (it.host.isNotBlank() && it.host == dev.host && cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(dev.name))
+        } || isDesktopDevice(dev)
+    }
+
     fun triggerScan() {
         if (isRefreshing) return
         isRefreshing = true
@@ -114,7 +137,13 @@ fun ConnectedDevicesScreen(
         scope.launch {
             try {
                 DeviceDiscoveryManager.startDiscovery()
-                delay(2500)
+                DeviceDiscoveryManager.triggerDiscoveryPing()
+                if (loggedInEmail.isNotBlank()) {
+                    try {
+                        registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                    } catch (_: Exception) {}
+                }
+                delay(2000)
             } finally {
                 isRefreshing = false
                 pullOffset = 0f
@@ -306,11 +335,12 @@ fun ConnectedDevicesScreen(
                 if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host else cleanDeviceDisplayName(it.name)
             }
             val allConnectedDevices = otherDevices.filter { dev ->
-                connectedKeys.contains("${dev.host}:${dev.port}") ||
-                connectedKeys.contains(dev.id) ||
-                connectedKeys.contains(dev.host) ||
-                connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
-                ConnectionManager.isDeviceConnected(dev)
+                val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                    connectedKeys.contains(dev.id) ||
+                    connectedKeys.contains(dev.host) ||
+                    connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                    ConnectionManager.isDeviceConnected(dev)
+                isConn && !isMyAccountDevice(dev)
             }
 
             // SECTION: Bağlı Cihazlar (Tümü Tek Liste)
@@ -817,12 +847,16 @@ fun ConnectedDevicesScreen(
             BackHandler {
                 deviceToPair = null
             }
+            var isPairingInFlight by remember { mutableStateOf(false) }
             SendPairRequestScreen(
                 device = target,
                 copy = copy,
                 onSendRequest = {
+                    if (isPairingInFlight) return@SendPairRequestScreen
+                    isPairingInFlight = true
                     if (!net.syncswift.subscription.SubscriptionManager.canAddDevice(connectedKeys.size)) {
                         deviceToPair = null
+                        isPairingInFlight = false
                         net.syncswift.subscription.SubscriptionManager.triggerPaywall(
                             net.syncswift.subscription.PaywallReason.DEVICE_LIMIT
                         )
@@ -831,6 +865,7 @@ fun ConnectedDevicesScreen(
                     deviceToPair = null
                     showNativeToast(copy.sendingConnectionRequest)
                     ConnectionManager.requestPairing(target) { result ->
+                        isPairingInFlight = false
                         when (result) {
                             PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
                             PairResult.REJECTED -> showNativeToast(copy.connectionRejected)

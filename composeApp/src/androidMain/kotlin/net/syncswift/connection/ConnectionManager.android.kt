@@ -148,11 +148,47 @@ actual object ConnectionManager {
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
     }
 
+    private val recentlyHandledTransferIds = java.util.Collections.synchronizedMap(object : java.util.LinkedHashMap<String, Long>(50, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > 50
+    })
+    private val recentlyHandledPairKeys = java.util.Collections.synchronizedMap(object : java.util.LinkedHashMap<String, Long>(50, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > 50
+    })
+
     fun dispatchIncomingPairRequest(request: IncomingPairRequest) {
+        val now = System.currentTimeMillis()
+        val key = "${request.senderId}_${request.senderHost}_${request.senderName}"
+        val lastHandled = recentlyHandledPairKeys[key] ?: 0L
+        if (now - lastHandled < 10000L) {
+            Log.d(TAG, "Ignoring duplicate pair request for $key within 10s")
+            return
+        }
+        val current = _pendingPairRequest.value
+        if (current != null && (current.requestId == request.requestId ||
+            (request.senderId.isNotBlank() && current.senderId == request.senderId) ||
+            (request.senderHost.isNotBlank() && current.senderHost == request.senderHost))) {
+            Log.d(TAG, "Pair request already pending for ${request.senderName}, ignoring duplicate")
+            return
+        }
+        recentlyHandledPairKeys[key] = now
         _pendingPairRequest.value = request
     }
 
     fun dispatchIncomingTransferRequest(request: IncomingTransferRequest) {
+        val now = System.currentTimeMillis()
+        val key = if (request.transferId.isNotBlank()) request.transferId else "${request.senderHost}_${request.fileName}_${request.fileSize}"
+        val lastHandled = recentlyHandledTransferIds[key] ?: 0L
+        if (now - lastHandled < 15000L) {
+            Log.d(TAG, "Ignoring duplicate transfer request for $key within 15s")
+            return
+        }
+        val current = _pendingTransferRequest.value
+        if (current != null && (current.requestId == request.requestId ||
+            (request.transferId.isNotBlank() && current.transferId == request.transferId))) {
+            Log.d(TAG, "Transfer request already pending for $key, ignoring duplicate")
+            return
+        }
+        recentlyHandledTransferIds[key] = now
         _pendingTransferRequest.value = request
     }
 

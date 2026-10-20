@@ -489,6 +489,7 @@ val ArabicCopy = Copy().apply {
     nearbyDevicesSection = "الأجهزة القريبة"
     scanningNetworkDevices = "فحص الأجهزة..."
     openSyncSwiftOnOtherDevice = "افتح SyncSwift على الجهاز الآخر على نفس شبكة Wi-Fi"
+    noNearbyDevicesYet = "لم يتم العثور على أجهزة قريبة"
     noConnectedDevicesYet = "لا توجد أجهزة متصلة بعد"
     connectedDevicesSectionTitle = "الأجهزة المتصلة"
     disconnectedDevicesSectionTitle = "الأجهزة المتصلة عن بعد"

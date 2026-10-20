@@ -370,17 +370,17 @@ actual object DeviceDiscoveryManager {
             }
         }
 
-        // 2. Launch UDP Heartbeat broadcaster (instant broadcast on start, then every 2.8s)
+        // 2. Launch UDP Heartbeat broadcaster (instant broadcast on start, then every 1.5s)
         udpHeartbeatJob = scope.launch(Dispatchers.IO) {
             // Instant discovery ping (only if logged in)
             if (SessionManager.isLoggedIn()) {
                 sendUdpPacket(buildSelfAnnouncement(isPing = true))
-                delay(500)
+                delay(80)
                 sendUdpPacket(buildSelfAnnouncement(isPing = false))
             }
 
             while (isActive) {
-                delay(2800)
+                delay(1500)
                 if (SessionManager.isLoggedIn()) {
                     sendUdpPacket(buildSelfAnnouncement(isPing = false))
                 }
@@ -405,7 +405,7 @@ actual object DeviceDiscoveryManager {
         livenessJob?.cancel()
         livenessJob = scope.launch {
             while (isActive) {
-                delay(2000)
+                delay(1500)
                 val now = System.currentTimeMillis()
                 val current = _devices.value.toMutableList()
                 var changed = false
@@ -422,24 +422,28 @@ actual object DeviceDiscoveryManager {
                         ?: 0L
 
                     val age = now - lastSeen
-                    // Heartbeat is sent every 2.8s. If seen within 6s -> online
-                    if (lastSeen > 0L && age < 6000L) {
+                    // Heartbeat is sent every 1.5s. If seen within 12s -> online (resilient to Wi-Fi packet drops)
+                    if (lastSeen > 0L && age < 12000L) {
                         if (!dev.isOnline) {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else if (lastSeen > 0L && age >= 6000L) {
+                    } else if (lastSeen > 0L && age >= 12000L) {
                         val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
                         if (!isConnected) {
-                            // Non-connected nearby device not seen for 6s -> remove immediately
-                            iterator.remove()
-                            changed = true
+                            if (age >= 25000L) {
+                                iterator.remove()
+                                changed = true
+                            } else if (dev.isOnline) {
+                                iterator.set(dev.copy(isOnline = false))
+                                changed = true
+                            }
                         } else {
                             if (dev.isOnline) {
                                 iterator.set(dev.copy(isOnline = false))
                                 changed = true
                             }
-                            if (age >= 10000L) {
+                            if (age >= 35000L) {
                                 net.syncswift.connection.ConnectionManager.markDeviceDisconnected(dev.id)
                                 iterator.remove()
                                 changed = true
@@ -462,7 +466,15 @@ actual object DeviceDiscoveryManager {
 
     actual fun triggerDiscoveryPing() {
         scope.launch(Dispatchers.IO) {
-            sendUdpPacket(buildSelfAnnouncement(isPing = true))
+            if (SessionManager.isLoggedIn()) {
+                val discPkt = buildSelfAnnouncement(isPing = true)
+                val beatPkt = buildSelfAnnouncement(isPing = false)
+                repeat(2) {
+                    sendUdpPacket(discPkt)
+                    sendUdpPacket(beatPkt)
+                    delay(50)
+                }
+            }
         }
     }
 

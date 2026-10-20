@@ -494,6 +494,7 @@ val TurkishCopy = Copy().apply {
     nearbyDevicesSection = "Yakındaki Cihazlar"
     scanningNetworkDevices = "Cihazlar taranıyor..."
     openSyncSwiftOnOtherDevice = "Aynı Wi-Fi ağındaki diğer cihazda SyncSwift'i açın"
+    noNearbyDevicesYet = "Yakında cihaz bulunamadı"
     noConnectedDevicesYet = "Henüz bağlı bir cihaz yok"
     connectedDevicesSectionTitle = "Bağlı Cihazlar"
     disconnectedDevicesSectionTitle = "Uzaktan Bağlı Cihazlar"

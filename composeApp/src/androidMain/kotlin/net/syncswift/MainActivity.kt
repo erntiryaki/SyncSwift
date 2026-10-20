@@ -62,6 +62,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onResume() {
         super.onResume()
         SessionManager.setCurrentActivity(this)
+        net.syncswift.discovery.DeviceDiscoveryManager.startDiscovery()
+        net.syncswift.discovery.DeviceDiscoveryManager.triggerDiscoveryPing()
         if (net.syncswift.biometric.BiometricAuthManager.isEnabled() && net.syncswift.biometric.BiometricAuthManager.isAppLocked.value) {
             net.syncswift.biometric.BiometricAuthManager.requestPrompt()
         }
@@ -69,12 +71,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     override fun onPause() {
         super.onPause()
-        net.syncswift.discovery.DeviceDiscoveryManager.broadcastGoodbye()
+        // Kept alive so device remains visible and connected in background
     }
 
     override fun onStop() {
         super.onStop()
-        net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
         if (net.syncswift.biometric.BiometricAuthManager.isEnabled()) {
             net.syncswift.biometric.BiometricAuthManager.lockApp()
         }
@@ -82,6 +83,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        net.syncswift.discovery.DeviceDiscoveryManager.broadcastGoodbye()
         net.syncswift.discovery.DeviceDiscoveryManager.stopDiscovery()
         SessionManager.setCurrentActivity(null)
     }
@@ -179,5 +181,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 )
             )
         }
+        intent?.removeExtra("type")
     }
 }

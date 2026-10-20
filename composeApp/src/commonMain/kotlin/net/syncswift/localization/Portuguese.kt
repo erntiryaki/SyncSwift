@@ -489,6 +489,7 @@ val PortugueseCopy = Copy().apply {
     nearbyDevicesSection = "Dispositivos próximos"
     scanningNetworkDevices = "Buscando dispositivos..."
     openSyncSwiftOnOtherDevice = "Abra o SyncSwift no outro dispositivo no mesmo Wi-Fi"
+    noNearbyDevicesYet = "Nenhum dispositivo próximo encontrado"
     noConnectedDevicesYet = "Nenhum dispositivo conectado ainda"
     connectedDevicesSectionTitle = "Dispositivos conectados"
     disconnectedDevicesSectionTitle = "Dispositivos conectados remotamente"

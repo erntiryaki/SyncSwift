@@ -526,6 +526,7 @@ class Copy {
     var nearbyDevicesSection: String = "Nearby Devices"
     var scanningNetworkDevices: String = "Scanning devices..."
     var openSyncSwiftOnOtherDevice: String = "Open SyncSwift on your other device on the same Wi-Fi"
+    var noNearbyDevicesYet: String = "No nearby devices found"
     var noConnectedDevicesYet: String = "No connected devices yet"
     var disconnectedDevicesSectionTitle: String = "Remote Connected Devices"
     var noDisconnectedDevicesYet: String = "No offline devices saved"

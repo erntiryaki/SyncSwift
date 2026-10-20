@@ -489,6 +489,7 @@ val RussianCopy = Copy().apply {
     nearbyDevicesSection = "Устройства поблизости"
     scanningNetworkDevices = "Поиск устройств..."
     openSyncSwiftOnOtherDevice = "Откройте SyncSwift на другом устройстве в той же сети Wi-Fi"
+    noNearbyDevicesYet = "Рядом устройства не найдены"
     noConnectedDevicesYet = "Пока нет подключенных устройств"
     connectedDevicesSectionTitle = "Подключенные устройства"
     disconnectedDevicesSectionTitle = "Удаленно подключенные устройства"

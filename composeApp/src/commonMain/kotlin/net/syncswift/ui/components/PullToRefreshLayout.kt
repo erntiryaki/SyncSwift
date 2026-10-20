@@ -48,8 +48,8 @@ fun ElegantPullToRefreshLayout(
     content: @Composable () -> Unit
 ) {
     var pullDistance by remember { mutableStateOf(0f) }
-    val maxDragDistance = 180f
-    val triggerThreshold = 120f
+    val maxDragDistance = 260f
+    val triggerThreshold = 180f
 
     val nestedScrollConnection = remember(isRefreshing) {
         object : NestedScrollConnection {
@@ -82,46 +82,29 @@ fun ElegantPullToRefreshLayout(
         }
     }
 
-    val progress = (pullDistance / triggerThreshold).coerceIn(0f, 1f)
-    val indicatorAlpha by animateFloatAsState(
-        targetValue = if (isRefreshing || progress > 0.15f) 1f else 0f,
-        animationSpec = tween(180)
-    )
-
     Column(
         modifier = modifier.nestedScroll(nestedScrollConnection)
     ) {
-        // Floating boxless indicator header
-        val isVisible = isRefreshing || pullDistance > 15f
+        // Floating boxless indicator header (only shown when refreshing)
         AnimatedVisibility(
-            visible = isVisible,
+            visible = isRefreshing,
             enter = fadeIn(tween(180)),
             exit = fadeOut(tween(220))
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp)
-                    .graphicsLayer { alpha = indicatorAlpha },
+                    .padding(top = 8.dp, bottom = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                if (isRefreshing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = LocalSyncSwiftColors.current.blue,
-                        strokeWidth = 2.2.dp
-                    )
-                } else {
-                    CircularProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.size(22.dp),
-                        color = LocalSyncSwiftColors.current.blue.copy(alpha = 0.5f + (progress * 0.5f)),
-                        strokeWidth = 2.2.dp
-                    )
-                }
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = LocalSyncSwiftColors.current.blue,
+                    strokeWidth = 2.2.dp
+                )
 
-                if (!refreshingText.isNullOrBlank() && isRefreshing) {
+                if (!refreshingText.isNullOrBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = refreshingText,

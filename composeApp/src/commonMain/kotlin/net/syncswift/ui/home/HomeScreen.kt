@@ -87,6 +87,20 @@ fun HomeScreen(
     var viewAllSection by remember { mutableStateOf<DeviceSectionType?>(null) }
     var isTransfersExpanded by remember { mutableStateOf(true) }
 
+    var registeredAccountDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
+    val loggedInEmail = remember { SessionManager.getLoggedInEmail() ?: "" }
+
+    LaunchedEffect(loggedInEmail) {
+        while (true) {
+            if (loggedInEmail.isNotBlank()) {
+                try {
+                    registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                } catch (_: Exception) {}
+            }
+            kotlinx.coroutines.delay(4000)
+        }
+    }
+
     var isRefreshingHome by remember { mutableStateOf(false) }
     val refreshScope = rememberCoroutineScope()
     fun triggerHomeRefresh() {
@@ -94,8 +108,13 @@ fun HomeScreen(
         isRefreshingHome = true
         refreshScope.launch {
             try {
-                DeviceDiscoveryManager.triggerDiscoveryPing()
                 DeviceDiscoveryManager.startDiscovery()
+                DeviceDiscoveryManager.triggerDiscoveryPing()
+                if (loggedInEmail.isNotBlank()) {
+                    try {
+                        registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                    } catch (_: Exception) {}
+                }
                 kotlinx.coroutines.delay(1800)
             } finally {
                 isRefreshingHome = false
@@ -130,13 +149,26 @@ fun HomeScreen(
         }
     }
 
-    val connectedDevices = remember(realOtherDevices, connectedKeys) {
+    val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
+        val t = dev.osType.lowercase()
+        t.contains("windows") || t.contains("mac") || t.contains("desktop") || t.contains("pc")
+    }
+
+    val isMyAccountDevice: (DiscoveredDevice) -> Boolean = { dev ->
+        registeredAccountDevices.any {
+            (it.id.isNotBlank() && it.id == dev.id) ||
+            (it.host.isNotBlank() && it.host == dev.host && cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(dev.name))
+        } || isDesktopDevice(dev)
+    }
+
+    val connectedDevices = remember(realOtherDevices, connectedKeys, registeredAccountDevices) {
         realOtherDevices.filter { dev ->
-            connectedKeys.contains("${dev.host}:${dev.port}") ||
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
                     connectedKeys.contains(dev.id) ||
                     connectedKeys.contains(dev.host) ||
                     connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
                     ConnectionManager.isDeviceConnected(dev)
+            isConn && !isMyAccountDevice(dev)
         }.map { dev ->
             val devModel = if (dev.modelCode.isNotBlank()) dev.modelCode else dev.osType.ifBlank { "SyncSwift" }
             UiDeviceItem(
@@ -168,25 +200,6 @@ fun HomeScreen(
                 section = DeviceSectionType.NEARBY,
                 realDevice = dev
             )
-        }
-    }
-
-    val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
-        val t = dev.osType.lowercase()
-        t.contains("windows") || t.contains("mac") || t.contains("desktop") || t.contains("pc")
-    }
-
-    var registeredAccountDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
-    val loggedInEmail = remember { SessionManager.getLoggedInEmail() ?: "" }
-
-    LaunchedEffect(loggedInEmail) {
-        while (true) {
-            if (loggedInEmail.isNotBlank()) {
-                try {
-                    registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
-                } catch (_: Exception) {}
-            }
-            kotlinx.coroutines.delay(4000)
         }
     }
 
@@ -424,48 +437,17 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable { DeviceDiscoveryManager.triggerDiscoveryPing() },
+                            .clip(RoundedCornerShape(16.dp)),
                         shape = RoundedCornerShape(16.dp),
                         color = CardSurface,
                         border = BorderStroke(1.dp, InputBorder)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(LocalSyncSwiftColors.current.blue.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                NearbyDiscoveryIcon(Modifier.size(20.dp), color = LocalSyncSwiftColors.current.blue)
-                            }
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = copy.scanningNetworkDevices,
-                                    color = Cloud,
-                                    fontSize = 13.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 2,
-                                    lineHeight = 18.sp
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = copy.openSyncSwiftOnOtherDevice,
-                                    color = Mist,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 2,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
+                        Text(
+                            text = copy.noNearbyDevicesYet,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
                     }
                 }
 
@@ -938,13 +920,17 @@ fun HomeScreen(
     ) {
         val target = deviceToPair
         if (target != null) {
+            var isPairingRequestInFlight by remember { mutableStateOf(false) }
             SendPairRequestScreen(
                 device = target,
                 copy = copy,
                 onSendRequest = {
+                    if (isPairingRequestInFlight) return@SendPairRequestScreen
+                    isPairingRequestInFlight = true
                     deviceToPair = null
                     showNativeToast(copy.sendingConnectionRequest)
                     ConnectionManager.requestPairing(target) { result ->
+                        isPairingRequestInFlight = false
                         when (result) {
                             PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
                             PairResult.REJECTED -> showNativeToast(copy.connectionRejected)
