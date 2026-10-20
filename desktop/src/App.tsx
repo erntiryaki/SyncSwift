@@ -208,7 +208,7 @@ export const App: React.FC = () => {
       try {
         const key = SYNC_SWIFT_CONFIG.SUPABASE_SERVICE_ROLE_KEY || SYNC_SWIFT_CONFIG.SUPABASE_ANON_KEY;
         const res = await fetch(
-          `${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/devices?id=eq.${devId}&select=id`,
+          `${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/devices?id=eq.${devId}&select=id,user_id`,
           {
             headers: {
               apikey: key,
@@ -218,13 +218,15 @@ export const App: React.FC = () => {
         );
         if (res.ok) {
           const list = await res.json();
-          // Eğer mobilden cihaz silinmişse masaüstünü hemen çıkış yaptır
-          if (Array.isArray(list) && list.length === 0) {
-            handleLogout();
+          // Eğer mobilden cihaz silinmişse veya hesaptan ayrılmışsa masaüstünü hemen çıkış yaptır
+          if (Array.isArray(list)) {
+            if (list.length === 0 || !list[0]?.user_id || list[0]?.user_id === '') {
+              handleLogout();
+            }
           }
         }
       } catch (_e) {}
-    }, 4000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [currentUser, handleLogout]);

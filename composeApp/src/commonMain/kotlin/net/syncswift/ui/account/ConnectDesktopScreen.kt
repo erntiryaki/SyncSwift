@@ -61,25 +61,6 @@ fun ConnectDesktopScreen(
     var deviceToConfirmRemove by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var isRemovingDevice by remember { mutableStateOf(false) }
 
-    fun refreshDevices() {
-        if (userEmail.isNotBlank()) {
-            scope.launch {
-                isLoadingDevices = true
-                try {
-                    val remoteDevs = SupabaseNetwork.fetchAllUserDevices(userEmail)
-                    registeredDevices = remoteDevs
-                } catch (_: Exception) {
-                } finally {
-                    isLoadingDevices = false
-                }
-            }
-        }
-    }
-
-    LaunchedEffect(userEmail) {
-        refreshDevices()
-    }
-
     // Identify linked desktop count for free plan check
     val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
         val t = dev.osType.lowercase()
@@ -89,6 +70,36 @@ fun ConnectDesktopScreen(
     val isMobileDevice: (DiscoveredDevice) -> Boolean = { dev ->
         val t = dev.osType.lowercase()
         t.contains("android") || t.contains("ios") || t.contains("iphone") || t.contains("ipad") || t.contains("mobile") || !isDesktopDevice(dev)
+    }
+
+    fun refreshDevices() {
+        if (userEmail.isNotBlank()) {
+            scope.launch {
+                isLoadingDevices = true
+                try {
+                    val remoteDevs = SupabaseNetwork.fetchAllUserDevices(userEmail)
+                    registeredDevices = remoteDevs
+
+                    // Masaüstünden çıkış yapılmışsa ve Supabase kaydı silinmişse yerel bellekten de kaldır
+                    val currentDiscovered = net.syncswift.discovery.DeviceDiscoveryManager.devices.value
+                    currentDiscovered.filter { isDesktopDevice(it) && remoteDevs.none { r -> r.id == it.id } }.forEach {
+                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(it.host)
+                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(it.id)
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    isLoadingDevices = false
+                }
+            }
+        }
+    }
+
+    // Ekran açıkken her 3 saniyede bir cihaz listesini güncelle (masaüstü çıkış yaptığında anında mobilde silinsin)
+    LaunchedEffect(userEmail) {
+        while (true) {
+            refreshDevices()
+            kotlinx.coroutines.delay(3000)
+        }
     }
 
     val selfDevice = remember { net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice() }
@@ -125,8 +136,9 @@ fun ConnectDesktopScreen(
         otherLinkedDevices.filter { isMobileDevice(it) }
     }
 
-    val linkedDesktopDevices = remember(otherLinkedDevices) {
-        otherLinkedDevices.filter { isDesktopDevice(it) }
+    // Masaüstü cihazları doğrudan kullanıcının Supabase hesabındaki kayıtlı cihazlardan gelir
+    val linkedDesktopDevices = remember(registeredDevices) {
+        registeredDevices.filter { !isCurrentSelfDevice(it) && isDesktopDevice(it) }
     }
 
     val linkedDesktopCount = remember(linkedDesktopDevices) {

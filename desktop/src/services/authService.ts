@@ -55,6 +55,7 @@ export function isValidEmail(email: string): boolean {
  * Fetch user profile from Supabase profiles table (identical to mobile app)
  */
 export async function fetchUserProfile(emailOrId: string): Promise<{
+  id?: string;
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -83,6 +84,7 @@ export async function fetchUserProfile(emailOrId: string): Promise<{
       if (Array.isArray(list) && list.length > 0) {
         const item = list[0];
         return {
+          id: item.id || '',
           email: item.email || clean,
           firstName: item.first_name || '',
           lastName: item.last_name || '',

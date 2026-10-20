@@ -12,6 +12,7 @@ export type ThemeMode = 'system' | 'dark' | 'light';
 export type IdentityProvider = 'email' | 'google' | 'apple' | 'local';
 
 export interface UserProfile {
+  id?: string;
   email: string;
   firstName: string;
   lastName: string;

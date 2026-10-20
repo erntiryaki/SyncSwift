@@ -175,6 +175,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             // Profil bilgilerini alıp başarıyla giriş yap
             const profile = await fetchUserProfile(pairedIdentifier);
             const userEmail = profile?.email || (pairedIdentifier.includes('@') ? pairedIdentifier : 'user@syncswift.net');
+            const targetUserId = profile?.id || userEmail;
 
             // Masaüstü cihazını Supabase devices tablosuna kaydet
             fetch(`${SYNC_SWIFT_CONFIG.SUPABASE_URL}/rest/v1/devices`, {
@@ -189,13 +190,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 id: deviceId,
                 device_name: isMac() ? 'SyncSwift Mac' : 'SyncSwift Windows',
                 device_type: isMac() ? 'macOS' : 'Windows',
-                user_id: userEmail,
+                user_id: targetUserId,
                 is_online: true
               })
             }).catch(() => {});
 
             setTimeout(() => {
               onLoginSuccess({
+                id: profile?.id,
                 email: userEmail,
                 firstName: profile?.firstName || userEmail.split('@')[0],
                 lastName: profile?.lastName || '',
