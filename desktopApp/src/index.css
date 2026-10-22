@@ -1,0 +1,151 @@
+:root {
+  --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  
+  /* Dark Theme Default */
+  --bg-night: #0B101B;
+  --bg-card: #131B28;
+  --bg-input: #1A2436;
+  --border-input: #1E293B;
+  --border-highlight: rgba(77, 144, 254, 0.2);
+  --text-cloud: #FFFFFF;
+  --text-mist: #94A3B8;
+  --text-placeholder: #64748B;
+  --accent-blue: #4D90FE;
+  --btn-pill-bg: #3875D7;
+  --btn-pill-border: #2B5EB5;
+  --success-green: #10B981;
+  --error-red: #EF4444;
+  --glass-bg: rgba(19, 27, 40, 0.75);
+  --glass-border: rgba(30, 41, 59, 0.6);
+}
+
+[data-theme="light"] {
+  --bg-night: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-input: #F1F5F9;
+  --border-input: #E2E8F0;
+  --border-highlight: rgba(29, 88, 216, 0.2);
+  --text-cloud: #0F172A;
+  --text-mist: #64748B;
+  --text-placeholder: #94A3B8;
+  --accent-blue: #1D58D8;
+  --btn-pill-bg: #1D58D8;
+  --btn-pill-border: #1544B0;
+  --success-green: #10B981;
+  --error-red: #EF4444;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(226, 232, 240, 0.8);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: var(--bg-night);
+  color: var(--text-cloud);
+  user-select: none;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-input);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-placeholder);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+/* Utility UI Elements */
+.pill-input {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-input);
+  color: var(--text-cloud);
+  border-radius: 9999px;
+  padding: 10px 18px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.pill-input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px var(--border-highlight);
+}
+
+.pill-button {
+  background-color: var(--btn-pill-bg);
+  border: 1px solid var(--btn-pill-border);
+  color: #FFFFFF;
+  border-radius: 9999px;
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.pill-button:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.pill-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+}
+
+.card-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-input);
+  border-radius: 16px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.card-panel:hover {
+  border-color: var(--border-highlight);
+}

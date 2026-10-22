@@ -12,8 +12,8 @@ Sabit kısıtlar: **Auth akışı ve UI'ı birebir korunur** (yalnızca K1 güve
 | K1 | Service role key istemcide | **Faz 0'da düzeltilecek.** Anahtar Supabase'de yenilenecek, admin işlemleri Edge Function'lara taşınacak, istemcide yalnızca anon key ve kullanıcı JWT'si kalacak. Auth ekranları ve akışı birebir aynı kalacak |
 | K2 | Quick Access (kodla anonim paylaşım) | **Kaldırılacak** |
 | K3 | Masaüstü teknolojisi | **Tauri v2** (Windows şimdi, macOS sonra): React + TS arayüz ve Rust çekirdek. Agent işleri Rust tarafında yapılacak. **Tray paneli** dahil |
-| K5 | Nesne depolama | S3 uyumlu soyutlama: **Cloudflare R2** (prod, egress ücretsiz). Alternatif/dev: **VPS üzerinde MinIO** |
-| K6 | Signaling/relay | Kullanıcının **VPS**'i (Docker) |
+| K5 | Nesne depolama | **MinIO** (VPS üzerinde self-hosted S3 uyumlu depolama: sıfır egress maliyeti, tam kontrol) |
+| K6 | Backend / VPS Altyapısı | **Self-Hosted Supabase + MinIO + Signaling/TURN** (Tüm backend altyapısı kullanıcının VPS'inde Docker ile barındırılır. Edge Function yerine yerel PostgreSQL RPC'leri kullanılır) |
 | K7 | Şartnamedeki açık kararlar | İlgili faza kadar "KARAR GEREKİYOR" olarak bekletilir |
 
 ---

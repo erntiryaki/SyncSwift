@@ -1,0 +1,195 @@
+version: "3.8"
+
+networks:
+  syncswift_network:
+    driver: bridge
+
+volumes:
+  supabase_db_data:
+  minio_data:
+
+services:
+  # ==========================================
+  # 1. DATABASE (Supabase PostgreSQL 15)
+  # ==========================================
+  db:
+    image: supabase/postgres:15.1.1.78
+    container_name: syncswift_db
+    restart: unless-stopped
+    networks:
+      - syncswift_network
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters}
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+      - ../backend/supabase/migrations:/docker-entrypoint-initdb.d/migrations:ro
+    ports:
+      - "5432:5432"
+
+  # ==========================================
+  # 2. SUPABASE REST (PostgREST)
+  # ==========================================
+  rest:
+    image: postgrest/postgrest:v12.0.1
+    container_name: syncswift_rest
+    restart: unless-stopped
+    networks:
+      - syncswift_network
+    depends_on:
+      - db
+    environment:
+      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+
+  # ==========================================
+  # 3. SUPABASE AUTH (GoTrue)
+  # ==========================================
+  auth:
+    image: supabase/gotrue:v2.158.1
+    container_name: syncswift_auth
+    restart: unless-stopped
+    networks:
+      - syncswift_network
+    depends_on:
+      - db
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: "*"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+
+  # ==========================================
+  # 4. SUPABASE REALTIME
+  # ==========================================
+  realtime:
+    image: supabase/realtime:v2.28.32
+    container_name: syncswift_realtime
+    restart: unless-stopped
+    networks:
+      - syncswift_network
+    depends_on:
+      - db
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: postgres
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_SSL: "false"
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters}
+      REPLICATION_MODE: RLS
+      SECURE_CHANNELS: "true"
+
+  # ==========================================
+  # 5. KONG API GATEWAY
+  # ==========================================
+  kong:
+    image: kong:2.8.1
+    container_name: syncswift_kong
+    restart: unless-stopped
+    networks:
+      - syncswift_network
+    depends_on:
+      - auth
+      - rest
+      - realtime
+    ports:
+      - "8000:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+    volumes:
+      - ./kong.yml:/var/lib/kong/kong.yml:ro
+
+  # ==========================================
+  # 6. SUPABASE STUDIO (Web UI)
+  # ==========================================
+  studio:
+    image: supabase/studio:20240729-fa80728
+    container_name: syncswift_studio
+    restart: unless-stopped
+    networks:
+      - syncswift_network
+    depends_on:
+      - kong
+    ports:
+      - "3000:3000"
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DEFAULT_ORGANIZATION_NAME: SyncSwift
+      DEFAULT_PROJECT_NAME: SyncSwift Production
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+
+  # ==========================================
+  # 7. MINIO (S3-Compatible Object Storage)
+  # ==========================================
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: syncswift_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    networks:
+      - syncswift_network
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-syncswift_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-SyncSwiftMinioPass2026!}
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL:-http://localhost:9000}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-http://localhost:9001}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"  # S3 API Endpoint
+      - "9001:9001"  # MinIO Web Console
+
+  # ==========================================
+  # 8. COTURN (WebRTC STUN / TURN Server)
+  # ==========================================
+  coturn:
+    image: coturn/coturn:latest
+    container_name: syncswift_coturn
+    restart: unless-stopped
+    networks:
+      - syncswift_network
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49152-49200:49152-49200/udp"
+    environment:
+      TURN_PORT: 3478
+      TURN_ALT_PORT: 3479
+      TURN_USERNAME: ${TURN_USER:-syncswift}
+      TURN_PASSWORD: ${TURN_PASSWORD:-turnsecret2026}
+      TURN_REALM: ${TURN_REALM:-syncswift.net}
+      EXTERNAL_IP: ${VPS_PUBLIC_IP:-127.0.0.1}
+    command:
+      - "-n"
+      - "--log-file=stdout"
+      - "--listening-port=3478"
+      - "--min-port=49152"
+      - "--max-port=49200"
+      - "--realm=syncswift.net"
+      - "--lt-cred-mech"
+      - "--user=syncswift:turnsecret2026"

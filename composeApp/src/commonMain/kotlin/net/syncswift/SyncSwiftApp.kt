@@ -494,7 +494,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
 
 
 
-    // Send Brevo OTP Email (Reuse active valid code if within 5 mins, else generate new)
+    // Send OTP Email (Reuse active valid code if within 5 mins, else generate new)
     fun triggerOrReuseOtp(targetEmail: String) {
         val now = currentTimeMs()
         val active = SessionManager.getActiveOtp(targetEmail, now)
@@ -838,16 +838,6 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                                     filePickDestination = FilePickDestination.DIRECT_SEND
                                                                     targetedDevice = dev
                                                                     pickFile()
-                                                                },
-                                                                onQuickAccessPickFile = {
-                                                                    filePickDestination = FilePickDestination.QUICK_ACCESS
-                                                                    pickFile()
-                                                                },
-                                                                stagedQuickFileName = stagedQuickFileName,
-                                                                stagedQuickFileSize = stagedQuickFileSize,
-                                                                onClearQuickAccessFile = {
-                                                                    stagedQuickFileName = null
-                                                                    stagedQuickFileSize = null
                                                                 },
                                                                 onViewAllTransfers = {
                                                                     mainTab = net.syncswift.ui.components.MainNavTab.Transfers

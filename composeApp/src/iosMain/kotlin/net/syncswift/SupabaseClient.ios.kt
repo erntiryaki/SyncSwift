@@ -50,8 +50,7 @@ private suspend fun executeRequest(
 }
 
 actual object SupabaseNetwork {
-    private fun cleanEmail(email: String): String = email.lowercase().trim()
-    private val effectiveKey: String get() = PlatformConfig.supabaseServiceRoleKey.ifBlank { PlatformConfig.supabaseAnonKey }
+    private val effectiveKey: String get() = PlatformConfig.supabaseAnonKey
 
     actual suspend fun registerUserInSupabase(
         email: String,
@@ -62,8 +61,8 @@ actual object SupabaseNetwork {
         password: String
     ): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = effectiveKey
-        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return false
 
         try {
             val clean = cleanEmail(email)
@@ -73,103 +72,36 @@ actual object SupabaseNetwork {
                 else -> "email"
             }
 
-            val hasNames = firstName.isNotBlank() || lastName.isNotBlank()
-            val userMetaJson = if (hasNames) {
-                """
-                    "user_metadata": {
-                        "first_name": "$firstName",
-                        "last_name": "$lastName",
-                        "full_name": "${"$firstName $lastName".trim()}",
-                        "provider": "$providerString"
-                    }
-                """.trimIndent()
-            } else {
-                """
-                    "user_metadata": {
-                        "provider": "$providerString"
-                    }
-                """.trimIndent()
-            }
-
             val payload = """
                 {
-                    "email": "$clean",
-                    "email_confirm": true,
-                    ${if (password.isNotBlank()) "\"password\": \"$password\"," else ""}
-                    $userMetaJson
+                    "p_email": "$clean",
+                    "p_password": "$password",
+                    "p_first_name": "$firstName",
+                    "p_last_name": "$lastName",
+                    "p_provider": "$providerString"
                 }
             """.trimIndent()
 
-            val authResp = executeRequest(
-                urlString = "$supabaseUrl/auth/v1/admin/users",
+            val rpcResp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/rpc/register_auth_user",
                 method = "POST",
                 headers = mapOf(
-                    "apikey" to serviceKey,
-                    "Authorization" to "Bearer $serviceKey",
+                    "apikey" to anonKey,
+                    "Authorization" to "Bearer $anonKey",
                     "Content-Type" to "application/json"
                 ),
                 body = payload
             )
 
-            var userId: String? = null
-            if (authResp.statusCode in 200..299) {
-                val idRegex = "\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
-                userId = idRegex.find(authResp.body)?.groupValues?.getOrNull(1)
+            if (rpcResp.statusCode in 200..299) {
+                val idRegex = "\"user_id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                val userId = idRegex.find(rpcResp.body)?.groupValues?.getOrNull(1)
+                if (!userId.isNullOrBlank()) {
+                    SessionManager.saveLoggedInUserId(userId)
+                }
+                return true
             }
-            if (userId.isNullOrBlank()) {
-                userId = getUserIdFromProfile(clean)
-            }
-            if (!userId.isNullOrBlank()) {
-                SessionManager.saveLoggedInUserId(userId)
-            }
-
-            // 2. Upsert profile in public.profiles table
-            val idField = if (!userId.isNullOrBlank()) "\"id\": \"$userId\"," else ""
-            val profPayload = if (hasNames) {
-                """
-                    {
-                        $idField
-                        "email": "$clean",
-                        "first_name": "$firstName",
-                        "last_name": "$lastName",
-                        "auth_provider": "$providerString"
-                    }
-                """.trimIndent()
-            } else {
-                """
-                    {
-                        $idField
-                        "email": "$clean",
-                        "auth_provider": "$providerString"
-                    }
-                """.trimIndent()
-            }
-
-            executeRequest(
-                urlString = "$supabaseUrl/rest/v1/profiles",
-                method = "POST",
-                headers = mapOf(
-                    "apikey" to serviceKey,
-                    "Authorization" to "Bearer $serviceKey",
-                    "Content-Type" to "application/json",
-                    "Prefer" to "resolution=merge-duplicates"
-                ),
-                body = profPayload
-            )
-
-            executeRequest(
-                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
-                method = "PATCH",
-                headers = mapOf(
-                    "apikey" to serviceKey,
-                    "Authorization" to "Bearer $serviceKey",
-                    "Content-Type" to "application/json",
-                    "Prefer" to "return=representation"
-                ),
-                body = profPayload
-            )
-
-            return authResp.statusCode in 200..299 || authResp.statusCode == 422
+            return false
         } catch (e: Exception) {
             println("[SyncSwift iOS] registerUserInSupabase error: ${e.message}")
             return false
@@ -178,20 +110,21 @@ actual object SupabaseNetwork {
 
     actual suspend fun checkUserExists(email: String): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = effectiveKey
-        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return false
         try {
             val clean = cleanEmail(email)
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean&select=id",
-                method = "GET",
+                urlString = "$supabaseUrl/rest/v1/rpc/check_user_exists",
+                method = "POST",
                 headers = mapOf(
-                    "apikey" to serviceKey,
-                    "Authorization" to "Bearer $serviceKey",
-                    "Accept" to "application/json"
-                )
+                    "apikey" to anonKey,
+                    "Authorization" to "Bearer $anonKey",
+                    "Content-Type" to "application/json"
+                ),
+                body = """{"p_email":"$clean"}"""
             )
-            return resp.statusCode in 200..299 && resp.body.contains("\"id\"") && resp.body != "[]"
+            return resp.statusCode in 200..299 && resp.body.trim() == "true"
         } catch (e: Exception) {
             return false
         }
@@ -199,24 +132,27 @@ actual object SupabaseNetwork {
 
     actual suspend fun getUserProvider(email: String): IdentityProvider? {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = effectiveKey
-        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return null
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return null
         try {
             val clean = cleanEmail(email)
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean&select=id,auth_provider",
-                method = "GET",
+                urlString = "$supabaseUrl/rest/v1/rpc/get_user_provider",
+                method = "POST",
                 headers = mapOf(
-                    "apikey" to serviceKey,
-                    "Authorization" to "Bearer $serviceKey",
-                    "Accept" to "application/json"
-                )
+                    "apikey" to anonKey,
+                    "Authorization" to "Bearer $anonKey",
+                    "Content-Type" to "application/json"
+                ),
+                body = """{"p_email":"$clean"}"""
             )
-            if (resp.statusCode in 200..299 && resp.body != "[]" && resp.body.contains("\"id\"")) {
+            if (resp.statusCode in 200..299) {
+                val body = resp.body.trim().replace("\"", "").lowercase()
                 return when {
-                    resp.body.contains("\"auth_provider\":\"google\"") -> IdentityProvider.Google
-                    resp.body.contains("\"auth_provider\":\"apple\"") -> IdentityProvider.Apple
-                    else -> IdentityProvider.EmailPassword
+                    body.contains("google") -> IdentityProvider.Google
+                    body.contains("apple") -> IdentityProvider.Apple
+                    body.isNotBlank() && body != "null" -> IdentityProvider.EmailPassword
+                    else -> null
                 }
             }
         } catch (e: Exception) {}
@@ -453,22 +389,21 @@ actual object SupabaseNetwork {
 
     actual suspend fun updateUserPassword(email: String, newPassword: String): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = effectiveKey
-        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return false
         try {
             val clean = cleanEmail(email)
-            val userId = getUserIdFromProfile(clean) ?: return false
             val resp = executeRequest(
-                urlString = "$supabaseUrl/auth/v1/admin/users/$userId",
-                method = "PUT",
+                urlString = "$supabaseUrl/rest/v1/rpc/update_user_password",
+                method = "POST",
                 headers = mapOf(
-                    "apikey" to serviceKey,
-                    "Authorization" to "Bearer $serviceKey",
+                    "apikey" to anonKey,
+                    "Authorization" to "Bearer $anonKey",
                     "Content-Type" to "application/json"
                 ),
-                body = """{"password":"$newPassword"}"""
+                body = """{"p_email":"$clean","p_new_password":"$newPassword"}"""
             )
-            return resp.statusCode in 200..299
+            return resp.statusCode in 200..299 && resp.body.trim() == "true"
         } catch (e: Exception) {
             return false
         }
@@ -856,32 +791,21 @@ actual object SupabaseNetwork {
 
     actual suspend fun deleteUserAccount(email: String): Boolean {
         val supabaseUrl = PlatformConfig.supabaseUrl
-        val serviceKey = effectiveKey
-        if (supabaseUrl.isBlank() || serviceKey.isBlank()) return false
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return false
         try {
             val clean = cleanEmail(email)
-            val userId = getUserIdFromProfile(clean)
-            if (!userId.isNullOrBlank()) {
-                executeRequest(
-                    urlString = "$supabaseUrl/auth/v1/admin/users/$userId",
-                    method = "DELETE",
-                    headers = mapOf(
-                        "apikey" to serviceKey,
-                        "Authorization" to "Bearer $serviceKey"
-                    )
-                )
-            }
-
-            val profResp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean",
-                method = "DELETE",
+            val resp = executeRequest(
+                urlString = "$supabaseUrl/rest/v1/rpc/delete_user_account",
+                method = "POST",
                 headers = mapOf(
-                    "apikey" to serviceKey,
-                    "Authorization" to "Bearer $serviceKey"
-                )
+                    "apikey" to anonKey,
+                    "Authorization" to "Bearer $anonKey",
+                    "Content-Type" to "application/json"
+                ),
+                body = """{"p_email":"$clean"}"""
             )
-
-            return profResp.statusCode in 200..299
+            return resp.statusCode in 200..299 && resp.body.trim() == "true"
         } catch (e: Exception) {
             return false
         }

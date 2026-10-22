@@ -4,10 +4,7 @@ package net.syncswift
 object SyncSwiftConfig {
     val SUPABASE_URL: String get() = PlatformConfig.supabaseUrl
     val SUPABASE_ANON_KEY: String get() = PlatformConfig.supabaseAnonKey
-    val SUPABASE_SERVICE_ROLE_KEY: String get() = PlatformConfig.supabaseServiceRoleKey
     val GOOGLE_WEB_CLIENT_ID: String get() = PlatformConfig.googleWebClientId
-    val BREVO_API_KEY: String get() = PlatformConfig.brevoApiKey
-    val BREVO_SENDER_EMAIL: String get() = PlatformConfig.brevoSenderEmail.ifBlank { "noreply@aqsesoft.com" }
 }
 
 /** A provider is permanently attached to an account after its first successful sign-in. */
@@ -23,17 +20,6 @@ data class AuthSession(
 
 interface EmailOtpGateway {
     suspend fun sendCode(email: String, code: String): Boolean
-}
-
-expect object BrevoMailer {
-    suspend fun sendOtpEmail(email: String, code: String): Boolean
-}
-
-/** Brevo Transactional Email Gateway */
-class BrevoOtpGateway : EmailOtpGateway {
-    override suspend fun sendCode(email: String, code: String): Boolean {
-        return BrevoMailer.sendOtpEmail(email, code)
-    }
 }
 
 /** Amazon SES Gateway with fallback */

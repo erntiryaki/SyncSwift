@@ -1,0 +1,42 @@
+name: SyncSwift CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Build Android App & Shared Module
+        run: ./gradlew :shared:assembleDebug :composeApp:compileDebugKotlinAndroid
+
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Desktop Frontend Dependencies
+        working-directory: desktopApp
+        run: npm ci
+      - name: Build Frontend
+        working-directory: desktopApp
+        run: npm run build
+      - name: Check Rust Backend
+        working-directory: desktopApp/src-tauri
+        run: cargo check

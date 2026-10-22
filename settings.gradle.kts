@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "SyncSwift"
 include(":composeApp")
+include(":shared")

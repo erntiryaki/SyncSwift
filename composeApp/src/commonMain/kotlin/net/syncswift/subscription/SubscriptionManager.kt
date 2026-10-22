@@ -54,8 +54,12 @@ fun PaywallReason.getDescription(copy: net.syncswift.Copy): String = when (this)
 }
 
 object SubscriptionManager {
-    const val FREE_MAX_DEVICES = 1 // 1 mobile + 1 desktop for free tier
-    const val FREE_MAX_FILE_BYTES = 5L * 1024 * 1024 * 1024 // 5 GB
+    const val FREE_MAX_DEVICES = 3 // Free plan supports up to 3 registered devices
+    const val PRO_MAX_DEVICES = 10 // Pro plan supports up to 10 registered devices
+    const val FREE_CLOUD_BYTES = 2L * 1024 * 1024 * 1024 // 2 GB Cloud
+    const val PRO_CLOUD_BYTES = 20L * 1024 * 1024 * 1024 // 20 GB Cloud
+    const val FREE_MONTHLY_RELAY_BYTES = 2L * 1024 * 1024 * 1024 // 2 GB Monthly Relay
+    const val PRO_MONTHLY_RELAY_BYTES = 50L * 1024 * 1024 * 1024 // 50 GB Monthly Relay
 
     private val _isPro = MutableStateFlow(false)
     val isPro: StateFlow<Boolean> = _isPro.asStateFlow()
@@ -165,8 +169,8 @@ object SubscriptionManager {
     }
 
     fun canTransferFileSize(sizeBytes: Long): Boolean {
-        if (isProActive()) return true
-        return sizeBytes <= FREE_MAX_FILE_BYTES
+        // Section 20: Free & Pro LAN file size is unlimited
+        return true
     }
 
     fun canRemoteTransfer(): Boolean {

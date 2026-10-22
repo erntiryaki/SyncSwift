@@ -40,6 +40,9 @@ iosApp/build/
 *.apk
 *.aab
 node_modules/
+**/node_modules/
+**/dist/
+**/target/
 
 # Logs & temp
 scratch/
