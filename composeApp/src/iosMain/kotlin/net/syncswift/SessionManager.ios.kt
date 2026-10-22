@@ -238,6 +238,14 @@ actual object SessionManager {
         return NSUserDefaults.standardUserDefaults.boolForKey("biometric_lock_enabled")
     }
 
+    actual fun saveAutoTransferEnabled(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = "auto_transfer_enabled")
+    }
+
+    actual fun isAutoTransferEnabled(): Boolean {
+        return NSUserDefaults.standardUserDefaults.boolForKey("auto_transfer_enabled")
+    }
+
     actual fun getPlatformDeviceId(): String {
         return platform.UIKit.UIDevice.currentDevice.identifierForVendor?.UUIDString ?: platform.Foundation.NSUUID().UUIDString
     }

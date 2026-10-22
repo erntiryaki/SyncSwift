@@ -51,7 +51,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     var screen by remember(onboardingSeen, alreadyLoggedIn) {
         mutableStateOf(
             if (alreadyLoggedIn) AuthStep.Home
-            else if (onboardingSeen) AuthStep.Email
+            else if (onboardingSeen || isDesktopPlatform()) AuthStep.Email
             else AuthStep.Onboarding
         )
     }
@@ -232,6 +232,29 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         }
     }
 
+    val externalAction by ExternalActionManager.pendingAction.collectAsState()
+
+    LaunchedEffect(externalAction) {
+        val action = externalAction ?: return@LaunchedEffect
+        when (action) {
+            is ExternalAction.SendFile -> {
+                pendingFileToSend = Triple(action.fileName, action.bytes, action.mimeType)
+                showDeviceSelectModal = true
+                ExternalActionManager.consumePendingAction()
+            }
+            is ExternalAction.SendClipboard -> {
+                pendingClipboardToSend = action.text
+                ExternalActionManager.consumePendingAction()
+            }
+            is ExternalAction.TriggerFilePick -> {
+                ExternalActionManager.consumePendingAction()
+                filePickDestination = FilePickDestination.DIRECT_SEND
+                targetedDevice = null
+                pickFile()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         net.syncswift.subscription.SubscriptionManager.init()
     }
@@ -288,6 +311,96 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         }
     }
 
+    data class BlockedDeviceLimitData(
+        val email: String,
+        val provider: IdentityProvider,
+        val firstName: String,
+        val lastName: String,
+        val password: String = "",
+        val devices: List<net.syncswift.discovery.DiscoveredDevice>
+    )
+
+    var blockedDeviceLimitData by remember { mutableStateOf<BlockedDeviceLimitData?>(null) }
+    var showOldDevicesModal by remember { mutableStateOf(false) }
+    var oldDeviceToConfirmRemove by remember { mutableStateOf<net.syncswift.discovery.DiscoveredDevice?>(null) }
+    var isRemovingOldDevice by remember { mutableStateOf(false) }
+
+    // Commit User to AuthPolicy, SharedPreferences & Database ONLY when reaching Home Screen!
+    fun commitUserRegistration(userEmail: String, provider: IdentityProvider, fName: String = "", lName: String = "", password: String = "") {
+        authPolicy.registerAccount(userEmail, provider)
+        authProvider = provider
+        email = userEmail
+        if (fName.isNotBlank()) firstName = fName
+        if (lName.isNotBlank()) lastName = lName
+        SessionManager.saveSession(userEmail, provider, firstName, lastName)
+        net.syncswift.workspace.WorkspaceManager.syncWorkspacesWithAccount(userEmail)
+        scope.launch {
+            SupabaseNetwork.registerUserInSupabase(
+                email = userEmail,
+                firstName = firstName,
+                lastName = lastName,
+                provider = provider,
+                password = password
+            )
+            val uid = SupabaseNetwork.getUserId(userEmail) ?: SessionManager.getLoggedInUserId()
+            val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+            SupabaseNetwork.registerDeviceInSupabase(
+                email = userEmail,
+                deviceId = SessionManager.getPlatformDeviceId(),
+                deviceName = SessionManager.getMyDeviceName(),
+                deviceType = SessionManager.getMyPlatformName(),
+                pushToken = SessionManager.getMyPushToken(),
+                localIp = selfDev?.host ?: "",
+                userId = uid
+            )
+            val prof = SupabaseNetwork.fetchUserProfile(userEmail)
+            if (prof != null && prof.isPro) {
+                net.syncswift.subscription.SubscriptionManager.setProState(true)
+                if (prof.proStartDate > 0L) SessionManager.saveProStartDateMillis(prof.proStartDate)
+                if (prof.proRenewalDate > 0L) SessionManager.saveProRenewalDateMillis(prof.proRenewalDate)
+            } else if (net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()) {
+                SupabaseNetwork.updateUserProStatus(
+                    email = userEmail,
+                    isPro = true,
+                    startDate = SessionManager.getProStartDateMillis(),
+                    renewalDate = SessionManager.getProRenewalDateMillis()
+                )
+            }
+        }
+    }
+
+    fun verifyDeviceLimitAndLogin(
+        targetEmail: String,
+        provider: IdentityProvider,
+        fName: String = "",
+        lName: String = "",
+        pwd: String = ""
+    ) {
+        scope.launch {
+            val prof = SupabaseNetwork.fetchUserProfile(targetEmail)
+            val isProUser = (prof?.isPro == true) || net.syncswift.subscription.SubscriptionManager.isProActive() || net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()
+            val currentDeviceId = SessionManager.getPlatformDeviceId()
+            if (!isProUser) {
+                val activeMobiles = SupabaseNetwork.getActiveMobileDevices(targetEmail)
+                val otherMobiles = activeMobiles.filter { it.id != currentDeviceId }
+                if (otherMobiles.isNotEmpty()) {
+                    blockedDeviceLimitData = BlockedDeviceLimitData(
+                        email = targetEmail,
+                        provider = provider,
+                        firstName = fName,
+                        lastName = lName,
+                        password = pwd,
+                        devices = otherMobiles
+                    )
+                    return@launch
+                }
+            }
+            commitUserRegistration(targetEmail, provider, fName, lName, pwd)
+            authDraftEmail = ""
+            screen = AuthStep.Home
+        }
+    }
+
     // Listen for remote logout events (via direct TCP socket, FCM/APNs, or background services)
     LaunchedEffect(Unit) {
         SessionEventBus.events.collect { event ->
@@ -309,6 +422,20 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                     mainTab = net.syncswift.ui.components.MainNavTab.Home
                     screen = AuthStep.Email
                     showNativeToast(copy.remoteSignedOut)
+                }
+                is SessionEvent.QrLoggedIn -> {
+                    val targetEmail = event.email.trim()
+                    if (targetEmail.isNotBlank()) {
+                        val provider = if (targetEmail == "local_user") IdentityProvider.Local else IdentityProvider.Google
+                        authDraftEmail = ""
+                        if (provider == IdentityProvider.Local) {
+                            commitUserRegistration(targetEmail, provider, event.firstName, event.lastName)
+                            screen = AuthStep.Home
+                        } else {
+                            verifyDeviceLimitAndLogin(targetEmail, provider, event.firstName, event.lastName)
+                        }
+                        showNativeToast(if (language == AppLanguage.Turkish) "Oturum açıldı!" else "Logged in successfully!")
+                    }
                 }
             }
         }
@@ -363,97 +490,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         BackHandler { screen = AuthStep.Otp }
     }
 
-    data class BlockedDeviceLimitData(
-        val email: String,
-        val provider: IdentityProvider,
-        val firstName: String,
-        val lastName: String,
-        val password: String = "",
-        val devices: List<net.syncswift.discovery.DiscoveredDevice>
-    )
 
-    var blockedDeviceLimitData by remember { mutableStateOf<BlockedDeviceLimitData?>(null) }
-    var showOldDevicesModal by remember { mutableStateOf(false) }
-    var oldDeviceToConfirmRemove by remember { mutableStateOf<net.syncswift.discovery.DiscoveredDevice?>(null) }
-    var isRemovingOldDevice by remember { mutableStateOf(false) }
 
-    // Commit User to AuthPolicy, SharedPreferences & Database ONLY when reaching Home Screen!
-    fun commitUserRegistration(userEmail: String, provider: IdentityProvider, fName: String = "", lName: String = "", password: String = "") {
-        authPolicy.registerAccount(userEmail, provider)
-        authProvider = provider
-        email = userEmail
-        if (fName.isNotBlank()) firstName = fName
-        if (lName.isNotBlank()) lastName = lName
-        SessionManager.saveSession(userEmail, provider, firstName, lastName)
-        net.syncswift.workspace.WorkspaceManager.syncWorkspacesWithAccount(userEmail)
-        scope.launch {
-            SupabaseNetwork.registerUserInSupabase(
-                email = userEmail,
-                firstName = firstName,
-                lastName = lastName,
-                provider = provider,
-                password = password
-            )
-            val uid = SupabaseNetwork.getUserId(userEmail) ?: SessionManager.getLoggedInUserId()
-            val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
-            SupabaseNetwork.registerDeviceInSupabase(
-                email = userEmail,
-                deviceId = SessionManager.getPlatformDeviceId(),
-                deviceName = SessionManager.getMyDeviceName(),
-                deviceType = SessionManager.getMyPlatformName(),
-                pushToken = SessionManager.getMyPushToken(),
-                localIp = selfDev?.host ?: "",
-                userId = uid
-            )
-            // Check if account has Pro purchased on another device or prior session
-            val prof = SupabaseNetwork.fetchUserProfile(userEmail)
-            if (prof != null && prof.isPro) {
-                net.syncswift.subscription.SubscriptionManager.setProState(true)
-                if (prof.proStartDate > 0L) SessionManager.saveProStartDateMillis(prof.proStartDate)
-                if (prof.proRenewalDate > 0L) SessionManager.saveProRenewalDateMillis(prof.proRenewalDate)
-            } else if (net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()) {
-                // If already purchased Pro on this device, sync it to the newly logged-in account
-                SupabaseNetwork.updateUserProStatus(
-                    email = userEmail,
-                    isPro = true,
-                    startDate = SessionManager.getProStartDateMillis(),
-                    renewalDate = SessionManager.getProRenewalDateMillis()
-                )
-            }
-        }
-    }
 
-    fun verifyDeviceLimitAndLogin(
-        targetEmail: String,
-        provider: IdentityProvider,
-        fName: String = "",
-        lName: String = "",
-        pwd: String = ""
-    ) {
-        scope.launch {
-            val prof = SupabaseNetwork.fetchUserProfile(targetEmail)
-            val isProUser = (prof?.isPro == true) || net.syncswift.subscription.SubscriptionManager.isProActive() || net.syncswift.subscription.SubscriptionManager.isPro.value || SessionManager.getSavedProStatus()
-            val currentDeviceId = SessionManager.getPlatformDeviceId()
-            if (!isProUser) {
-                val activeMobiles = SupabaseNetwork.getActiveMobileDevices(targetEmail)
-                val otherMobiles = activeMobiles.filter { it.id != currentDeviceId }
-                if (otherMobiles.isNotEmpty()) {
-                    blockedDeviceLimitData = BlockedDeviceLimitData(
-                        email = targetEmail,
-                        provider = provider,
-                        firstName = fName,
-                        lastName = lName,
-                        password = pwd,
-                        devices = otherMobiles
-                    )
-                    return@launch
-                }
-            }
-            commitUserRegistration(targetEmail, provider, fName, lName, pwd)
-            authDraftEmail = ""
-            screen = AuthStep.Home
-        }
-    }
 
     // Send Brevo OTP Email (Reuse active valid code if within 5 mins, else generate new)
     fun triggerOrReuseOtp(targetEmail: String) {
@@ -763,9 +802,9 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                             onBack = { inNotifications = false }
                                         )
                                         else -> {
-                                            Column(Modifier.fillMaxSize()) {
-                                                Box(Modifier.weight(1f).fillMaxWidth()) {
-                                                    Crossfade(
+                                            @Composable
+                                            fun MainTabsContent() {
+                                                Crossfade(
                                                     targetState = mainTab,
                                                     animationSpec = tween(180),
                                                     label = "MainTabCrossfade"
@@ -898,21 +937,53 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                                 }
                                             }
 
-                                            // Persistent Ad Banner across main tabs
-                                            val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
-                                            if (!isProUser) {
-                                                net.syncswift.ui.components.AdBannerView(
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
+                                            if (isDesktopPlatform()) {
+                                                val selfDev = net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice()
+                                                Row(Modifier.fillMaxSize()) {
+                                                    net.syncswift.ui.components.DesktopSidebar(
+                                                        selectedTab = mainTab,
+                                                        onTabSelected = { mainTab = it },
+                                                        onOpenConnectDesktop = { inConnectDesktop = true },
+                                                        onOpenNotifications = { inNotifications = true },
+                                                        onOpenSettings = { inSettings = true },
+                                                        copy = copy
+                                                    )
+                                                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                                                        net.syncswift.ui.components.DesktopTopBar(
+                                                            deviceName = selfDev?.name ?: SessionManager.getMyDeviceName(),
+                                                            localIp = selfDev?.host ?: "127.0.0.1",
+                                                            connectedCount = selectableDevicesForTransfer.size,
+                                                            unreadNotificationCount = 0,
+                                                            onOpenNotifications = { inNotifications = true },
+                                                            copy = copy
+                                                        )
+                                                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                                                            MainTabsContent()
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                Column(Modifier.fillMaxSize()) {
+                                                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                                                        MainTabsContent()
+                                                    }
 
-                                            // Bottom Navigation Bar
-                                                net.syncswift.ui.components.BottomNavBar(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    selectedTab = mainTab,
-                                                    onTabSelected = { mainTab = it },
-                                                    copy = copy
-                                                )
+                                                    // Persistent Ad Banner across main tabs
+                                                    val isProUser by net.syncswift.subscription.SubscriptionManager.isPro.collectAsState()
+                                                    if (!isProUser) {
+                                                        net.syncswift.ui.components.AdBannerView(
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                    }
+
+                                                    // Bottom Navigation Bar
+                                                    net.syncswift.ui.components.BottomNavBar(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        selectedTab = mainTab,
+                                                        onTabSelected = { mainTab = it },
+                                                        copy = copy
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -921,25 +992,6 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                         }
                     }
 
-                        // Global Incoming Pair Request Full Page (No Modal)
-                        AnimatedVisibility(
-                            visible = pendingPairRequest != null,
-                            enter = fadeIn(animationSpec = tween(220)),
-                            exit = fadeOut(animationSpec = tween(180))
-                        ) {
-                            val req = pendingPairRequest
-                            if (req != null) {
-                                BackHandler {
-                                    net.syncswift.connection.ConnectionManager.rejectPairRequest(req)
-                                }
-                                net.syncswift.ui.components.IncomingPairScreen(
-                                    request = req,
-                                    copy = copy,
-                                    onAccept = { net.syncswift.connection.ConnectionManager.acceptPairRequest(req) },
-                                    onDecline = { net.syncswift.connection.ConnectionManager.rejectPairRequest(req) }
-                                )
-                            }
-                        }
 
                         // Global Floating Received File Banner with "Dosya Konumunu Gör" & "Aç"
                         AnimatedVisibility(
@@ -1090,25 +1142,6 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                             }
                         }
 
-                        // Global Incoming Transfer Request Full Page (No Modal)
-                        AnimatedVisibility(
-                            visible = pendingTransferRequest != null,
-                            enter = fadeIn(animationSpec = tween(220)),
-                            exit = fadeOut(animationSpec = tween(180))
-                        ) {
-                            val req = pendingTransferRequest
-                            if (req != null) {
-                                BackHandler {
-                                    net.syncswift.connection.ConnectionManager.rejectTransferRequest(req)
-                                }
-                                net.syncswift.ui.components.IncomingTransferScreen(
-                                    request = req,
-                                    copy = copy,
-                                    onAccept = { net.syncswift.connection.ConnectionManager.acceptTransferRequest(req) },
-                                    onDecline = { net.syncswift.connection.ConnectionManager.rejectTransferRequest(req) }
-                                )
-                            }
-                        }
 
                         // Device Selection Screen for Sending File (Full Page, No Modal)
                         AnimatedVisibility(
@@ -1161,8 +1194,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                                     pendingClipboardToSend = null
                                 }
                                 val previewText = clipText.take(35).replace("\n", " ")
-                                val sizeBytes = clipText.encodeToByteArray().size.toLong()
-                                val formattedSize = "${net.syncswift.transfer.formatBytes(sizeBytes)} · ${clipText.length} chars"
+                                val formattedSize = copy.clipboard
                                 net.syncswift.ui.components.FileDeviceSelectScreen(
                                     fileName = "${copy.clipboard}: $previewText",
                                     fileSizeFormatted = formattedSize,
@@ -1188,34 +1220,7 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
-            // Universal Outgoing Request & Transfer Screen (Animated Checkmark / Cross - Full Page)
-            val outgoingState by net.syncswift.connection.OutgoingStatusManager.state.collectAsState()
-            AnimatedVisibility(
-                visible = outgoingState != null,
-                enter = fadeIn(animationSpec = tween(220)),
-                exit = fadeOut(animationSpec = tween(180))
-            ) {
-                val state = outgoingState
-                if (state != null) {
-                    BackHandler {
-                        if (state.step == net.syncswift.connection.OutgoingStep.WAITING_APPROVAL || state.step == net.syncswift.connection.OutgoingStep.IN_PROGRESS) {
-                            net.syncswift.connection.OutgoingStatusManager.cancel()
-                        } else {
-                            net.syncswift.connection.OutgoingStatusManager.dismiss()
-                        }
-                    }
-                    net.syncswift.ui.components.TransferStatusScreen(
-                        state = state,
-                        copy = copy,
-                        onDismiss = {
-                            net.syncswift.connection.OutgoingStatusManager.dismiss()
-                        },
-                        onCancel = {
-                            net.syncswift.connection.OutgoingStatusManager.cancel()
-                        }
-                    )
-                }
-            }
+
 
             // Paywall 7-Day Trial Full Page Screen (No Modal)
             val showPaywall by net.syncswift.subscription.SubscriptionManager.showPaywall.collectAsState()

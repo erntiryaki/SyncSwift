@@ -53,6 +53,9 @@ fun SettingsScreen(
     // Biometric state
     var biometricEnabled by remember { mutableStateOf(BiometricAuthManager.isEnabled()) }
 
+    // Auto Transfer state
+    var autoTransferEnabled by remember { mutableStateOf(SessionManager.isAutoTransferEnabled()) }
+
     // Password change states
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -238,7 +241,34 @@ fun SettingsScreen(
                     }
                 )
 
-                // 4. Change Password (Birebir AccountMenuItemRow)
+                // 4. Auto Transfer (Otomatik Aktarım)
+                AccountMenuItemRow(
+                    icon = { CircularSyncArrowIcon(Modifier.size(22.dp), color = iconColor) },
+                    title = copy.autoTransfer,
+                    subtitle = copy.autoTransferDesc,
+                    trailing = {
+                        Switch(
+                            checked = autoTransferEnabled,
+                            onCheckedChange = { targetState ->
+                                autoTransferEnabled = targetState
+                                SessionManager.saveAutoTransferEnabled(targetState)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = softBlue,
+                                uncheckedThumbColor = Mist,
+                                uncheckedTrackColor = InputBg
+                            )
+                        )
+                    },
+                    onClick = {
+                        val targetState = !autoTransferEnabled
+                        autoTransferEnabled = targetState
+                        SessionManager.saveAutoTransferEnabled(targetState)
+                    }
+                )
+
+                // 5. Change Password (Birebir AccountMenuItemRow)
                 if (isLocalUser) {
                     AccountMenuItemRow(
                         icon = { KeyVectorIcon(Modifier.size(22.dp), color = Mist.copy(alpha = 0.4f)) },

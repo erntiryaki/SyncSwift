@@ -16,7 +16,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
@@ -42,7 +41,6 @@ import net.syncswift.transfer.TransferEngine
 import net.syncswift.transfer.TransferItem
 import net.syncswift.transfer.TransferStatus
 import net.syncswift.ui.components.ConnectedDeviceActionScreen
-import net.syncswift.ui.components.SendPairRequestScreen
 import net.syncswift.SheetSystemBars
 import net.syncswift.ui.theme.*
 
@@ -87,7 +85,6 @@ fun HomeScreen(
     var selectedFilterChip by remember { mutableStateOf(0) } // 0: Tümü, 1: Yakındaki, 2: Bağlı, 3: Bağlı Olmayan
     val searchFocusRequester = remember { FocusRequester() }
 
-    var deviceToPair by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var deviceForAction by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var viewAllSection by remember { mutableStateOf<DeviceSectionType?>(null) }
     var isTransfersExpanded by remember { mutableStateOf(true) }
@@ -100,6 +97,7 @@ fun HomeScreen(
             if (loggedInEmail.isNotBlank()) {
                 try {
                     registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                    ConnectionManager.updateCachedAccountDevices(registeredAccountDevices)
                 } catch (_: Exception) {}
             }
             kotlinx.coroutines.delay(4000)
@@ -118,6 +116,7 @@ fun HomeScreen(
                 if (loggedInEmail.isNotBlank()) {
                     try {
                         registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                        ConnectionManager.updateCachedAccountDevices(registeredAccountDevices)
                     } catch (_: Exception) {}
                 }
                 kotlinx.coroutines.delay(1800)
@@ -134,116 +133,149 @@ fun HomeScreen(
     val myPushToken = SessionManager.getMyPushToken()
     val myLocalIp = selfDevice?.host ?: ""
 
+    val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
+        val t = dev.osType.lowercase()
+        val n = dev.name.lowercase()
+        t.contains("win") || t.contains("mac") || t.contains("desk") || t.contains("pc") || t.contains("linux") ||
+        n.contains("windows") || n.contains("desktop") || n.contains("pc") || n.contains("laptop") || n.contains("macbook")
+    }
+
     val isDeviceSelf: (DiscoveredDevice) -> Boolean = { dev ->
-        val devClean = cleanDeviceDisplayName(dev.name)
-        dev.isSelf ||
-                (myId.isNotBlank() && dev.id.equals(myId, ignoreCase = true)) ||
-                (myName.isNotBlank() && devClean.equals(myName, ignoreCase = true)) ||
-                (myRawName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(myRawName), ignoreCase = true) || dev.name.equals(myRawName, ignoreCase = true))) ||
-                (selfDevice != null && dev.id == selfDevice.id) ||
-                (selfDevice != null && dev.id.removePrefix("self-") == selfDevice.id.removePrefix("self-")) ||
-                (myLocalIp.isNotBlank() && myLocalIp != "127.0.0.1" && dev.host == myLocalIp) ||
-                (selfDevice != null && selfDevice.host.isNotBlank() && selfDevice.host != "127.0.0.1" && dev.host == selfDevice.host) ||
-                (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken)
+        val devIsDesktop = isDesktopDevice(dev)
+        val myIsDesktop = SessionManager.getMyPlatformName().let { it.contains("Win", true) || it.contains("Mac", true) || it.contains("Linux", true) }
+        if (devIsDesktop != myIsDesktop) {
+            false
+        } else {
+            val devClean = cleanDeviceDisplayName(dev.name)
+            dev.isSelf ||
+                    (myId.isNotBlank() && dev.id.equals(myId, ignoreCase = true)) ||
+                    (myName.isNotBlank() && devClean.equals(myName, ignoreCase = true)) ||
+                    (myRawName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(myRawName), ignoreCase = true) || dev.name.equals(myRawName, ignoreCase = true))) ||
+                    (selfDevice != null && dev.id == selfDevice.id) ||
+                    (selfDevice != null && dev.id.removePrefix("self-") == selfDevice.id.removePrefix("self-")) ||
+                    (myLocalIp.isNotBlank() && myLocalIp != "127.0.0.1" && dev.host == myLocalIp) ||
+                    (selfDevice != null && selfDevice.host.isNotBlank() && selfDevice.host != "127.0.0.1" && dev.host == selfDevice.host) ||
+                    (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken)
+        }
     }
 
     fun formatDeviceOs(osType: String, devName: String = ""): String {
         val lower = osType.lowercase()
         val nameLower = devName.lowercase()
         return when {
-            lower.contains("ios") || lower.contains("iphone") || lower.contains("ipad") || nameLower.contains("iphone") || nameLower.contains("ipad") -> "iOS"
-            lower.contains("android") || nameLower.contains("android") || nameLower.contains("galaxy") || nameLower.contains("pixel") -> "Android"
+            lower.contains("win") || lower.contains("desktop") || lower.contains("pc") || nameLower.contains("windows") || nameLower.contains("desktop") || nameLower.contains("pc") -> "Windows"
             lower.contains("mac") || nameLower.contains("macbook") || nameLower.contains("macos") -> "macOS"
-            lower.contains("win") || nameLower.contains("windows") || nameLower.contains("pc") -> "Windows"
+            lower.contains("ios") || lower.contains("iphone") || lower.contains("ipad") || nameLower.contains("iphone") || nameLower.contains("ipad") -> "iOS"
+            lower.contains("android") || nameLower.contains("android") || nameLower.contains("galaxy") || nameLower.contains("pixel") || nameLower.contains("redmi") || nameLower.contains("xiaomi") -> "Android"
             lower.contains("linux") -> "Linux"
             else -> if (osType.isNotBlank() && !osType.contains(" ") && osType.length < 12) osType else "Android"
         }
     }
 
     val realOtherDevices = remember(discoveredDevices, connectedKeys) {
-        discoveredDevices.filter { !isDeviceSelf(it) }.distinctBy {
-            if (it.host.isNotBlank() && !it.host.startsWith("remote-")) it.host
-            else (if (it.id.isNotBlank()) it.id else cleanDeviceDisplayName(it.name))
+        discoveredDevices.filter { dev ->
+            !isDeviceSelf(dev) && !dev.name.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"""))
+        }.distinctBy {
+            cleanDeviceDisplayName(it.name)
         }
-    }
-
-    val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
-        val t = dev.osType.lowercase()
-        t.contains("windows") || t.contains("mac") || t.contains("desktop") || t.contains("pc")
     }
 
     val isMyAccountDevice: (DiscoveredDevice) -> Boolean = { dev ->
         registeredAccountDevices.any {
             (it.id.isNotBlank() && it.id == dev.id) ||
-            (it.host.isNotBlank() && it.host == dev.host && cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(dev.name))
-        } || isDesktopDevice(dev)
+            (it.host.isNotBlank() && it.host != "127.0.0.1" && it.host == dev.host) ||
+            (cleanDeviceDisplayName(it.name).equals(cleanDeviceDisplayName(dev.name), ignoreCase = true))
+        }
     }
 
-    val connectedDevices = remember(realOtherDevices, connectedKeys, registeredAccountDevices) {
+    val isMyDesktop: Boolean = remember {
+        val p = SessionManager.getMyPlatformName().lowercase()
+        p.contains("win") || p.contains("mac") || p.contains("desk") || p.contains("pc") || p.contains("linux")
+    }
+
+    val myDevices = remember(registeredAccountDevices, realOtherDevices, connectedKeys, myName, myId) {
+        val list = mutableListOf<UiDeviceItem>()
+
+        // Linked counterpart device registered in this user's Supabase account:
+        // If mobile -> linked desktop device (e.g. TIRYAKI, Windows)
+        // If desktop -> linked mobile device (e.g. Galaxy S23, Android)
+        val linkedAccountDevice = registeredAccountDevices.firstOrNull { dev ->
+            if (isDeviceSelf(dev)) false
+            else if (isMyDesktop) !isDesktopDevice(dev)
+            else isDesktopDevice(dev)
+        } ?: registeredAccountDevices.firstOrNull { !isDeviceSelf(it) }
+
+        if (linkedAccountDevice != null) {
+            val clean = cleanDeviceDisplayName(linkedAccountDevice.name)
+            val friendlyName = if (clean.length >= 20 && clean.contains("-")) {
+                "${formatDeviceOs(linkedAccountDevice.osType, linkedAccountDevice.name)} Cihazı"
+            } else clean
+
+            list.add(
+                UiDeviceItem(
+                    id = linkedAccountDevice.id.ifBlank { linkedAccountDevice.host },
+                    name = friendlyName,
+                    os = formatDeviceOs(linkedAccountDevice.osType, linkedAccountDevice.name),
+                    isOnline = true,
+                    section = DeviceSectionType.MY_DEVICES,
+                    realDevice = linkedAccountDevice.copy(
+                        name = friendlyName,
+                        isOnline = true
+                    )
+                )
+            )
+        }
+        list
+    }
+
+    val connectedDevices = remember(realOtherDevices, connectedKeys, myDevices, registeredAccountDevices) {
+        val myDeviceIds = myDevices.map { it.id }.toSet()
+        val myDeviceNames = myDevices.map { cleanDeviceDisplayName(it.name) }.toSet()
+
+        val list = mutableListOf<UiDeviceItem>()
+
         realOtherDevices.filter { dev ->
+            val devClean = cleanDeviceDisplayName(dev.name)
+            val isAlreadyInMyDevices = myDeviceIds.contains(dev.id) || myDeviceNames.contains(devClean)
             val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
                     connectedKeys.contains(dev.id) ||
                     connectedKeys.contains(dev.host) ||
-                    connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
+                    connectedKeys.contains(devClean) ||
                     ConnectionManager.isDeviceConnected(dev)
-            isConn && !isMyAccountDevice(dev)
-        }.map { dev ->
-            UiDeviceItem(
-                id = dev.id.ifBlank { dev.host },
-                name = cleanDeviceDisplayName(dev.name),
-                os = formatDeviceOs(dev.osType, dev.name),
-                isOnline = dev.isOnline,
-                section = DeviceSectionType.CONNECTED,
-                realDevice = dev
+            isConn && !isAlreadyInMyDevices && !isMyAccountDevice(dev)
+        }.forEach { dev ->
+            val clean = cleanDeviceDisplayName(dev.name)
+            list.add(
+                UiDeviceItem(
+                    id = dev.id.ifBlank { dev.host },
+                    name = clean,
+                    os = formatDeviceOs(dev.osType, dev.name),
+                    isOnline = true,
+                    section = DeviceSectionType.CONNECTED,
+                    realDevice = dev.copy(name = clean, isOnline = true)
+                )
             )
         }
+
+        list.distinctBy { cleanDeviceDisplayName(it.name) }
     }
 
-    val nearbyDevices = remember(realOtherDevices, connectedKeys) {
-        realOtherDevices.filter { dev ->
-            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
-                    connectedKeys.contains(dev.id) ||
-                    connectedKeys.contains(dev.host) ||
-                    connectedKeys.contains(cleanDeviceDisplayName(dev.name)) ||
-                    ConnectionManager.isDeviceConnected(dev)
-            !isConn && dev.isLoggedIn
-        }.map { dev ->
-            UiDeviceItem(
-                id = dev.id.ifBlank { dev.host },
-                name = cleanDeviceDisplayName(dev.name),
-                os = formatDeviceOs(dev.osType, dev.name),
-                isOnline = dev.isOnline,
-                section = DeviceSectionType.NEARBY,
-                realDevice = dev
-            )
+    val nearbyDevices = remember { emptyList<UiDeviceItem>() }
+
+    val allDeviceItems = remember(connectedDevices, myDevices) {
+        val result = mutableListOf<UiDeviceItem>()
+        // Priority order: Connected > My Devices > Nearby
+        for (item in connectedDevices + myDevices + nearbyDevices) {
+            val isDuplicate = result.any { existing ->
+                (item.realDevice?.host?.isNotBlank() == true && item.realDevice?.host != "127.0.0.1" && item.realDevice?.host == existing.realDevice?.host) ||
+                (item.id.isNotBlank() && item.id == existing.id) ||
+                (cleanDeviceDisplayName(item.name).equals(cleanDeviceDisplayName(existing.name), ignoreCase = true))
+            }
+            if (!isDuplicate) {
+                result.add(item)
+            }
         }
-    }
-
-    val myDevices = remember(registeredAccountDevices, realOtherDevices, connectedKeys) {
-        val list = mutableListOf<DiscoveredDevice>()
-        // 1. Supabase kayıtlı cihazlar (giriş yapılı bu telefon KESİNLİKLE hariç tutulur)
-        registeredAccountDevices.filter { !isDeviceSelf(it) }.forEach { list.add(it) }
-
-        // 2. Local oturumda veya aynı ağda eşleşmiş / bulunan masaüstü cihazları (bu telefon KESİNLİKLE hariç tutulur)
-        realOtherDevices.filter { dev ->
-            !isDeviceSelf(dev) && isDesktopDevice(dev) &&
-            list.none { it.id == dev.id || (it.host.isNotBlank() && it.host == dev.host && it.name == dev.name) }
-        }.forEach { list.add(it) }
-
-        list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }.map { dev ->
-            UiDeviceItem(
-                id = dev.id.ifBlank { dev.host },
-                name = cleanDeviceDisplayName(dev.name),
-                os = formatDeviceOs(dev.osType, dev.name),
-                isOnline = dev.isOnline,
-                section = DeviceSectionType.MY_DEVICES,
-                realDevice = dev
-            )
-        }
-    }
-
-    val allDeviceItems = remember(nearbyDevices, connectedDevices, myDevices) {
-        nearbyDevices + connectedDevices + myDevices
+        result
     }
 
     fun handleDeviceSelection(item: UiDeviceItem) {
@@ -473,93 +505,7 @@ fun HomeScreen(
                 ) {
                 Spacer(Modifier.height(8.dp))
 
-                // SECTION 1: YAKINDAKİ CİHAZLAR (Horizontal Cards)
-                SectionHeaderRow(
-                    title = copy.nearbyDevicesSection,
-                    count = nearbyDevices.size,
-                    copy = copy,
-                    onViewAllClick = { viewAllSection = DeviceSectionType.NEARBY }
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                if (nearbyDevices.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        nearbyDevices.take(4).forEach { dev ->
-                            NearbyDeviceCard(
-                                item = dev,
-                                onClick = { handleDeviceSelection(dev) }
-                            )
-                        }
-                    }
-                } else {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp)),
-                        shape = RoundedCornerShape(16.dp),
-                        color = CardSurface,
-                        border = BorderStroke(1.dp, InputBorder)
-                    ) {
-                        Text(
-                            text = copy.noNearbyDevicesYet,
-                            color = Mist,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(14.dp)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // SECTION 2: YEREL BAĞLI CİHAZLAR
-                SectionHeaderRow(
-                    title = copy.connectedDevicesSectionTitle,
-                    count = connectedDevices.size,
-                    copy = copy,
-                    onViewAllClick = { viewAllSection = DeviceSectionType.CONNECTED }
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                if (connectedDevices.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        connectedDevices.take(4).forEach { dev ->
-                            DeviceListRowCard(
-                                item = dev,
-                                onClick = { handleDeviceSelection(dev) }
-                            )
-                        }
-                    }
-                } else {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp)),
-                        shape = RoundedCornerShape(16.dp),
-                        color = CardSurface,
-                        border = BorderStroke(1.dp, InputBorder)
-                    ) {
-                        Text(
-                            text = copy.noConnectedDevicesYet,
-                            color = Mist,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(14.dp)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // SECTION 3: KENDİ CİHAZLARIM (Giriş yapılı mevcut telefon hariç tutulur)
+                // SECTION 1: KENDİ CİHAZLARIM (Horizontal Oval Cards)
                 SectionHeaderRow(
                     title = copy.myDevicesTitle,
                     count = myDevices.size,
@@ -567,17 +513,20 @@ fun HomeScreen(
                     onViewAllClick = { viewAllSection = DeviceSectionType.MY_DEVICES }
                 )
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
 
                 if (myDevices.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        myDevices.take(4).forEach { dev ->
-                            DeviceListRowCard(
+                        myDevices.take(5).forEach { dev ->
+                            NearbyDeviceCard(
                                 item = dev,
-                                onClick = { handleDeviceSelection(dev) }
+                                onClick = { handleDeviceSelection(dev) },
+                                modifier = Modifier.width(114.dp)
                             )
                         }
                     }
@@ -592,6 +541,51 @@ fun HomeScreen(
                     ) {
                         Text(
                             text = copy.noLinkedDesktop,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // SECTION 2: BAĞLI CİHAZLAR (Horizontal Oval Cards)
+                SectionHeaderRow(
+                    title = copy.connectedDevicesSectionTitle,
+                    count = connectedDevices.size,
+                    copy = copy,
+                    onViewAllClick = { viewAllSection = DeviceSectionType.CONNECTED }
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                if (connectedDevices.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        connectedDevices.take(5).forEach { dev ->
+                            NearbyDeviceCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) },
+                                modifier = Modifier.width(114.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Text(
+                            text = copy.noConnectedDevicesYet,
                             color = Mist,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(14.dp)
@@ -736,9 +730,9 @@ fun HomeScreen(
                         Text(
                             text = copy.recentTransfersSection,
                             color = Cloud,
-                            fontSize = 17.5.sp,
+                            fontSize = 16.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = (-0.3).sp
+                            letterSpacing = (-0.2).sp
                         )
                         ChevronDownIcon(
                             modifier = Modifier
@@ -775,7 +769,26 @@ fun HomeScreen(
                             ) {
                                 recentTransfers.forEach { item ->
                                     val isFailed = item.status == TransferStatus.FAILED || item.status == TransferStatus.CANCELLED
+                                    val isClipboard = item.fileName.startsWith("${copy.clipboard}:") ||
+                                            item.fileName.startsWith("Pano:") ||
+                                            item.fileName.startsWith("Clipboard:") ||
+                                            item.mimeType.contains("text/plain", ignoreCase = true) ||
+                                            item.mimeType.contains("clipboard", ignoreCase = true)
+
                                     val icon: @Composable () -> Unit = when {
+                                        isClipboard -> {
+                                            {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(38.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(Color(0xFF10B981).copy(alpha = 0.14f)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    ClipboardVectorIcon(Modifier.size(18.dp), color = Color(0xFF10B981))
+                                                }
+                                            }
+                                        }
                                         item.fileName.endsWith(".pdf", ignoreCase = true) || item.mimeType.contains("pdf", ignoreCase = true) -> {
                                             { FilePdfIcon(Modifier.size(38.dp)) }
                                         }
@@ -788,11 +801,11 @@ fun HomeScreen(
                                     }
                                     val peer = if (item.peerName.isNotBlank()) cleanDeviceDisplayName(item.peerName)
                                     else if (item.isSent) copy.transfersSent else copy.transfersReceived
-                                    val subtitle = if (isFailed) "$peer · ${copy.transferFailedStatus}" else peer
+                                    val subtitle = peer
 
-                                    val sizeDisplay = when (item.status) {
-                                        TransferStatus.FAILED, TransferStatus.CANCELLED -> copy.transferFailedStatus
-                                        TransferStatus.IN_PROGRESS -> "${(item.progress * 100).toInt()}%"
+                                    val sizeDisplay = when {
+                                        item.status == TransferStatus.IN_PROGRESS -> "${(item.progress * 100).toInt()}%"
+                                        isClipboard -> ""
                                         else -> item.formattedSize
                                     }
 
@@ -993,43 +1006,6 @@ fun HomeScreen(
 
     }
 
-    // Pair request dialogs
-    AnimatedVisibility(
-        visible = deviceToPair != null,
-        enter = fadeIn(animationSpec = tween(220)),
-        exit = fadeOut(animationSpec = tween(180))
-    ) {
-        val target = deviceToPair
-        if (target != null) {
-            var isPairingRequestInFlight by remember { mutableStateOf(false) }
-            SendPairRequestScreen(
-                device = target,
-                copy = copy,
-                onSendRequest = {
-                    if (isPairingRequestInFlight) return@SendPairRequestScreen
-                    isPairingRequestInFlight = true
-                    deviceToPair = null
-                    showNativeToast(copy.sendingConnectionRequest)
-                    ConnectionManager.requestPairing(target) { result ->
-                        isPairingRequestInFlight = false
-                        when (result) {
-                            PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                            PairResult.REJECTED -> {
-                                ConnectionManager.disconnectDevice(target, notifyPeer = false)
-                                showNativeToast(copy.connectionRejected)
-                            }
-                            PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
-                            PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
-                            PairResult.PENDING_APPROVAL -> {}
-                            else -> {}
-                        }
-                    }
-                },
-                onDismiss = { deviceToPair = null }
-            )
-        }
-    }
-
     // Device Action Bottom Sheet (Matching user screenshot)
     AnimatedVisibility(
         visible = deviceForAction != null,
@@ -1038,7 +1014,8 @@ fun HomeScreen(
     ) {
         val target = deviceForAction
         if (target != null) {
-            val isTargetConnected = ConnectionManager.isDeviceConnected(target) ||
+            val isTargetConnected = isMyAccountDevice(target) ||
+                    ConnectionManager.isDeviceConnected(target) ||
                     connectedKeys.contains("${target.host}:${target.port}") ||
                     connectedKeys.contains(target.id) ||
                     connectedKeys.contains(target.host) ||
@@ -1049,7 +1026,19 @@ fun HomeScreen(
                 isConnected = isTargetConnected,
                 onSendConnectionRequest = {
                     deviceForAction = null
-                    deviceToPair = target
+                    showNativeToast(copy.sendingConnectionRequest)
+                    ConnectionManager.requestPairing(target) { result ->
+                        when (result) {
+                            PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
+                            PairResult.REJECTED -> {
+                                ConnectionManager.disconnectDevice(target, notifyPeer = false)
+                                showNativeToast(copy.connectionRejected)
+                            }
+                            PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                            PairResult.UNAVAILABLE -> showNativeToast(copy.deviceUnavailable)
+                            else -> {}
+                        }
+                    }
                 },
                 onSendFile = {
                     deviceForAction = null
@@ -1078,7 +1067,18 @@ fun HomeScreen(
                 onDisconnect = {
                     deviceForAction = null
                     ConnectionManager.disconnectDevice(target)
-                    showNativeToast(copy.disconnected)
+                    if (loggedInEmail.isNotBlank()) {
+                        scope.launch {
+                            try {
+                                SupabaseNetwork.removeUserDevice(loggedInEmail, target.id)
+                                registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
+                                ConnectionManager.updateCachedAccountDevices(registeredAccountDevices)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    DeviceDiscoveryManager.removeManualDevice(target.host)
+                    DeviceDiscoveryManager.removeManualDevice(target.id)
+                    showNativeToast(copy.deviceRemovedSuccess)
                 },
                 onDismiss = {
                     deviceForAction = null
@@ -1136,9 +1136,9 @@ private fun SectionHeaderRow(
             Text(
                 text = title,
                 color = Cloud,
-                fontSize = 16.sp,
+                fontSize = 16.5.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.3).sp,
+                letterSpacing = (-0.2).sp,
                 softWrap = false
             )
 
@@ -1328,13 +1328,26 @@ private fun DeviceListBottomSheet(
                                         .fillMaxWidth()
                                         .weight(1f, fill = false)
                                         .verticalScroll(rememberScrollState()),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    devices.forEach { dev ->
-                                        DeviceListRowCard(
-                                            item = dev,
-                                            onClick = { onDeviceClick(dev) }
-                                        )
+                                    devices.chunked(3).forEach { rowDevices ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            rowDevices.forEach { dev ->
+                                                Box(modifier = Modifier.weight(1f)) {
+                                                    NearbyDeviceCard(
+                                                        item = dev,
+                                                        onClick = { onDeviceClick(dev) },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                }
+                                            }
+                                            repeat(3 - rowDevices.size) {
+                                                Spacer(Modifier.weight(1f))
+                                            }
+                                        }
                                     }
                                     Spacer(Modifier.height(16.dp))
                                 }
@@ -1387,15 +1400,15 @@ private fun SearchSectionHeader(
 }
 
 @Composable
-private fun NearbyDeviceCard(
+internal fun NearbyDeviceCard(
     item: UiDeviceItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.width(114.dp)
 ) {
     val blue = LocalSyncSwiftColors.current.blue
     val isDark = LocalSyncSwiftColors.current.isDark
     Surface(
-        modifier = Modifier
-            .width(114.dp)
+        modifier = modifier
             .height(122.dp)
             .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
@@ -1581,7 +1594,7 @@ private fun TransferItemRowCard(
                 Text(
                     text = title,
                     color = Cloud,
-                    fontSize = 14.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.2).sp,
                     maxLines = 1,
@@ -1630,20 +1643,19 @@ private fun FilterChipPill(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val isDark = LocalSyncSwiftColors.current.isDark
     Surface(
         modifier = Modifier
             .clip(CircleShape)
             .clickable(onClick = onClick),
         shape = CircleShape,
         color = if (selected) {
-            Color(0xFF2563EB).copy(alpha = if (isDark) 0.35f else 0.15f)
+            Color(0xFF2563EB)
         } else {
             CardSurface
         },
         border = BorderStroke(
             1.dp,
-            if (selected) Color(0xFF2563EB).copy(alpha = 0.6f) else InputBorder
+            if (selected) Color(0xFF3B82F6) else InputBorder
         )
     ) {
         Row(
@@ -1653,13 +1665,13 @@ private fun FilterChipPill(
         ) {
             Text(
                 text = label,
-                color = if (selected) Color(0xFF2563EB) else Mist,
+                color = Color.White,
                 fontSize = 12.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
             )
             Text(
                 text = count.toString(),
-                color = if (selected) Color(0xFF2563EB) else Mist.copy(alpha = 0.8f),
+                color = if (selected) Color.White else Color.White.copy(alpha = 0.85f),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
             )

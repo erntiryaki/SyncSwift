@@ -142,26 +142,31 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 val senderHost = data["senderHost"] ?: ""
                 val senderPort = data["senderPort"]?.toIntOrNull() ?: 52424
                 val senderOs = data["senderOs"] ?: "Android"
-                val senderLanguage = data["senderLanguage"] ?: "en"
                 val senderPushToken = data["senderPushToken"] ?: ""
                 val isRemoteReq = data["isRemote"]?.equals("true", ignoreCase = true) == true ||
                         senderPushToken.isNotBlank() ||
-                        senderHost.startsWith("remote-") ||
-                        net.syncswift.discovery.DeviceDiscoveryManager.devices.value.none {
-                            it.host == senderHost && it.isOnline && !it.isRemote
-                        }
+                        senderHost.startsWith("remote-")
 
-                val request = IncomingPairRequest(
-                    senderId = senderId,
-                    senderName = senderName,
-                    senderHost = senderHost,
-                    senderPort = senderPort,
-                    senderOsType = senderOs,
-                    senderLanguage = senderLanguage,
-                    senderPushToken = senderPushToken,
-                    isRemote = isRemoteReq
+                val clean = cleanDeviceDisplayName(senderName)
+                if (senderHost.isNotBlank()) {
+                    ConnectionManager.markDeviceConnected("$senderHost:$senderPort", isRemote = isRemoteReq)
+                    ConnectionManager.markDeviceConnected(senderHost, isRemote = isRemoteReq)
+                }
+                if (senderId.isNotBlank()) ConnectionManager.markDeviceConnected(senderId, isRemote = isRemoteReq)
+                ConnectionManager.markDeviceConnected(clean, isRemote = isRemoteReq)
+
+                val peerDev = net.syncswift.discovery.DiscoveredDevice(
+                    id = senderId.ifBlank { "dev-$senderHost" },
+                    name = clean,
+                    host = senderHost,
+                    port = senderPort,
+                    osType = senderOs,
+                    pushToken = senderPushToken,
+                    isRemote = isRemoteReq,
+                    isOnline = true
                 )
-                ConnectionManager.dispatchIncomingPairRequest(request)
+                net.syncswift.discovery.DeviceDiscoveryManager.addOrUpdateConnectedDevice(peerDev)
+                net.syncswift.discovery.DeviceDiscoveryManager.saveManualDevices()
             }
             "file_request" -> {
                 val transferId = data["transferId"] ?: ""
@@ -310,9 +315,13 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
                 if (senderHost.isNotBlank()) ConnectionManager.markDeviceDisconnected("$senderHost:$senderPort")
                 if (senderName.isNotBlank()) ConnectionManager.markDeviceDisconnected(senderName)
                 if (clean.isNotBlank()) ConnectionManager.markDeviceDisconnected(clean)
+                DeviceDiscoveryManager.removeManualDevice(senderHost)
+                DeviceDiscoveryManager.removeManualDevice(clean)
+                DeviceDiscoveryManager.removeManualDevice(senderId)
                 ConnectionManager.cancelIncomingPairRequest()
                 ConnectionManager.cancelIncomingTransferRequest()
                 net.syncswift.connection.OutgoingStatusManager.dismiss()
+                net.syncswift.showNativeToast(copy.disconnected)
                 return
             }
             "file_completed", "file_accepted" -> {
@@ -340,47 +349,42 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
         val notificationId: Int
 
         when (type) {
-            "pair_request" -> {
-                title = copy.notificationPairRequestTitle
-                body = copy.notificationPairRequestBody.replace("%s", senderName)
-                notificationId = NOTIFICATION_PAIR_ID
-            }
-            "file_request" -> {
-                title = copy.notificationFileRequestTitle
-                val fileName = data["fileName"] ?: "File"
-                val fileSize = data["fileSize"]?.toLongOrNull() ?: 0L
-                val sizeStr = if (fileSize > 0) " (${net.syncswift.transfer.formatBytes(fileSize)})" else ""
-                body = copy.notificationFileRequestBody
-                    .replace("%s", senderName)
-                    .replace("%s", fileName)
-                    .replace("(%s)", sizeStr)
-                notificationId = NOTIFICATION_FILE_ID
-            }
-            "pair_accepted" -> {
+            "pair_request", "pair_accepted" -> {
                 title = copy.connectionAccepted
                 body = copy.notificationPairAcceptedStatus.replace("%s", senderName)
-                notificationId = (System.currentTimeMillis() % 100000).toInt()
+                notificationId = NOTIFICATION_PAIR_ID
             }
-            "pair_rejected" -> {
+            "pair_rejected", "pair_failed" -> {
                 title = copy.connectionRejected
                 body = copy.notificationPairRejectedStatus.replace("%s", senderName)
                 notificationId = (System.currentTimeMillis() % 100000).toInt()
             }
-            "file_rejected" -> {
-                title = copy.transferRejectedByRecipient
-                body = copy.notificationFileRejectedStatus.replace("%s", senderName)
+            "file_request", "file_completed" -> {
+                title = copy.transferSuccessStatus
+                val fileName = data["fileName"] ?: "File"
+                body = copy.fileReceivedSuccessfully.replace("%s", fileName)
+                notificationId = NOTIFICATION_FILE_ID
+            }
+            "file_rejected", "file_failed" -> {
+                title = copy.transferFailedStatus
+                body = copy.transferFailed
                 notificationId = (System.currentTimeMillis() % 100000).toInt()
             }
             "clipboard_request", "clipboard_sync" -> {
-                title = copy.syncClipboardAction
+                title = copy.clipboard
                 val clipText = data["text"] ?: data["content"] ?: data["body"] ?: remoteMessage.notification?.body ?: ""
                 val preview = clipText.take(35).replace("\n", " ")
-                body = "$senderName: $preview"
+                body = copy.clipboardSynced.replace("%s", preview)
                 notificationId = NOTIFICATION_FILE_ID
             }
+            "clipboard_rejected", "clipboard_failed" -> {
+                title = copy.transferFailedStatus
+                body = copy.operationRejectedOrTimeout
+                notificationId = (System.currentTimeMillis() % 100000).toInt()
+            }
             else -> {
-                title = remoteMessage.notification?.title ?: data["title"] ?: copy.notificationPairRequestTitle
-                body = remoteMessage.notification?.body ?: data["body"] ?: copy.notificationPairRequestBody.replace("%s", senderName)
+                title = remoteMessage.notification?.title ?: data["title"] ?: copy.connectionAccepted
+                body = remoteMessage.notification?.body ?: data["body"] ?: copy.notificationPairAcceptedStatus.replace("%s", senderName)
                 notificationId = (System.currentTimeMillis() % 100000).toInt()
             }
         }
@@ -448,89 +452,7 @@ class SyncSwiftFirebaseMessagingService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 
-        if (type == "pair_request") {
-            // "Onayla" Action button
-            val acceptIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_ACCEPT_PAIR
-                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_NAME, senderName)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_HOST, senderHost)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_PORT, senderPort)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_ID, senderId)
-            }
-            val acceptPending = PendingIntent.getBroadcast(
-                this,
-                notificationId + 1,
-                acceptIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            // "Reddet" Action button
-            val rejectIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_REJECT_PAIR
-                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_NAME, senderName)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_HOST, senderHost)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_PORT, senderPort)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_ID, senderId)
-                putExtra("sender_push_token", data["senderPushToken"] ?: "")
-                putExtra("sender_language", data["senderLanguage"] ?: "")
-            }
-            val rejectPending = PendingIntent.getBroadcast(
-                this,
-                notificationId + 2,
-                rejectIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            builder.addAction(android.R.drawable.checkbox_on_background, copy.notificationActionAccept, acceptPending)
-            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, copy.notificationActionDecline, rejectPending)
-        } else if (type == "file_request") {
-            val transferId = data["transferId"] ?: ""
-            val fileName = data["fileName"] ?: "File"
-            val fileSize = data["fileSize"]?.toLongOrNull() ?: 0L
-            val mimeType = data["mimeType"] ?: "application/octet-stream"
-
-            // Accept Action button
-            val acceptFileIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_ACCEPT_FILE
-                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-                putExtra(NotificationActionReceiver.EXTRA_TRANSFER_ID, transferId)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_NAME, senderName)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_HOST, senderHost)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_PORT, senderPort)
-                putExtra(NotificationActionReceiver.EXTRA_FILE_NAME, fileName)
-                putExtra(NotificationActionReceiver.EXTRA_FILE_SIZE, fileSize)
-                putExtra(NotificationActionReceiver.EXTRA_MIME_TYPE, mimeType)
-                putExtra(NotificationActionReceiver.EXTRA_DOWNLOAD_URL, data["downloadUrl"] ?: "")
-                putExtra(NotificationActionReceiver.EXTRA_IS_REMOTE, data["isRemote"] == "true")
-            }
-            val acceptFilePending = PendingIntent.getBroadcast(
-                this,
-                notificationId + 3,
-                acceptFileIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            // Decline Action button
-            val rejectFileIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_REJECT_FILE
-                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-                putExtra(NotificationActionReceiver.EXTRA_TRANSFER_ID, transferId)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_NAME, senderName)
-                putExtra(NotificationActionReceiver.EXTRA_SENDER_HOST, senderHost)
-            }
-            val rejectFilePending = PendingIntent.getBroadcast(
-                this,
-                notificationId + 4,
-                rejectFileIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            builder.addAction(android.R.drawable.checkbox_on_background, copy.notificationActionAccept, acceptFilePending)
-            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, copy.notificationActionDecline, rejectFilePending)
-        }
-
+        // Purely informative notification without approval/rejection action buttons
         notificationManager.notify(notificationId, builder.build())
     }
 }

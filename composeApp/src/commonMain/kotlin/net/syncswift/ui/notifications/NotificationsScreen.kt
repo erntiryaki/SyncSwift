@@ -72,9 +72,9 @@ fun NotificationsScreen(
             Text(
                 text = copy.notificationsTitle,
                 color = Cloud,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.6).sp,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.3).sp,
                 modifier = Modifier.weight(1f)
             )
 

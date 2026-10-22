@@ -89,23 +89,28 @@ actual object DeviceDiscoveryManager {
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
                     val id = obj.optString("id", "")
+                    val rawName = obj.optString("name", "").trim()
+                    val clean = cleanDeviceDisplayName(rawName)
+                    // Never restore an IP address as a device name
+                    if (clean.isBlank() || clean.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"""))) {
+                        continue
+                    }
                     val isRemote = obj.optBoolean("isRemote", false) || id.startsWith("remote-")
-                    restored.add(
-                        DiscoveredDevice(
-                            id = id,
-                            name = obj.optString("name", "Device"),
-                            host = obj.optString("host", ""),
-                            port = obj.optInt("port", 52424),
-                            osType = obj.optString("osType", "Android"),
-                            isSelf = false,
-                            isOnline = false,
-                            isRemote = isRemote,
-                            pushToken = obj.optString("pushToken", "").ifBlank { null }
-                        )
+                    val dev = DiscoveredDevice(
+                        id = id,
+                        name = clean,
+                        host = obj.optString("host", ""),
+                        port = obj.optInt("port", 52424),
+                        osType = obj.optString("osType", "Android"),
+                        isSelf = false,
+                        isOnline = true,
+                        isRemote = isRemote,
+                        pushToken = obj.optString("pushToken", "").ifBlank { null }
                     )
+                    restored.add(dev)
                 }
                 if (restored.isNotEmpty()) {
-                    _devices.value = restored
+                    _devices.value = restored.distinctBy { cleanDeviceDisplayName(it.name) }
                 }
             } catch (_: Exception) {}
         }
@@ -116,11 +121,13 @@ actual object DeviceDiscoveryManager {
             val array = org.json.JSONArray()
             for (dev in _devices.value) {
                 if (dev.isSelf) continue
+                val clean = cleanDeviceDisplayName(dev.name)
+                if (clean.isBlank() || clean.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"""))) continue
                 val isConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
                 if (!dev.id.startsWith("manual-") && !dev.id.startsWith("remote-") && !dev.isRemote && !isConnected) continue
                 val obj = org.json.JSONObject().apply {
                     put("id", dev.id)
-                    put("name", dev.name)
+                    put("name", clean)
                     put("host", dev.host)
                     put("port", dev.port)
                     put("osType", dev.osType)
@@ -387,7 +394,7 @@ actual object DeviceDiscoveryManager {
             }
 
             while (isActive) {
-                delay(1500)
+                delay(15000)
                 if (SessionManager.isLoggedIn()) {
                     sendUdpPacket(buildSelfAnnouncement(isPing = false))
                 }
@@ -429,13 +436,14 @@ actual object DeviceDiscoveryManager {
                         ?: 0L
 
                     val age = now - lastSeen
-                    // Heartbeat is sent every 1.5s. If seen within 12s -> online (resilient to Wi-Fi packet drops)
-                    if (lastSeen > 0L && age < 12000L) {
+                    // Heartbeat is sent every 1.2-1.5s. Keep stably online if seen within 35s or currently connected
+                    val isActivelyConnected = net.syncswift.connection.ConnectionManager.isDeviceConnected(dev)
+                    if (isActivelyConnected || (lastSeen > 0L && age < 35000L)) {
                         if (!dev.isOnline) {
                             iterator.set(dev.copy(isOnline = true))
                             changed = true
                         }
-                    } else if (lastSeen > 0L && age >= 15000L) {
+                    } else if (lastSeen > 0L && age >= 40000L && !isActivelyConnected) {
                         if (dev.isOnline) {
                             iterator.set(dev.copy(isOnline = false))
                             changed = true
@@ -688,33 +696,7 @@ actual object DeviceDiscoveryManager {
                 }
 
                 override fun onServiceLost(service: NsdServiceInfo) {
-                    Log.d(TAG, "NSD Service lost: ${service.serviceName}")
-                    val lostName = service.serviceName
-                    val cleanLost = cleanDeviceDisplayName(lostName)
-                    val now = System.currentTimeMillis()
-                    val lastSeen = lastSeenTimestamps[lostName] ?: lastSeenTimestamps[cleanLost] ?: 0L
-                    // If UDP heartbeats have seen this device recently (<45s), ignore NSD's false service-lost event!
-                    if (now - lastSeen < 45000L) {
-                        Log.d(TAG, "Ignoring NSD service lost for $lostName - UDP heartbeats active")
-                        return
-                    }
-
-                    val current = _devices.value.toMutableList()
-                    var changed = false
-                    val iterator = current.listIterator()
-                    while (iterator.hasNext()) {
-                        val dev = iterator.next()
-                        val cleanDevName = cleanDeviceDisplayName(dev.name)
-                        val matches = !dev.isRemote && (dev.id == lostName || dev.name == lostName || cleanDevName == cleanLost || lostName.contains(cleanDevName))
-                        if (matches) {
-                            changed = true
-                            iterator.set(dev.copy(isOnline = false))
-                        }
-                    }
-                    if (changed) {
-                        _devices.value = current
-                        saveManualDevices()
-                    }
+                    Log.d(TAG, "NSD Service lost: ${service.serviceName} (deferred to UDP liveness to avoid false disconnects)")
                 }
 
                 override fun onDiscoveryStopped(serviceType: String) {
@@ -866,20 +848,54 @@ actual object DeviceDiscoveryManager {
         }
     }
 
-    private fun getLocalIpAddress(): String? {
+    fun getLocalIpAddress(): String? {
         try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
+            val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: return null
+            val candidates = mutableListOf<Pair<String, String>>() // name to ip
+
+            for (networkInterface in interfaces) {
                 if (networkInterface.isLoopback || !networkInterface.isUp) continue
+                val name = networkInterface.name.lowercase()
                 val addresses = networkInterface.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val address = addresses.nextElement()
                     if (!address.isLoopbackAddress && address is Inet4Address) {
-                        return address.hostAddress
+                        val host = address.hostAddress ?: continue
+                        candidates.add(name to host)
                     }
                 }
             }
+
+            // 1. Prefer Wi-Fi or Ethernet interfaces (wlan*, eth*, en*) on private LAN (192.168, 10, 172)
+            val wifiCandidate = candidates.firstOrNull { (name, ip) ->
+                (name.startsWith("wlan") || name.startsWith("eth") || name.startsWith("en") || name.startsWith("tiwlan") || name.startsWith("ap")) &&
+                        (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) &&
+                        !ip.startsWith("100.")
+            }?.second
+            if (!wifiCandidate.isNullOrBlank()) return wifiCandidate
+
+            // 2. Any interface on private LAN excluding cellular (rmnet*, ccmni*, pdp*, tun*, dummy*)
+            val privateLanCandidate = candidates.firstOrNull { (name, ip) ->
+                !name.startsWith("rmnet") && !name.startsWith("ccmni") && !name.startsWith("pdp") &&
+                        !name.startsWith("tun") && !name.startsWith("dummy") &&
+                        (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) &&
+                        !ip.startsWith("100.")
+            }?.second
+            if (!privateLanCandidate.isNullOrBlank()) return privateLanCandidate
+
+            // 3. Any Wi-Fi interface regardless of IP range
+            val anyWifi = candidates.firstOrNull { (name, _) ->
+                name.startsWith("wlan") || name.startsWith("eth") || name.startsWith("en")
+            }?.second
+            if (!anyWifi.isNullOrBlank()) return anyWifi
+
+            // 4. Any non-cellular, non-CGNAT candidate
+            val nonCellular = candidates.firstOrNull { (name, ip) ->
+                !name.startsWith("rmnet") && !name.startsWith("ccmni") && !name.startsWith("pdp") && !ip.startsWith("100.")
+            }?.second
+            if (!nonCellular.isNullOrBlank()) return nonCellular
+
+            return candidates.firstOrNull()?.second
         } catch (e: Exception) {
             Log.w(TAG, "Failed to get local IP: ${e.message}")
         }

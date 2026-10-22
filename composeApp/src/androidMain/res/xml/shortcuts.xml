@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="shortcut_send_file"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_send_file"
+        android:shortcutShortLabel="@string/shortcut_send_file_short"
+        android:shortcutLongLabel="@string/shortcut_send_file_long">
+        <intent
+            android:action="net.syncswift.ACTION_SHORTCUT_SEND_FILE"
+            android:targetPackage="net.syncswift"
+            android:targetClass="net.syncswift.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="shortcut_send_clipboard"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_send_clipboard"
+        android:shortcutShortLabel="@string/shortcut_send_clipboard_short"
+        android:shortcutLongLabel="@string/shortcut_send_clipboard_long">
+        <intent
+            android:action="net.syncswift.ACTION_SHORTCUT_SEND_CLIPBOARD"
+            android:targetPackage="net.syncswift"
+            android:targetClass="net.syncswift.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

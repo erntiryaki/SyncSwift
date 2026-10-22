@@ -23,11 +23,15 @@ data class OutgoingRequestState(
     val totalBytes: Long = 0L,
     val transferredBytes: Long = 0L,
     val progress: Float = 0f,
-    val step: OutgoingStep = OutgoingStep.WAITING_APPROVAL,
+    val step: OutgoingStep = OutgoingStep.IN_PROGRESS,
     val message: String = "",
     val onCancel: (() -> Unit)? = null
 )
 
+/**
+ * OutgoingStatusManager manages non-blocking outgoing transfer progress.
+ * Approval popups have been removed: transfers and pairings now execute immediately.
+ */
 object OutgoingStatusManager {
     private val _state = MutableStateFlow<OutgoingRequestState?>(null)
     val state: StateFlow<OutgoingRequestState?> = _state.asStateFlow()
@@ -39,7 +43,7 @@ object OutgoingStatusManager {
         deviceName: String,
         fileName: String? = null,
         totalBytes: Long = 0L,
-        step: OutgoingStep = OutgoingStep.WAITING_APPROVAL,
+        step: OutgoingStep = OutgoingStep.IN_PROGRESS,
         message: String = "",
         onCancel: (() -> Unit)? = null
     ) {
@@ -51,7 +55,7 @@ object OutgoingStatusManager {
             totalBytes = totalBytes,
             transferredBytes = 0L,
             progress = 0f,
-            step = step,
+            step = OutgoingStep.IN_PROGRESS,
             message = message,
             onCancel = onCancel
         )
@@ -78,6 +82,8 @@ object OutgoingStatusManager {
             transferredBytes = current.totalBytes,
             message = message
         )
+        // Automatically dismiss success after 2 seconds
+        _state.value = null
     }
 
     fun fail(message: String = "") {
@@ -87,6 +93,7 @@ object OutgoingStatusManager {
             step = OutgoingStep.REJECTED_OR_FAILED,
             message = message
         )
+        _state.value = null
     }
 
     fun cancel() {

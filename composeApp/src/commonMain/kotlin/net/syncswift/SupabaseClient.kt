@@ -124,6 +124,31 @@ expect object SupabaseNetwork {
 
     /** Fetches all joined members for a workspace from invite records */
     suspend fun fetchWorkspaceMembers(workspaceId: String): List<Map<String, String>>
+
+    /** Publishes an end-to-end remote transfer request in Supabase for cross-network delivery */
+    suspend fun publishRemoteTransferSession(
+        transferId: String,
+        targetDeviceId: String,
+        targetDeviceName: String,
+        senderName: String,
+        fileName: String,
+        fileSize: Long,
+        mimeType: String,
+        downloadUrlOrContent: String,
+        isClipboard: Boolean = false
+    ): Boolean
+
+    /** Polls for pending remote file / clipboard transfers addressed to this device */
+    suspend fun pollPendingRemoteTransfers(
+        myDeviceId: String,
+        myDeviceName: String
+    ): List<Map<String, String>>
+
+    /** Updates the status of a remote transfer session (e.g. ACCEPTED, REJECTED) */
+    suspend fun updateRemoteTransferStatus(transferId: String, status: String): Boolean
+
+    /** Checks current status of a remote transfer session (PENDING, ACCEPTED, REJECTED, etc.) */
+    suspend fun checkRemoteTransferStatus(transferId: String): String?
 }
 
 

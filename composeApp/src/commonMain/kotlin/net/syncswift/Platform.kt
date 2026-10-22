@@ -4,7 +4,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class PlatformFlavor { Android, Ios }
+enum class PlatformFlavor { Android, Ios, Desktop }
+
+/** True on Windows / macOS desktop builds. Shared UI uses this to switch to desktop layouts. */
+fun isDesktopPlatform(): Boolean = currentPlatform() == PlatformFlavor.Desktop
 
 object ToastNotifier {
     private val _currentToast = MutableStateFlow<String?>(null)

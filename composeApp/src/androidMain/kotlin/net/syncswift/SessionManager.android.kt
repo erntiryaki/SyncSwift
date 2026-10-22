@@ -142,6 +142,9 @@ actual object SessionManager {
 
     actual fun saveLanguage(languageCode: String) {
         getPrefs()?.edit()?.putString("app_language", languageCode)?.apply()
+        appContext?.let { ctx ->
+            net.syncswift.shortcuts.ShortcutHelper.updateShortcuts(ctx, languageCode)
+        }
     }
 
     actual fun getSavedLanguage(): String? {
@@ -274,6 +277,14 @@ actual object SessionManager {
 
     actual fun getSavedBiometricEnabled(): Boolean {
         return getPrefs()?.getBoolean("biometric_lock_enabled", false) ?: false
+    }
+
+    actual fun saveAutoTransferEnabled(enabled: Boolean) {
+        getPrefs()?.edit()?.putBoolean("auto_transfer_enabled", enabled)?.apply()
+    }
+
+    actual fun isAutoTransferEnabled(): Boolean {
+        return getPrefs()?.getBoolean("auto_transfer_enabled", false) ?: false
     }
 
     actual fun getPlatformDeviceId(): String {

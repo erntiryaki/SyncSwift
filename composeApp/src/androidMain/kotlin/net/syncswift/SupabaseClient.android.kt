@@ -825,8 +825,22 @@ actual object SupabaseNetwork {
                 SessionManager.saveLoggedInUserId(resolvedUserId)
             }
 
-            val resolvedToken = pushToken.ifBlank { SessionManager.getMyPushToken() }
-            val resolvedIp = localIp.ifBlank { getLocalIpAddress() ?: "" }
+            val isDesktop = deviceType.contains("win", ignoreCase = true) ||
+                            deviceType.contains("mac", ignoreCase = true) ||
+                            deviceType.contains("desk", ignoreCase = true) ||
+                            deviceType.contains("linux", ignoreCase = true)
+            val isCurrentSelf = deviceId == SessionManager.getPlatformDeviceId()
+
+            val resolvedToken = when {
+                pushToken.isNotBlank() -> pushToken
+                isCurrentSelf && !isDesktop -> SessionManager.getMyPushToken()
+                else -> ""
+            }
+            val resolvedIp = when {
+                localIp.isNotBlank() -> localIp
+                isCurrentSelf -> getLocalIpAddress() ?: ""
+                else -> ""
+            }
             val subnet = if (resolvedIp.contains(".")) resolvedIp.substringBeforeLast(".") else ""
 
             val payload = org.json.JSONObject().apply {
@@ -838,7 +852,11 @@ actual object SupabaseNetwork {
                 } else {
                     put("user_id", org.json.JSONObject.NULL)
                 }
-                if (resolvedToken.isNotBlank()) put("push_token", resolvedToken)
+                if (resolvedToken.isNotBlank()) {
+                    put("push_token", resolvedToken)
+                } else {
+                    put("push_token", org.json.JSONObject.NULL)
+                }
                 if (resolvedIp.isNotBlank()) put("local_ip", resolvedIp)
                 put("port", port)
                 if (subnet.isNotBlank()) put("network_ssid", subnet)
@@ -1069,21 +1087,7 @@ actual object SupabaseNetwork {
     }
 
     private fun getLocalIpAddress(): String? {
-        try {
-            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                if (networkInterface.isLoopback || !networkInterface.isUp) continue
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
-                    if (!address.isLoopbackAddress && address is java.net.Inet4Address) {
-                        return address.hostAddress
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-        return null
+        return net.syncswift.discovery.DeviceDiscoveryManager.getLocalIpAddress()
     }
 
     actual suspend fun publishQuickAccessSession(
@@ -1346,6 +1350,165 @@ actual object SupabaseNetwork {
         } catch (e: Exception) {
             Log.w("SupabaseNetwork", "fetchWorkspaceMembers error: ${e.message}")
             emptyList()
+        }
+    }
+
+    actual suspend fun publishRemoteTransferSession(
+        transferId: String,
+        targetDeviceId: String,
+        targetDeviceName: String,
+        senderName: String,
+        fileName: String,
+        fileSize: Long,
+        mimeType: String,
+        downloadUrlOrContent: String,
+        isClipboard: Boolean
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+
+            val cleanTargetId = if (targetDeviceId.isNotBlank() && !targetDeviceId.contains(".") && !targetDeviceId.startsWith("remote-")) {
+                targetDeviceId.trim()
+            } else {
+                cleanDeviceDisplayName(targetDeviceName)
+            }
+            val meta = "$senderName:::$fileName:::$fileSize:::$mimeType"
+            val devType = if (isClipboard) "RemoteClipboard" else "RemoteFile"
+            val expiresAt = java.time.Instant.now().plusSeconds(900).toString()
+
+            val json = org.json.JSONObject().apply {
+                put("code", transferId)
+                put("device_id", cleanTargetId)
+                put("device_name", meta)
+                put("device_type", devType)
+                put("local_ip", "remote")
+                put("port", 52424)
+                put("push_token", downloadUrlOrContent)
+                put("status", "PENDING")
+                put("expires_at", expiresAt)
+            }
+            conn.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.w("SupabaseNetwork", "publishRemoteTransferSession error: ${e.message}")
+            false
+        }
+    }
+
+    actual suspend fun pollPendingRemoteTransfers(
+        myDeviceId: String,
+        myDeviceName: String
+    ): List<Map<String, String>> = withContext(Dispatchers.IO) {
+        try {
+            val cleanName = cleanDeviceDisplayName(myDeviceName)
+            val encName = java.net.URLEncoder.encode(cleanName, "UTF-8").replace("+", "%20")
+            val encId = java.net.URLEncoder.encode(myDeviceId, "UTF-8").replace("+", "%20")
+            val filter = if (myDeviceId.isNotBlank() && cleanName.isNotBlank() && myDeviceId != cleanName) {
+                "or=(device_id.eq.$encId,device_id.eq.$encName)"
+            } else if (myDeviceId.isNotBlank()) {
+                "device_id=eq.$encId"
+            } else {
+                "device_id=eq.$encName"
+            }
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?$filter&status=eq.PENDING&order=created_at.desc&limit=10")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Accept", "application/json")
+
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                if (body.isBlank() || body == "[]") return@withContext emptyList()
+                val arr = org.json.JSONArray(body)
+                val results = mutableListOf<Map<String, String>>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val devType = obj.optString("device_type", "")
+                    if (devType == "RemoteFile" || devType == "RemoteClipboard") {
+                        val meta = obj.optString("device_name", "")
+                        val parts = meta.split(":::")
+                        val sName = parts.getOrNull(0) ?: "Remote Device"
+                        val fName = parts.getOrNull(1) ?: "File"
+                        val fSize = parts.getOrNull(2) ?: "0"
+                        val mMime = parts.getOrNull(3) ?: "application/octet-stream"
+                        val content = obj.optString("push_token", "")
+                        results.add(mapOf(
+                            "transferId" to obj.optString("code"),
+                            "senderName" to sName,
+                            "fileName" to fName,
+                            "fileSize" to fSize,
+                            "mimeType" to mMime,
+                            "content" to content,
+                            "deviceType" to devType,
+                            "status" to obj.optString("status", "PENDING")
+                        ))
+                    }
+                }
+                return@withContext results
+            }
+            emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    actual suspend fun updateRemoteTransferStatus(transferId: String, status: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$transferId")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "PATCH"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+
+            val json = org.json.JSONObject().apply {
+                put("status", status)
+            }
+            conn.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    actual suspend fun checkRemoteTransferStatus(transferId: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/pairing_codes?code=eq.$transferId&select=status")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            conn.setRequestProperty("apikey", effectiveKey)
+            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("Accept", "application/json")
+
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                if (body.isNotBlank() && body != "[]") {
+                    val arr = org.json.JSONArray(body)
+                    if (arr.length() > 0) {
+                        return@withContext arr.getJSONObject(0).optString("status", null)
+                    }
+                }
+            }
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 }

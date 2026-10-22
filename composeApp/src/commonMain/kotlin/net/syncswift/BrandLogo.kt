@@ -8,4 +8,4 @@ import androidx.compose.ui.graphics.Color
 expect fun BrandLogo(modifier: Modifier = Modifier)
 
 @Composable
-expect fun BrandIcon(modifier: Modifier = Modifier, tint: Color = Color.White)
+expect fun BrandIcon(modifier: Modifier = Modifier, tint: Color = Color.Unspecified)

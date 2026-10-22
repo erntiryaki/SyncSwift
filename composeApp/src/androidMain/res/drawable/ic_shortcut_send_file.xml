@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Outer glow / drop-shadow disc -->
+    <path
+        android:fillColor="#1D4ED8"
+        android:pathData="M24,2A22,22 0 1,0 46,24A22,22 0 0,0 24,2Z" />
+    <!-- Vibrant Blue core disc -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M24,4A20,20 0 1,0 44,24A20,20 0 0,0 24,4Z" />
+    <!-- Top subtle ambient highlight -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M24,4C14.06,4 5.8,11.2 4.3,20.5C8.8,17.2 16.1,15 24,15C31.9,15 39.2,17.2 43.7,20.5C42.2,11.2 33.94,4 24,4Z" />
+
+    <!-- Modern Document Body (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M16,11H27L33,17V33C33,34.66 31.66,36 30,36H16C14.34,36 13,34.66 13,33V14C13,12.34 14.34,11 16,11Z" />
+    <!-- Folded Corner Flap (Soft Blue) -->
+    <path
+        android:fillColor="#93C5FD"
+        android:pathData="M27,11V17H33Z" />
+
+    <!-- Document Content Lines -->
+    <path
+        android:fillColor="#BFDBFE"
+        android:pathData="M17,21H25V23H17ZM17,25H23V27H17ZM17,29H21V31H17Z" />
+
+    <!-- Modern Send Flight Badge (Electric Cyan circle with forward swift arrow) -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M31,22A8,8 0 1,0 47,30A8,8 0 0,0 31,22Z" />
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M31,23.5A6.5,6.5 0 1,0 44,30A6.5,6.5 0 0,0 31,23.5Z" />
+    <!-- Upward-right swift paper plane / send arrow -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M27,29.5L37,25L32.5,35L31,31.5L27,29.5Z" />
+</vector>

@@ -29,11 +29,29 @@ expect object DeviceDiscoveryManager {
     fun broadcastGoodbye()
 }
 
-fun cleanDeviceDisplayName(rawName: String): String {
-    var name = rawName.removePrefix("SyncSwift-").trim()
+fun cleanDeviceDisplayName(rawName: String, fallbackOs: String = ""): String {
+    var name = rawName
+        .removePrefix("SyncSwift-")
+        .removePrefix("self-")
+        .removePrefix("remote-")
+        .removePrefix("manual-")
+        .trim()
     val suffixRegex = Regex("""(\s*[\(\[]\s*\d+\s*[\)\]]|\s+-\s*\d+)+$""")
     while (suffixRegex.containsMatchIn(name)) {
         name = name.replace(suffixRegex, "").trim()
     }
-    return name.ifBlank { "SyncSwift Device" }
+    val isUuidOrSerial = name.matches(Regex("""^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$""")) ||
+                         name.matches(Regex("""^[0-9a-fA-F]{24,40}$""")) ||
+                         (name.length in 30..45 && name.count { it.isDigit() } > 10 && name.contains("-"))
+    if (isUuidOrSerial) {
+        val osLower = fallbackOs.lowercase()
+        return when {
+            osLower.contains("win") -> "Windows PC"
+            osLower.contains("mac") -> "Mac"
+            osLower.contains("ios") || osLower.contains("iphone") -> "iPhone"
+            osLower.contains("android") -> "Android"
+            else -> "Cihaz"
+        }
+    }
+    return name.ifBlank { "Cihaz" }
 }

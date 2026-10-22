@@ -276,8 +276,8 @@ val ItalianCopy = Copy().apply {
     availableDevicesSection = "Altri dispositivi sulla rete"
     localConnectedDevices = "Dispositivi locali (Stesso Wi-Fi)"
     remoteConnectedDevices = "Dispositivi connessi da remoto"
-    remotePairingTitle = "Accoppiamento remoto"
-    remotePairingSubtitle = "Associa dispositivi su reti diverse da remoto."
+    remotePairingTitle = "Collega nuovo dispositivo"
+    remotePairingSubtitle = "Associa i tuoi dispositivi in modo permanente con codice QR o codice a 6 cifre."
     codeExpiresIn = "Si aggiorna tra: %s s"
     enter6DigitCode = "Codice di associazione a 6 cifre"
     enter6DigitCodeHint = "123 456"
@@ -630,4 +630,19 @@ val ItalianCopy = Copy().apply {
     clearClipboardHistory = "Cancella cronologia"
     clearClipboardConfirm = "Sei sicuro di voler cancellare tutta la cronologia degli appunti?"
     filesCountSuffix = "file"
+
+    // Auto Transfer Feature
+    autoTransfer = "Trasferimento automatico"
+    autoTransferDesc = "Trasferisci direttamente appunti e file tra i tuoi dispositivi senza conferma"
+    autoTransferSuccess = "Trasferito automaticamente"
+    autoTransferFileReceived = "File ricevuto automaticamente: %s"
+    autoTransferClipboardReceived = "Appunti sincronizzati automaticamente"
+
+    // Shortcuts & Native Share Sheet
+    shortcutSendFileShort = "Invia file"
+    shortcutSendFileLong = "Invia file al dispositivo"
+    shortcutSendClipboardShort = "Invia appunti"
+    shortcutSendClipboardLong = "Invia appunti al dispositivo"
+    clipboardEmpty = "Appunti vuoti"
+    shareTargetTitle = "Condividi con SyncSwift"
 }

@@ -276,8 +276,8 @@ val FrenchCopy = Copy().apply {
     availableDevicesSection = "Autres appareils sur le réseau"
     localConnectedDevices = "Appareils locaux (Même Wi-Fi)"
     remoteConnectedDevices = "Appareils connectés à distance"
-    remotePairingTitle = "Jumelage à distance"
-    remotePairingSubtitle = "Jumelez des appareils sur des réseaux différents à distance."
+    remotePairingTitle = "Associer un nouvel appareil"
+    remotePairingSubtitle = "Associez vos appareils définitivement par code QR ou code à 6 chiffres."
     codeExpiresIn = "Actualisation dans : %s s"
     enter6DigitCode = "Code de jumelage à 6 chiffres"
     enter6DigitCodeHint = "123 456"
@@ -630,4 +630,19 @@ val FrenchCopy = Copy().apply {
     clearClipboardHistory = "Effacer l'historique"
     clearClipboardConfirm = "Voulez-vous vraiment effacer tout l'historique du presse-papiers ?"
     filesCountSuffix = "fichiers"
+
+    // Auto Transfer Feature
+    autoTransfer = "Transfert automatique"
+    autoTransferDesc = "Transférez directement le presse-papiers et les fichiers entre vos propres appareils sans confirmation"
+    autoTransferSuccess = "Transféré automatiquement"
+    autoTransferFileReceived = "Fichier reçu automatiquement : %s"
+    autoTransferClipboardReceived = "Presse-papiers synchronisé automatiquement"
+
+    // Shortcuts & Native Share Sheet
+    shortcutSendFileShort = "Envoyer fichier"
+    shortcutSendFileLong = "Envoyer le fichier à l'appareil"
+    shortcutSendClipboardShort = "Envoyer presse-papiers"
+    shortcutSendClipboardLong = "Envoyer le presse-papiers à l'appareil"
+    clipboardEmpty = "Presse-papiers vide"
+    shareTargetTitle = "Partager via SyncSwift"
 }

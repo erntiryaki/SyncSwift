@@ -55,7 +55,7 @@ fun ConnectDesktopScreen(
     var desktopCodeInput by remember { mutableStateOf("") }
     var isConnecting by remember { mutableStateOf(false) }
 
-    var registeredDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
+    var registeredDevices by remember { mutableStateOf<List<DiscoveredDevice>>(ConnectionManager.getCachedAccountDevices()) }
     var isLoadingDevices by remember { mutableStateOf(false) }
 
     var deviceToConfirmRemove by remember { mutableStateOf<DiscoveredDevice?>(null) }
@@ -64,12 +64,14 @@ fun ConnectDesktopScreen(
     // Identify linked desktop count for free plan check
     val isDesktopDevice: (DiscoveredDevice) -> Boolean = { dev ->
         val t = dev.osType.lowercase()
-        t.contains("windows") || t.contains("mac") || t.contains("desktop") || t.contains("pc")
+        val n = dev.name.lowercase()
+        t.contains("win") || t.contains("mac") || t.contains("desk") || t.contains("pc") || t.contains("linux") ||
+        n.contains("windows") || n.contains("desktop") || n.contains("pc") || n.contains("laptop") || n.contains("macbook")
     }
 
     val isMobileDevice: (DiscoveredDevice) -> Boolean = { dev ->
         val t = dev.osType.lowercase()
-        t.contains("android") || t.contains("ios") || t.contains("iphone") || t.contains("ipad") || t.contains("mobile") || !isDesktopDevice(dev)
+        !isDesktopDevice(dev) && (t.contains("android") || t.contains("ios") || t.contains("iphone") || t.contains("ipad") || t.contains("phone") || t.contains("mobile"))
     }
 
     fun refreshDevices() {
@@ -79,13 +81,7 @@ fun ConnectDesktopScreen(
                 try {
                     val remoteDevs = SupabaseNetwork.fetchAllUserDevices(userEmail)
                     registeredDevices = remoteDevs
-
-                    // Masaüstünden çıkış yapılmışsa ve Supabase kaydı silinmişse yerel bellekten de kaldır
-                    val currentDiscovered = net.syncswift.discovery.DeviceDiscoveryManager.devices.value
-                    currentDiscovered.filter { isDesktopDevice(it) && remoteDevs.none { r -> r.id == it.id } }.forEach {
-                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(it.host)
-                        net.syncswift.discovery.DeviceDiscoveryManager.removeManualDevice(it.id)
-                    }
+                    ConnectionManager.updateCachedAccountDevices(remoteDevs)
                 } catch (_: Exception) {
                 } finally {
                     isLoadingDevices = false
@@ -118,44 +114,99 @@ fun ConnectDesktopScreen(
         }
     }
 
+    val isDesktopPlatform = net.syncswift.isDesktopPlatform()
+
     val selfDevice = remember { net.syncswift.discovery.DeviceDiscoveryManager.getSelfDevice() }
     val myCleanName = remember { cleanDeviceDisplayName(selfDevice?.name ?: currentDeviceName) }
     val myPushToken = remember { SessionManager.getMyPushToken() }
+
     val isCurrentSelfDevice: (DiscoveredDevice) -> Boolean = { dev ->
-        val devClean = cleanDeviceDisplayName(dev.name)
-        dev.isSelf ||
-        (currentDeviceId.isNotBlank() && dev.id.equals(currentDeviceId, ignoreCase = true)) ||
-        (selfDevice != null && dev.id == selfDevice.id) ||
-        (selfDevice != null && dev.id.removePrefix("self-") == selfDevice.id.removePrefix("self-")) ||
-        (selfDevice != null && selfDevice.host.isNotBlank() && selfDevice.host != "127.0.0.1" && dev.host == selfDevice.host) ||
-        (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken) ||
-        (myCleanName.isNotBlank() && devClean.equals(myCleanName, ignoreCase = true)) ||
-        (currentDeviceName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(currentDeviceName), ignoreCase = true) || dev.name.equals(currentDeviceName, ignoreCase = true)))
+        val devIsDesktop = isDesktopDevice(dev)
+        if (devIsDesktop != isDesktopPlatform) {
+            false
+        } else {
+            val devClean = cleanDeviceDisplayName(dev.name)
+            dev.isSelf ||
+            (currentDeviceId.isNotBlank() && dev.id.equals(currentDeviceId, ignoreCase = true)) ||
+            (selfDevice != null && dev.id.equals(selfDevice.id, ignoreCase = true)) ||
+            (selfDevice != null && dev.id.removePrefix("self-").equals(selfDevice.id.removePrefix("self-"), ignoreCase = true)) ||
+            (myPushToken.isNotBlank() && !dev.pushToken.isNullOrBlank() && dev.pushToken == myPushToken) ||
+            (myCleanName.isNotBlank() && devClean.equals(myCleanName, ignoreCase = true)) ||
+            (currentDeviceName.isNotBlank() && (devClean.equals(cleanDeviceDisplayName(currentDeviceName), ignoreCase = true) || dev.name.equals(currentDeviceName, ignoreCase = true)))
+        }
     }
 
-    // Kullanıcının kayıtlı ve eşleşmiş cihazları (kendi telefonu kesinlikle hariç tutulur)
+    fun getSanitizedDeviceName(dev: DiscoveredDevice): String {
+        val raw = dev.name.trim()
+        val isSerialOrUuid = raw.matches(Regex("""^[0-9a-fA-F-]{32,36}$""")) ||
+                             raw.startsWith("remote-") ||
+                             raw.startsWith("manual-") ||
+                             raw.startsWith("self-")
+        if (isSerialOrUuid) {
+            val model = dev.modelCode.trim()
+            if (model.isNotBlank() && !model.matches(Regex("""^[0-9a-fA-F-]{32,36}$"""))) {
+                return model
+            }
+            return if (isDesktopDevice(dev)) "Windows PC" else "Android"
+        }
+        return cleanDeviceDisplayName(raw)
+    }
+
+    // Kullanıcının kayıtlı ve eşleşmiş cihazları (mevcut cihaz hariç tutulur ve kesinlikle tekilleştirilir)
     val discoveredDevices by net.syncswift.discovery.DeviceDiscoveryManager.devices.collectAsState()
     val otherLinkedDevices = remember(registeredDevices, discoveredDevices, currentDeviceId, selfDevice) {
-        val list = mutableListOf<DiscoveredDevice>()
-        // 1. Supabase hesabına kayıtlı cihazlar (mevcut telefon hariç)
-        registeredDevices.filter { !isCurrentSelfDevice(it) }.forEach { list.add(it) }
-
-        // 2. Yerel / eşleşmiş masaüstü cihazları (mevcut telefon hariç, sadece desktop olanlar)
-        discoveredDevices.filter { dev ->
-            !isCurrentSelfDevice(dev) && isDesktopDevice(dev) &&
-            list.none { it.id == dev.id || (it.host.isNotBlank() && it.host == dev.host && it.name == dev.name) }
-        }.forEach { list.add(it) }
-
-        list.distinctBy { it.id.ifBlank { "${it.host}:${it.port}" } }
+        val unique = mutableListOf<DiscoveredDevice>()
+        registeredDevices.filter { !isCurrentSelfDevice(it) }.forEach { regDev ->
+            val clean = getSanitizedDeviceName(regDev)
+            val liveMatch = discoveredDevices.find {
+                it.id == regDev.id ||
+                (it.host.isNotBlank() && it.host != "127.0.0.1" && it.host == regDev.host) ||
+                cleanDeviceDisplayName(it.name).equals(clean, ignoreCase = true)
+            }
+            val resolved = if (liveMatch != null) {
+                regDev.copy(
+                    name = clean,
+                    host = liveMatch.host,
+                    port = liveMatch.port,
+                    isOnline = true,
+                    isRemote = false
+                )
+            } else {
+                regDev.copy(name = clean, isOnline = true)
+            }
+            val alreadyExists = unique.any { u ->
+                (resolved.id.isNotBlank() && u.id == resolved.id) ||
+                (resolved.host.isNotBlank() && resolved.host != "127.0.0.1" && u.host == resolved.host) ||
+                (clean.isNotBlank() && cleanDeviceDisplayName(u.name).equals(clean, ignoreCase = true))
+            }
+            if (!alreadyExists) {
+                unique.add(resolved)
+            }
+        }
+        unique
     }
 
     val linkedMobileDevices = remember(otherLinkedDevices) {
-        otherLinkedDevices.filter { isMobileDevice(it) }
+        val mobiles = otherLinkedDevices.filter { isMobileDevice(it) }
+        if (mobiles.isNotEmpty()) {
+            mobiles
+        } else if (isDesktopPlatform) {
+            otherLinkedDevices.filter { !isDesktopDevice(it) }.ifEmpty { otherLinkedDevices }
+        } else {
+            emptyList()
+        }
     }
 
-    // Masaüstü cihazları (mevcut telefon hariç)
+    // Masaüstü cihazları (mevcut cihaz hariç)
     val linkedDesktopDevices = remember(otherLinkedDevices) {
-        otherLinkedDevices.filter { isDesktopDevice(it) }
+        val desktops = otherLinkedDevices.filter { isDesktopDevice(it) }
+        if (desktops.isNotEmpty()) {
+            desktops
+        } else if (!isDesktopPlatform) {
+            otherLinkedDevices.filter { !isMobileDevice(it) }.ifEmpty { otherLinkedDevices }
+        } else {
+            emptyList()
+        }
     }
 
     val linkedDesktopCount = remember(linkedDesktopDevices) {
@@ -191,19 +242,45 @@ fun ConnectDesktopScreen(
                 clean.contains("name=") -> clean.substringAfter("name=", "").substringBefore("&").replace("%20", " ").trim()
                 else -> "Desktop"
             }
+            val extractedId = when {
+                clean.contains("id=") -> clean.substringAfter("id=", "").substringBefore("&").trim()
+                else -> ""
+            }
             val os = when {
                 clean.contains("os=") -> clean.substringAfter("os=", "").substringBefore("&").trim()
-                else -> "Desktop"
+                else -> "Windows"
             }
 
             fun attemptDirectLocalPairing() {
                 if (host.isNotBlank() && host != "127.0.0.1" && host != "0.0.0.0") {
-                    val dev = net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(host, port, name, os)
+                    val resolvedOs = if (os.isNotBlank()) os else "Windows"
+                    val dev = net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(host, port, name, resolvedOs).let {
+                        if (extractedId.isNotBlank()) it.copy(id = extractedId) else it
+                    }
                     ConnectionManager.requestPairing(dev) { pairRes ->
                         isConnecting = false
                         if (pairRes == PairResult.ACCEPTED) {
                             showNativeToast(copy.connectionAccepted)
-                            refreshDevices()
+                            ConnectionManager.addCachedAccountDevice(dev)
+                            if (userEmail.isNotBlank()) {
+                                scope.launch {
+                                    try {
+                                        SupabaseNetwork.registerDeviceInSupabase(
+                                            email = userEmail,
+                                            deviceId = dev.id,
+                                            deviceName = dev.name,
+                                            deviceType = dev.osType,
+                                            pushToken = dev.pushToken ?: "",
+                                            localIp = dev.host,
+                                            port = dev.port,
+                                            userId = SessionManager.getLoggedInUserId()
+                                        )
+                                    } catch (_: Exception) {}
+                                    refreshDevices()
+                                }
+                            } else {
+                                refreshDevices()
+                            }
                             onDismiss()
                         } else {
                             showNativeToast(copy.codeExpiredOrAlreadyUsed)
@@ -304,272 +381,513 @@ fun ConnectDesktopScreen(
                         .verticalScroll(scrollState)
                         .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
-                // ==========================================
-                // SECTION 1: MOBİL CİHAZLARIM (TOP)
-                // ==========================================
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = copy.myMobileDevices,
-                        color = Cloud,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.3).sp
-                    )
-
-                    Text(
-                        text = copy.formatDeviceCount(1 + linkedMobileDevices.size),
-                        color = Mist,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-
-                // Şuanki cihaz: KUTUSUZ şekilde (boxless)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp, horizontal = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Blue.copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
+                // =========================================================================
+                // SECTION 1: EĞER PC'DEYSEK ÖNCE MASAÜSTÜ, MOBİLDEYSEK ÖNCE MOBİL
+                // =========================================================================
+                if (isDesktopPlatform) {
+                    // ---- DESKTOP PLATFORM: MASAÜSTÜ CİHAZLARIM (BU CİHAZ BURADA) ----
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        MobileDeviceIcon(Modifier.size(20.dp), color = Blue)
-                    }
-
-                    Spacer(Modifier.width(13.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = myCleanName,
+                            text = copy.myDesktopDevices,
                             color = Cloud,
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.3).sp
                         )
-                        Spacer(Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(SuccessGreen)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = "$currentDeviceOs · ${copy.connectedStatus}",
-                                color = Mist,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-
-                    // Passive "Bu Cihaz" Badge (Cannot be removed)
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Blue.copy(alpha = 0.16f))
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
                         Text(
-                            text = copy.currentDeviceBadge,
-                            color = Blue,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Diğer mobil cihazlar (varsa)
-                if (linkedMobileDevices.isNotEmpty()) {
-                    HorizontalDivider(
-                        thickness = 1.dp,
-                        color = InputBorder.copy(alpha = 0.22f),
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    linkedMobileDevices.forEach { dev ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 10.dp, horizontal = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Night),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                MobileDeviceIcon(Modifier.size(20.dp), color = Mist)
-                            }
-
-                            Spacer(Modifier.width(13.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = cleanDeviceDisplayName(dev.name),
-                                    color = Cloud,
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                val statusText = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
-                                Text(
-                                    text = "${dev.osType} · $statusText",
-                                    color = Mist,
-                                    fontSize = 11.5.sp
-                                )
-                            }
-
-                            Spacer(Modifier.width(8.dp))
-
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = ErrorRed.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.32f)),
-                                modifier = Modifier.clickable {
-                                    deviceToConfirmRemove = dev
-                                }
-                            ) {
-                                Text(
-                                    text = copy.removeAction,
-                                    color = ErrorRed,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(28.dp))
-
-                // ==========================================
-                // SECTION 2: MASAÜSTÜ CİHAZLARIM (BOTTOM)
-                // ==========================================
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = copy.myDesktopDevices,
-                        color = Cloud,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.3).sp
-                    )
-
-                    if (linkedDesktopDevices.isNotEmpty()) {
-                        Text(
-                            text = copy.formatDeviceCount(linkedDesktopDevices.size),
+                            text = copy.formatDeviceCount(1 + linkedDesktopDevices.size),
                             color = Mist,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
-                }
-                Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                if (linkedDesktopDevices.isEmpty()) {
-                    Surface(
+                    // Bu Cihaz (Masaüstü PC)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp, horizontal = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E293B)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            DevicePlatformIcon(
+                                name = myCleanName,
+                                osType = currentDeviceOs,
+                                modelCode = currentDeviceOs,
+                                color = Blue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.width(13.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = myCleanName,
+                                color = Cloud,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(SuccessGreen)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "$currentDeviceOs · ${copy.connectedStatus}",
+                                    color = Mist,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        // Passive "Bu Cihaz" Badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF1E293B))
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = copy.currentDeviceBadge,
+                                color = Blue,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Varsa diğer masaüstü cihazlar
+                    if (linkedDesktopDevices.isNotEmpty()) {
+                        HorizontalDivider(
+                            thickness = 1.dp,
+                            color = InputBorder.copy(alpha = 0.3f),
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        linkedDesktopDevices.forEach { dev ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp, horizontal = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Night),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    DevicePlatformIcon(
+                                        name = dev.name,
+                                        osType = dev.osType,
+                                        modelCode = dev.modelCode,
+                                        color = Mist,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(Modifier.width(13.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = cleanDeviceDisplayName(dev.name),
+                                        color = Cloud,
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "${dev.osType} · ${if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping}",
+                                        color = Mist,
+                                        fontSize = 11.5.sp
+                                    )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF2A1515),
+                                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.4f)),
+                                    modifier = Modifier.clickable { deviceToConfirmRemove = dev }
+                                ) {
+                                    Text(
+                                        text = copy.removeAction,
+                                        color = ErrorRed,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(28.dp))
+
+                    // ---- DESKTOP PLATFORM: MOBİL CİHAZLARIM (ALTTA) ----
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        color = CardSurface,
-                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.3f))
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = copy.noLinkedDesktop,
-                            color = Mist,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(16.dp),
-                            textAlign = TextAlign.Center
+                            text = copy.myMobileDevices,
+                            color = Cloud,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.3).sp
                         )
+                        if (linkedMobileDevices.isNotEmpty()) {
+                            Text(
+                                text = copy.formatDeviceCount(linkedMobileDevices.size),
+                                color = Mist,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
-                } else {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = CardSurface,
-                        border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.35f))
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            linkedDesktopDevices.forEachIndexed { index, dev ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 13.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
+                    Spacer(Modifier.height(10.dp))
+
+                    if (linkedMobileDevices.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = copy.noLinkedMobile,
+                                color = Mist,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(16.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                linkedMobileDevices.forEachIndexed { index, dev ->
+                                    Row(
                                         modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(CircleShape)
-                                            .background(Blue.copy(alpha = 0.14f)),
-                                        contentAlignment = Alignment.Center
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 13.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        DevicePlatformIcon(
-                                            name = dev.name,
-                                            osType = dev.osType,
-                                            modelCode = dev.modelCode,
-                                            color = Blue,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-
-                                    Spacer(Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = cleanDeviceDisplayName(dev.name),
-                                            color = Cloud,
-                                            fontSize = 14.5.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                        val statusText = if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping
-                                        Text(
-                                            text = "${dev.osType} · $statusText",
-                                            color = Mist,
-                                            fontSize = 11.5.sp
-                                        )
-                                    }
-
-                                    Spacer(Modifier.width(8.dp))
-
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = ErrorRed.copy(alpha = 0.12f),
-                                        border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.32f)),
-                                        modifier = Modifier.clickable {
-                                            deviceToConfirmRemove = dev
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF1E293B)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            MobileDeviceIcon(Modifier.size(20.dp), color = Blue)
                                         }
-                                    ) {
-                                        Text(
-                                            text = copy.removeAction,
-                                            color = ErrorRed,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                        )
+
+                                        Spacer(Modifier.width(12.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = cleanDeviceDisplayName(dev.name),
+                                                color = Cloud,
+                                                fontSize = 14.5.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = "${dev.osType} · ${if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping}",
+                                                color = Mist,
+                                                fontSize = 11.5.sp
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(8.dp))
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF2A1515),
+                                            border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.4f)),
+                                            modifier = Modifier.clickable { deviceToConfirmRemove = dev }
+                                        ) {
+                                            Text(
+                                                text = copy.removeAction,
+                                                color = ErrorRed,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                            )
+                                        }
+                                    }
+                                    if (index < linkedMobileDevices.size - 1) {
+                                        HorizontalDivider(thickness = 1.dp, color = InputBorder.copy(alpha = 0.25f))
                                     }
                                 }
+                            }
+                        }
+                    }
+                } else {
+                    // ---- MOBİL PLATFORM: MOBİL CİHAZLARIM (BU CİHAZ BURADA) ----
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = copy.myMobileDevices,
+                            color = Cloud,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.3).sp
+                        )
+                        Text(
+                            text = copy.formatDeviceCount(1 + linkedMobileDevices.size),
+                            color = Mist,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
 
-                                if (index < linkedDesktopDevices.size - 1) {
-                                    HorizontalDivider(
-                                        thickness = 1.dp,
-                                        color = InputBorder.copy(alpha = 0.22f)
+                    // Bu Cihaz (Mobil Telefon)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp, horizontal = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E293B)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            MobileDeviceIcon(Modifier.size(20.dp), color = Blue)
+                        }
+
+                        Spacer(Modifier.width(13.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = myCleanName,
+                                color = Cloud,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(SuccessGreen)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "$currentDeviceOs · ${copy.connectedStatus}",
+                                    color = Mist,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        // Passive "Bu Cihaz" Badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF1E293B))
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = copy.currentDeviceBadge,
+                                color = Blue,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Varsa diğer mobil cihazlar
+                    if (linkedMobileDevices.isNotEmpty()) {
+                        HorizontalDivider(
+                            thickness = 1.dp,
+                            color = InputBorder.copy(alpha = 0.3f),
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        linkedMobileDevices.forEach { dev ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp, horizontal = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Night),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    MobileDeviceIcon(Modifier.size(20.dp), color = Mist)
+                                }
+                                Spacer(Modifier.width(13.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = cleanDeviceDisplayName(dev.name),
+                                        color = Cloud,
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "${dev.osType} · ${if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping}",
+                                        color = Mist,
+                                        fontSize = 11.5.sp
+                                    )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF2A1515),
+                                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.4f)),
+                                    modifier = Modifier.clickable { deviceToConfirmRemove = dev }
+                                ) {
+                                    Text(
+                                        text = copy.removeAction,
+                                        color = ErrorRed,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(28.dp))
+
+                    // ---- MOBİL PLATFORM: MASAÜSTÜ CİHAZLARIM (ALTTA) ----
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = copy.myDesktopDevices,
+                            color = Cloud,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.3).sp
+                        )
+                        if (linkedDesktopDevices.isNotEmpty()) {
+                            Text(
+                                text = copy.formatDeviceCount(linkedDesktopDevices.size),
+                                color = Mist,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+
+                    if (linkedDesktopDevices.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = copy.noLinkedDesktop,
+                                color = Mist,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(16.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                linkedDesktopDevices.forEachIndexed { index, dev ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 13.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF1E293B)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            DevicePlatformIcon(
+                                                name = dev.name,
+                                                osType = dev.osType,
+                                                modelCode = dev.modelCode,
+                                                color = Blue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(12.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = cleanDeviceDisplayName(dev.name),
+                                                color = Cloud,
+                                                fontSize = 14.5.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = "${dev.osType} · ${if (dev.isOnline) copy.connectedStatus else copy.offlineSleeping}",
+                                                color = Mist,
+                                                fontSize = 11.5.sp
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(8.dp))
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF2A1515),
+                                            border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.4f)),
+                                            modifier = Modifier.clickable { deviceToConfirmRemove = dev }
+                                        ) {
+                                            Text(
+                                                text = copy.removeAction,
+                                                color = ErrorRed,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                            )
+                                        }
                                 }
                             }
                         }
@@ -870,6 +1188,7 @@ fun ConnectDesktopScreen(
             }
         }
     }
+}
 }
 
 @Composable

@@ -904,7 +904,12 @@ actual object TransferEngine {
             val fcmSent = ConnectionManager.sendFcmNotification(
                 token = token,
                 title = targetCopy.notificationFileRequestTitle,
-                body = targetCopy.notificationFileRequestBody.replace("%s", selfName).replace("%f", fileName),
+                body = net.syncswift.formatNotificationBody(
+                    template = targetCopy.notificationFileRequestBody,
+                    senderName = selfName,
+                    itemName = fileName,
+                    sizeStr = formatBytes(fileBytes.size.toLong())
+                ),
                 data = mapOf(
                     "type" to "file_request",
                     "transferId" to transferId,
@@ -1195,10 +1200,12 @@ actual object TransferEngine {
         val targetDev = DeviceDiscoveryManager.devices.value.find { it.host == targetHost || it.name == targetName }
         val targetCopy = net.syncswift.copyForLanguageCode(targetDev?.language)
         val preview = text.trim().replace("\n", " ").take(100)
-        val notificationBody = targetCopy.notificationFileRequestBody
-            .replace("%s", selfName)
-            .replace("%s", "${currentAppCopy().clipboard}: $preview")
-            .replace("(%s)", "")
+        val notificationBody = net.syncswift.formatNotificationBody(
+            template = targetCopy.notificationFileRequestBody,
+            senderName = selfName,
+            itemName = "${currentAppCopy().clipboard}: $preview",
+            sizeStr = ""
+        )
         return ConnectionManager.sendFcmNotification(
             token = token,
             title = targetCopy.notificationFileRequestTitle,

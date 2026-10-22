@@ -266,7 +266,7 @@ fun WorkspaceScreen(
                                     .background(primaryBlue.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                FolderVectorIcon(Modifier.size(36.dp), color = primaryBlue)
+                                WorkspaceEmptyStateIcon(Modifier.size(36.dp), color = primaryBlue)
                             }
                             Spacer(Modifier.height(16.dp))
                             Text(

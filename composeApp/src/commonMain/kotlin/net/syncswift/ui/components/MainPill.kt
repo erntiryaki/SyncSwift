@@ -52,9 +52,10 @@ fun MainPill(
         } else {
             Text(
                 text = text,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = platformFontFamily()
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = platformFontFamily(),
+                letterSpacing = 0.1.sp
             )
         }
     }

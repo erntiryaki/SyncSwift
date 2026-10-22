@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SyncSwift</string>
+    <string name="shortcut_send_file_short">Отправить файл</string>
+    <string name="shortcut_send_file_long">Отправить файл на устройство</string>
+    <string name="shortcut_send_clipboard_short">Отправить буфер</string>
+    <string name="shortcut_send_clipboard_long">Отправить буфер обмена на устройство</string>
+</resources>

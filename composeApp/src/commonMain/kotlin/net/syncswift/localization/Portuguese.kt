@@ -276,8 +276,8 @@ val PortugueseCopy = Copy().apply {
     availableDevicesSection = "Outros dispositivos na rede"
     localConnectedDevices = "Dispositivos locais (Mesmo Wi-Fi)"
     remoteConnectedDevices = "Dispositivos conectados remotamente"
-    remotePairingTitle = "Emparelhamento remoto"
-    remotePairingSubtitle = "Emparelhe dispositivos através de diferentes redes remotamente."
+    remotePairingTitle = "Emparelhar novo dispositivo"
+    remotePairingSubtitle = "Emparelhe seus dispositivos permanentemente com código QR ou código de 6 dígitos."
     codeExpiresIn = "Atualiza em: %s s"
     enter6DigitCode = "Código de emparelhamento de 6 dígitos"
     enter6DigitCodeHint = "123 456"
@@ -630,4 +630,19 @@ val PortugueseCopy = Copy().apply {
     clearClipboardHistory = "Limpar histórico"
     clearClipboardConfirm = "Tem certeza de que deseja limpar todo o histórico da área de transferência?"
     filesCountSuffix = "arquivos"
+
+    // Auto Transfer Feature
+    autoTransfer = "Transferência automática"
+    autoTransferDesc = "Transfira diretamente a área de transferência e arquivos entre seus próprios dispositivos sem confirmação"
+    autoTransferSuccess = "Transferido automaticamente"
+    autoTransferFileReceived = "Arquivo recebido automaticamente: %s"
+    autoTransferClipboardReceived = "Área de transferência sincronizada automaticamente"
+
+    // Shortcuts & Native Share Sheet
+    shortcutSendFileShort = "Enviar arquivo"
+    shortcutSendFileLong = "Enviar arquivo para o dispositivo"
+    shortcutSendClipboardShort = "Enviar área transf."
+    shortcutSendClipboardLong = "Enviar área de transferência para o dispositivo"
+    clipboardEmpty = "Área de transferência vazia"
+    shareTargetTitle = "Compartilhar com SyncSwift"
 }

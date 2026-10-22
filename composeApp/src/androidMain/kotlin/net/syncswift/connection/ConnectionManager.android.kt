@@ -58,6 +58,9 @@ actual object ConnectionManager {
 
     private var codeRotationJob: Job? = null
 
+    private val handledRemoteTransferIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private var remotePollJob: Job? = null
+
     init {
         val savedConnected = SessionManager.getSavedConnectedDeviceKeys()
         val savedRemote = SessionManager.getSavedRemoteConnectedDeviceKeys()
@@ -68,6 +71,48 @@ actual object ConnectionManager {
             _remoteConnectedDeviceKeys.value = savedRemote
         }
         generateOrRotatePairingCode()
+        startRemoteTransferPolling()
+    }
+
+    private fun startRemoteTransferPolling() {
+        remotePollJob?.cancel()
+        remotePollJob = scope.launch {
+            while (isActive) {
+                try {
+                    val myId = SessionManager.getPlatformDeviceId()
+                    val myName = cleanDeviceDisplayName(SessionManager.getMyDeviceName())
+                    val pending = SupabaseNetwork.pollPendingRemoteTransfers(myId, myName)
+                    for (item in pending) {
+                        val transferId = item["transferId"] ?: continue
+                        if (handledRemoteTransferIds.contains(transferId)) continue
+                        val devType = item["deviceType"] ?: "RemoteFile"
+                        val senderName = item["senderName"] ?: "Remote Device"
+                        val fileName = item["fileName"] ?: "File"
+                        val fileSize = item["fileSize"]?.toLongOrNull() ?: 0L
+                        val mimeType = item["mimeType"] ?: "application/octet-stream"
+                        val content = item["content"] ?: ""
+
+                        if (content.isBlank()) continue
+                        handledRemoteTransferIds.add(transferId)
+
+                        val request = IncomingTransferRequest(
+                            senderName = senderName,
+                            fileName = fileName,
+                            fileSize = fileSize,
+                            mimeType = mimeType,
+                            senderHost = "remote",
+                            senderPort = 52424,
+                            transferId = transferId,
+                            downloadUrl = content,
+                            isRemote = true,
+                            senderLanguage = "en"
+                        )
+                        dispatchIncomingTransferRequest(request)
+                    }
+                } catch (_: Exception) {}
+                delay(2200)
+            }
+        }
     }
 
     private fun deviceKey(host: String, port: Int): String = "$host:$port"
@@ -81,6 +126,57 @@ actual object ConnectionManager {
                (device.host.isNotBlank() && set.contains(device.host)) ||
                (clean.isNotBlank() && set.contains(clean)) ||
                (device.name.isNotBlank() && set.contains(device.name))
+    }
+
+    private val _cachedAccountDevices = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
+    actual fun updateCachedAccountDevices(devices: List<DiscoveredDevice>) {
+        _cachedAccountDevices.value = devices
+    }
+    actual fun getCachedAccountDevices(): List<DiscoveredDevice> = _cachedAccountDevices.value
+    actual fun addCachedAccountDevice(device: DiscoveredDevice) {
+        val current = _cachedAccountDevices.value.filter { it.id != device.id && (device.host.isBlank() || it.host != device.host) }
+        _cachedAccountDevices.value = listOf(device) + current
+    }
+
+    fun isSenderMyDevice(senderHost: String, senderPort: Int = 52424, senderName: String = "", senderId: String = ""): Boolean {
+        val clean = cleanDeviceDisplayName(senderName)
+
+        // 1. Check if it's an authenticated desktop device in My Devices (via QR code / desktop pairing)
+        val discovered = DeviceDiscoveryManager.devices.value
+        val matchedDev = discovered.firstOrNull { dev ->
+            (senderId.isNotBlank() && dev.id == senderId) ||
+            (senderHost.isNotBlank() && dev.host == senderHost) ||
+            (clean.isNotBlank() && cleanDeviceDisplayName(dev.name) == clean)
+        }
+        if (matchedDev != null) {
+            val t = matchedDev.osType.lowercase()
+            val isDesktop = t.contains("windows") || t.contains("mac") || t.contains("desktop") || t.contains("pc")
+            if (isDesktop) return true
+        }
+
+        // 2. Check if the device is registered under the user's Supabase account (same auth account)
+        val accountDevs = _cachedAccountDevices.value
+        if (accountDevs.any { dev ->
+            (senderId.isNotBlank() && dev.id == senderId) ||
+            (senderHost.isNotBlank() && dev.host == senderHost) ||
+            (clean.isNotBlank() && cleanDeviceDisplayName(dev.name) == clean)
+        }) {
+            return true
+        }
+
+        return false
+    }
+
+    fun isSenderTrusted(senderHost: String, senderPort: Int = 52424, senderName: String = "", senderId: String = ""): Boolean {
+        if (isSenderMyDevice(senderHost, senderPort, senderName, senderId)) return true
+        val key = deviceKey(senderHost, senderPort)
+        val clean = cleanDeviceDisplayName(senderName)
+        val set = _connectedDeviceKeys.value + _remoteConnectedDeviceKeys.value
+        return set.contains(key) ||
+               (senderId.isNotBlank() && set.contains(senderId)) ||
+               (senderHost.isNotBlank() && set.contains(senderHost)) ||
+               (clean.isNotBlank() && set.contains(clean)) ||
+               (senderName.isNotBlank() && set.contains(senderName))
     }
 
     actual fun isRemoteDevice(device: DiscoveredDevice): Boolean {
@@ -168,57 +264,38 @@ actual object ConnectionManager {
 
     fun dispatchIncomingPairRequest(request: IncomingPairRequest) {
         val now = System.currentTimeMillis()
-        val key = "${request.senderId}_${request.senderHost}_${request.senderName}"
+        val key = if (request.senderId.isNotBlank()) request.senderId else deviceKey(request.senderHost, request.senderPort)
         val lastHandled = recentlyHandledPairKeys[key] ?: 0L
-        if (now - lastHandled < 10000L) {
-            Log.d(TAG, "Ignoring duplicate pair request for $key within 10s")
-            return
-        }
-        val current = _pendingPairRequest.value
-        if (current != null && (current.requestId == request.requestId ||
-            (request.senderId.isNotBlank() && current.senderId == request.senderId) ||
-            (request.senderHost.isNotBlank() && current.senderHost == request.senderHost))) {
-            Log.d(TAG, "Pair request already pending for ${request.senderName}, ignoring duplicate")
+        if (now - lastHandled < 3000L) {
+            Log.d(TAG, "Ignoring rapid duplicate pair request for $key")
             return
         }
         recentlyHandledPairKeys[key] = now
-        _pendingPairRequest.value = request
+        Log.d(TAG, "Directly auto-accepting pair request from ${request.senderName}")
+        acceptPairRequest(request)
     }
 
     fun dispatchIncomingTransferRequest(request: IncomingTransferRequest) {
         val now = System.currentTimeMillis()
         val key = if (request.transferId.isNotBlank()) request.transferId else "${request.senderHost}_${request.fileName}_${request.fileSize}"
         val lastHandled = recentlyHandledTransferIds[key] ?: 0L
-        if (now - lastHandled < 15000L) {
-            Log.d(TAG, "Ignoring duplicate transfer request for $key within 15s")
-            return
-        }
-        val current = _pendingTransferRequest.value
-        if (current != null && (current.requestId == request.requestId ||
-            (request.transferId.isNotBlank() && current.transferId == request.transferId))) {
-            Log.d(TAG, "Transfer request already pending for $key, ignoring duplicate")
+        if (now - lastHandled < 3000L) {
+            Log.d(TAG, "Ignoring rapid duplicate transfer request for $key")
             return
         }
         recentlyHandledTransferIds[key] = now
-        _pendingTransferRequest.value = request
+        Log.d(TAG, "Directly auto-approving incoming transfer from ${request.senderName}")
+        if (!request.deferredResponse.isCompleted) {
+            request.deferredResponse.complete(true)
+        }
+        acceptTransferRequest(request)
     }
 
     actual fun acceptPairRequest(request: IncomingPairRequest) {
         val key = deviceKey(request.senderHost, request.senderPort)
-        if (_pendingPairRequest.value?.requestId != request.requestId ||
-            isRequestCancelled(key) ||
-            isRequestCancelled(request.senderId) ||
-            isRequestCancelled(request.senderHost)) {
-            _pendingPairRequest.value = null
-            request.deferredResponse.complete(false)
-            showNativeToast(currentAppCopy().requestCancelledBySender)
-            return
-        }
         _pendingPairRequest.value = null
-        val completed = request.deferredResponse.complete(true)
-        if (!completed) {
-            showNativeToast(currentAppCopy().requestCancelledBySender)
-            return
+        if (!request.deferredResponse.isCompleted) {
+            request.deferredResponse.complete(true)
         }
         val matchedDev = DeviceDiscoveryManager.devices.value.firstOrNull {
             it.host == request.senderHost || cleanDeviceDisplayName(it.name) == cleanDeviceDisplayName(request.senderName)
@@ -362,15 +439,15 @@ actual object ConnectionManager {
     }
 
     actual fun acceptTransferRequest(request: IncomingTransferRequest) {
-        if (_pendingTransferRequest.value?.requestId != request.requestId) {
-            showNativeToast(currentAppCopy().transferCancelledBySender)
-            return
+        if (_pendingTransferRequest.value?.requestId == request.requestId) {
+            _pendingTransferRequest.value = null
         }
-        _pendingTransferRequest.value = null
-        val completed = request.deferredResponse.complete(true)
-        if (!completed) {
-            showNativeToast(currentAppCopy().transferCancelledBySender)
-            return
+        if (!request.deferredResponse.isCompleted) {
+            val completed = request.deferredResponse.complete(true)
+            if (!completed) {
+                showNativeToast(currentAppCopy().transferCancelledBySender)
+                return
+            }
         }
         if (request.senderHost.isNotBlank()) {
             DeviceDiscoveryManager.markDeviceSeen(request.senderHost, request.senderName)
@@ -379,68 +456,15 @@ actual object ConnectionManager {
         if (request.mimeType == "text/plain") {
             val clipText = request.downloadUrl
             val copy = currentAppCopy()
-            net.syncswift.transfer.TransferEngine.applyReceivedClipboard(clipText, copy)
+            val ctx = SessionManager.getAppContext()
+            if (ctx != null) {
+                try {
+                    val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("SyncSwift", clipText))
+                    net.syncswift.clipboard.ClipboardHistoryManager.addClip(clipText)
+                } catch (_: Exception) {}
+            }
             showNativeToast(copy.clipboardCopiedSuccess)
-            scope.launch {
-                val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
-                if (!senderToken.isNullOrBlank()) {
-                    val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
-                    val self = DeviceDiscoveryManager.getSelfDevice()
-                    val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
-                    sendFcmNotification(
-                        token = senderToken,
-                        title = targetCopy.syncClipboardAction,
-                        body = targetCopy.clipboardSentSuccess.replace("%s", clipText.take(30)),
-                        data = mapOf(
-                            "type" to "clipboard_accepted",
-                            "preview" to clipText.take(30),
-                            "transferId" to request.transferId,
-                            "senderName" to selfName
-                        )
-                    )
-                }
-            }
-        } else if (request.isRemote && request.downloadUrl.isNotBlank()) {
-            scope.launch {
-                val senderToken = if (request.senderPushToken.isNotBlank()) request.senderPushToken else queryPushTokenFromSupabase(request.senderHost, request.senderName)
-                if (!senderToken.isNullOrBlank()) {
-                    val targetCopy = net.syncswift.copyForLanguageCode(request.senderLanguage)
-                    val self = DeviceDiscoveryManager.getSelfDevice()
-                    val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
-                    sendFcmNotification(
-                        token = senderToken,
-                        title = targetCopy.notificationFileRequestTitle,
-                        body = targetCopy.fileSentSuccessfully.replace("%s", request.fileName),
-                        data = mapOf(
-                            "type" to "file_accepted",
-                            "transferId" to request.transferId,
-                            "fileName" to request.fileName,
-                            "senderName" to selfName
-                        )
-                    )
-                }
-            }
-            net.syncswift.transfer.TransferEngine.downloadRemoteFile(
-                downloadUrl = request.downloadUrl,
-                fileName = request.fileName,
-                fileSize = request.fileSize,
-                mimeType = request.mimeType,
-                transferId = request.transferId,
-                senderName = request.senderName,
-                senderHost = request.senderHost,
-                senderPushToken = request.senderPushToken,
-                senderLanguage = request.senderLanguage
-            )
-        } else if (request.senderHost.isNotBlank() && request.transferId.isNotBlank()) {
-            net.syncswift.transfer.TransferEngine.downloadStagedFile(
-                senderHost = request.senderHost,
-                senderPort = request.senderPort,
-                senderName = request.senderName,
-                transferId = request.transferId,
-                fileName = request.fileName,
-                fileSize = request.fileSize,
-                mimeType = request.mimeType
-            )
         }
     }
 
@@ -449,6 +473,11 @@ actual object ConnectionManager {
             _pendingTransferRequest.value = null
         }
         request.deferredResponse.complete(false)
+        if (request.isRemote && request.transferId.isNotBlank()) {
+            scope.launch {
+                SupabaseNetwork.updateRemoteTransferStatus(request.transferId, "REJECTED")
+            }
+        }
         scope.launch {
             val senderToken = queryPushTokenFromSupabase(request.senderHost, request.senderName)
             if (!senderToken.isNullOrBlank()) {
@@ -510,7 +539,12 @@ actual object ConnectionManager {
                 val self = DeviceDiscoveryManager.getSelfDevice()
                 val selfId = java.util.UUID.nameUUIDFromBytes("${Build.MANUFACTURER}_${Build.MODEL}_${Build.ID}".toByteArray()).toString()
                 val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
-                val selfHost = self?.host ?: ""
+                val detectedIp = DeviceDiscoveryManager.getLocalIpAddress() ?: ""
+                val selfHost = if (!detectedIp.startsWith("100.") && detectedIp.isNotBlank()) {
+                    detectedIp
+                } else {
+                    (self?.host ?: "").ifBlank { detectedIp }
+                }
                 val selfPort = self?.port ?: 52424
                 val ctx = SessionManager.getAppContext()
                 val pushToken = if (ctx != null) SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
@@ -535,6 +569,7 @@ actual object ConnectionManager {
                     put("push_token", pushToken)
                     put("host", selfHost)
                     put("port", selfPort)
+                    put("expires_at", java.time.Instant.now().plusSeconds(600).toString())
                 }
 
                 conn.outputStream.use { os ->
@@ -575,7 +610,9 @@ actual object ConnectionManager {
                         val expiresAtStr = obj.optString("expires_at", "")
                         val isExpired = try {
                             if (expiresAtStr.isNotBlank()) {
-                                java.time.Instant.parse(expiresAtStr).isBefore(java.time.Instant.now())
+                                val expiry = java.time.Instant.parse(expiresAtStr)
+                                // Allow 5 minutes clock drift tolerance between devices
+                                expiry.plusSeconds(300).isBefore(java.time.Instant.now())
                             } else false
                         } catch (_: Exception) { false }
 
@@ -613,10 +650,10 @@ actual object ConnectionManager {
                             val myPushToken = if (ctx != null) SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
                             sendFcmNotification(
                                 token = pushToken,
-                                title = targetCopy.notificationPairRequestTitle,
-                                body = targetCopy.notificationPairRequestBody.replace("%s", selfName),
+                                title = targetCopy.connectionAccepted,
+                                body = targetCopy.notificationPairAcceptedStatus.replace("%s", selfName),
                                 data = mapOf(
-                                    "type" to "pair_request",
+                                    "type" to "pair_accepted",
                                     "senderId" to (self?.id ?: ""),
                                     "senderName" to selfName,
                                     "senderHost" to (self?.host ?: ""),
@@ -663,19 +700,54 @@ actual object ConnectionManager {
                                 Log.e("ConnectionManager", "PATCH pairing_codes error: ${e.message}")
                             }
 
-                            if (deviceId.isNotBlank() && !isLocal) {
+                            // 1. Direct LAN HTTP /api/pair to desktop so it instantly authorizes and transitions
+                            if (targetHost.isNotBlank() && !targetHost.startsWith("remote-") && targetHost != "127.0.0.1") {
+                                try {
+                                    val pairUrl = URL("http://$targetHost:$port/api/pair")
+                                    val pairConn = pairUrl.openConnection() as HttpURLConnection
+                                    pairConn.requestMethod = "POST"
+                                    pairConn.doOutput = true
+                                    pairConn.connectTimeout = 3000
+                                    pairConn.readTimeout = 3000
+                                    pairConn.setRequestProperty("Content-Type", "application/json")
+                                    val self = DeviceDiscoveryManager.getSelfDevice()
+                                    val selfName = cleanDeviceDisplayName(self?.name ?: Build.MODEL)
+                                    val selfHost = DeviceDiscoveryManager.getLocalIpAddress() ?: (self?.host ?: "")
+                                    val myPush = if (SessionManager.getAppContext() != null) SyncSwiftFirebaseMessagingService.getSavedToken(SessionManager.getAppContext()!!) ?: "" else ""
+                                    val payload = org.json.JSONObject().apply {
+                                        put("id", self?.id ?: "mobile")
+                                        put("name", selfName)
+                                        put("host", selfHost)
+                                        put("port", self?.port ?: 52424)
+                                        put("os", "Android")
+                                        put("email", rawEmail)
+                                        put("push_token", myPush)
+                                    }
+                                    pairConn.outputStream.use { it.write(payload.toString().toByteArray()) }
+                                    val code = pairConn.responseCode
+                                    Log.d("ConnectionManager", "Direct LAN HTTP /api/pair to desktop: HTTP $code")
+                                } catch (e: Exception) {
+                                    Log.w("ConnectionManager", "Direct LAN HTTP /api/pair failed: ${e.message}")
+                                }
+                            }
+
+                            // 2. Register desktop device in Supabase devices table so it appears in My Devices list
+                            if (rawEmail.isNotBlank()) {
                                 try {
                                     SupabaseNetwork.registerDeviceInSupabase(
-                                        email = effectiveIdentifier,
+                                        email = rawEmail,
                                         deviceId = deviceId,
                                         deviceName = deviceName,
                                         deviceType = deviceType,
-                                        pushToken = "",
-                                        localIp = host,
+                                        pushToken = pushToken,
+                                        localIp = targetHost,
                                         port = port,
                                         userId = rawUserId.ifBlank { null }
                                     )
-                                } catch (_: Exception) {}
+                                    Log.d("ConnectionManager", "Registered desktop $deviceName ($deviceId) in Supabase devices")
+                                } catch (e: Exception) {
+                                    Log.e("ConnectionManager", "Error registering desktop in devices table: ${e.message}")
+                                }
                             }
                         }
 
@@ -693,14 +765,10 @@ actual object ConnectionManager {
                             isOnline = true
                         )
                         DeviceDiscoveryManager.addOrUpdateConnectedDevice(newDev)
+                        addCachedAccountDevice(newDev)
 
                         withContext(Dispatchers.Main) {
                             onResult(PairResult.ACCEPTED)
-                        }
-                        return@launch
-
-                        withContext(Dispatchers.Main) {
-                            onResult(PairResult.PENDING_APPROVAL)
                         }
                         return@launch
                     }
@@ -785,75 +853,21 @@ actual object ConnectionManager {
             }
         }
 
-        OutgoingStatusManager.show(
-            type = OutgoingStatusType.CONNECTION,
-            deviceName = target.name,
-            step = OutgoingStep.WAITING_APPROVAL,
-            message = copy.waitingForRecipientApproval,
-            onCancel = cancelPairing
-        )
+        // LocalSend Architecture: Direct HTTP pair with zero approval wait
+        if (target.host.isNotBlank() && !target.host.startsWith("remote-")) {
+            net.syncswift.transfer.LocalSendClient.sendPair(
+                targetHost = target.host,
+                targetPort = target.port,
+                targetDevice = target,
+                onResult = onResult
+            )
+            return
+        }
 
         pairJob = scope.launch {
-            val isLocalDiscovered = target.isOnline && !target.isRemote && !target.host.startsWith("remote-") &&
-                    !isRemoteDevice(target) && DeviceDiscoveryManager.devices.value.any { it.host == target.host && it.isOnline && !it.isRemote }
-
-            // 1. Direct TCP handshake if local discovered
-            if (isLocalDiscovered && target.host.isNotBlank()) {
-                try {
-                    val socket = Socket()
-                    activeSocket = socket
-                    socket.connect(InetSocketAddress(target.host, target.port), 3500)
-                    socket.soTimeout = 35000
-                    socket.use { s ->
-                        val out = DataOutputStream(s.getOutputStream())
-                        val input = DataInputStream(s.getInputStream())
-
-                        out.writeByte(PROTOCOL_VERSION.toInt())
-                        out.writeByte(TYPE_PAIR_REQUEST.toInt())
-                        out.writeUTF(selfName)
-                        out.writeUTF(selfHost)
-                        out.writeInt(selfPort)
-                        out.writeUTF(selfOs)
-                        out.flush()
-
-                        val response = input.readByte()
-                        val currentCopy = currentAppCopy()
-                        if (response == RESP_ACCEPTED) {
-                            markDeviceConnected(deviceKey(target.host, target.port), isRemote = target.isRemote)
-                            markDeviceConnected(target.id, isRemote = target.isRemote)
-                            markDeviceConnected(target.host, isRemote = target.isRemote)
-                            markDeviceConnected(target.name, isRemote = target.isRemote)
-                            markDeviceConnected(cleanDeviceDisplayName(target.name), isRemote = target.isRemote)
-                            DeviceDiscoveryManager.addOrUpdateConnectedDevice(target)
-                            DeviceDiscoveryManager.saveManualDevices()
-                            OutgoingStatusManager.completeSuccess(currentCopy.connectionAccepted)
-                            withContext(Dispatchers.Main) {
-                                onResult(PairResult.ACCEPTED)
-                            }
-                            return@launch
-                        } else {
-                            markDeviceDisconnected(deviceKey(target.host, target.port))
-                            markDeviceDisconnected(target.id)
-                            markDeviceDisconnected(target.host)
-                            markDeviceDisconnected(target.name)
-                            markDeviceDisconnected(cleanDeviceDisplayName(target.name))
-                            OutgoingStatusManager.fail(currentCopy.connectionRequestRejected)
-                            withContext(Dispatchers.Main) {
-                                onResult(PairResult.REJECTED)
-                            }
-                            return@launch
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.d(TAG, "Direct socket pair failed: ${e.message}")
-                } finally {
-                    activeSocket = null
-                }
-            }
-
             if (isCancelled || !isActive) return@launch
 
-            // 2. Fallback or Direct to FCM Wake-up Push Notification in target's language
+            // 2. Fallback to FCM Wake-up Push Notification
             var token = target.pushToken
             if (token.isNullOrBlank() && target.host.isNotBlank()) {
                 token = queryPushTokenFromSupabase(target.host, target.name)
@@ -865,13 +879,12 @@ actual object ConnectionManager {
                 Log.d(TAG, "Sending FCM wake-up pairing request to token: $token")
                 val ctx = SessionManager.getAppContext()
                 val myPushToken = if (ctx != null) SyncSwiftFirebaseMessagingService.getSavedToken(ctx) ?: "" else ""
-                val isRemoteTarget = target.isRemote || !isLocalDiscovered || target.host.startsWith("remote-")
                 val fcmSent = sendFcmNotification(
                     token = token,
-                    title = targetCopy.notificationPairRequestTitle,
-                    body = targetCopy.notificationPairRequestBody.replace("%s", selfName),
+                    title = targetCopy.connectionAccepted,
+                    body = targetCopy.notificationPairAcceptedStatus.replace("%s", selfName),
                     data = mapOf(
-                        "type" to "pair_request",
+                        "type" to "pair_accepted",
                         "senderId" to (self?.id ?: ""),
                         "senderName" to selfName,
                         "senderHost" to selfHost,
@@ -879,29 +892,21 @@ actual object ConnectionManager {
                         "senderOs" to selfOs,
                         "senderPushToken" to myPushToken,
                         "senderLanguage" to (SessionManager.getSavedLanguage() ?: net.syncswift.getSystemLanguageCode()),
-                        "isRemote" to "$isRemoteTarget",
+                        "isRemote" to "true",
                         "timestamp" to "${System.currentTimeMillis()}"
                     )
                 )
                 if (isCancelled || !isActive) return@launch
 
                 if (fcmSent) {
-                    OutgoingStatusManager.show(
-                        type = OutgoingStatusType.CONNECTION,
-                        deviceName = target.name,
-                        step = OutgoingStep.WAITING_APPROVAL,
-                        message = copy.transferNotificationSentWaiting,
-                        onCancel = cancelPairing
-                    )
                     withContext(Dispatchers.Main) {
-                        onResult(PairResult.PENDING_APPROVAL)
+                        onResult(PairResult.ACCEPTED)
                     }
                     return@launch
                 }
             }
 
             if (isCancelled || !isActive) return@launch
-            OutgoingStatusManager.fail(copy.deviceDidNotRespond)
             withContext(Dispatchers.Main) {
                 onResult(PairResult.UNAVAILABLE)
             }
@@ -944,17 +949,10 @@ actual object ConnectionManager {
         _remoteConnectedDeviceKeys.value = newRemote
         SessionManager.saveRemoteConnectedDeviceKeys(newRemote)
 
-        // Retain devices in DeviceDiscoveryManager so they drop into "Ağdaki Diğer Cihazlar" or "Uzaktan / Çevrimdışı Cihazlar" without disappearing
-        val hasLocalHost = target.host.isNotBlank() && !target.host.startsWith("remote-")
-        val isRemoteDev = target.isRemote || target.host.startsWith("remote-") || target.id.startsWith("remote-") || isRemoteDevice(target)
-        val devToKeep = (if (hasLocalHost) target else matchingDevices.firstOrNull()) ?: target
-
-        DeviceDiscoveryManager.addOrUpdateConnectedDevice(
-            devToKeep.copy(
-                isOnline = if (isRemoteDev) false else true,
-                isRemote = isRemoteDev
-            )
-        )
+        // Completely purge device from DeviceDiscoveryManager manual devices
+        DeviceDiscoveryManager.removeManualDevice(targetHost)
+        DeviceDiscoveryManager.removeManualDevice(clean)
+        DeviceDiscoveryManager.removeManualDevice(targetId)
         DeviceDiscoveryManager.triggerDiscoveryPing()
 
         if (notifyPeer) {
@@ -964,25 +962,11 @@ actual object ConnectionManager {
                 val selfPort = self?.port ?: 52424
                 val selfId = self?.id ?: ""
                 val selfName = self?.name ?: ""
+                val effectivePort = if (target.port > 0) target.port else 52424
 
-                // 1. Try local TCP unpair packet if target has local host
-                if (target.host.isNotBlank() && !target.host.startsWith("remote-") && target.port > 0) {
-                    try {
-                        val socket = Socket()
-                        socket.connect(InetSocketAddress(target.host, target.port), 2500)
-                        socket.use { s ->
-                            val out = DataOutputStream(s.getOutputStream())
-                            out.writeByte(PROTOCOL_VERSION.toInt())
-                            out.writeByte(TYPE_UNPAIR.toInt())
-                            out.writeUTF(selfHost)
-                            out.writeInt(selfPort)
-                            out.writeUTF(selfId)
-                            out.writeUTF(selfName)
-                            out.flush()
-                        }
-                    } catch (e: Exception) {
-                        Log.d(TAG, "Local unpair notification skipped/failed: ${e.message}")
-                    }
+                // 1. Send HTTP POST /api/unpair to peer
+                if (targetHost.isNotBlank() && !targetHost.startsWith("remote-")) {
+                    net.syncswift.transfer.LocalSendClient.sendUnpair(targetHost, effectivePort, target)
                 }
 
                 // 2. Try remote FCM unpair push notification

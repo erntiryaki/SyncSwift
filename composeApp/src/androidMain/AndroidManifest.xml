@@ -42,13 +42,46 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="SyncSwift"
+        android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- App Icon Long-press Launcher Shortcuts -->
+            <intent-filter>
+                <action android:name="net.syncswift.ACTION_SHORTCUT_SEND_FILE" />
+                <action android:name="net.syncswift.ACTION_SHORTCUT_SEND_CLIPBOARD" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- System Share Sheet Target: uses dedicated circular/adaptive ic_share icon -->
+        <activity-alias
+            android:name=".ShareActivity"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_share"
+            android:roundIcon="@mipmap/ic_share_round"
+            android:label="SyncSwift">
+            <!-- System Share Sheet: Send single file, image, video, link or text -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <!-- System Share Sheet: Send multiple files -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity-alias>
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
             android:screenOrientation="portrait"

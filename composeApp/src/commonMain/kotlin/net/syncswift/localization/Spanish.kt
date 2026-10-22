@@ -276,8 +276,8 @@ val SpanishCopy = Copy().apply {
     availableDevicesSection = "Otros dispositivos en la red"
     localConnectedDevices = "Dispositivos locales (Mismo Wi-Fi)"
     remoteConnectedDevices = "Dispositivos conectados en remoto"
-    remotePairingTitle = "Vinculación remota"
-    remotePairingSubtitle = "Empareje dispositivos a través de diferentes redes de forma remota."
+    remotePairingTitle = "Vincular nuevo dispositivo"
+    remotePairingSubtitle = "Empareje sus dispositivos permanentemente con código QR o código de 6 dígitos."
     codeExpiresIn = "Se renueva en: %s s"
     enter6DigitCode = "Código de emparejamiento de 6 dígitos"
     enter6DigitCodeHint = "123 456"
@@ -630,4 +630,19 @@ val SpanishCopy = Copy().apply {
     clearClipboardHistory = "Borrar historial"
     clearClipboardConfirm = "¿Seguro que deseas borrar todo el historial del portapapeles?"
     filesCountSuffix = "archivos"
+
+    // Auto Transfer Feature
+    autoTransfer = "Transferencia automática"
+    autoTransferDesc = "Transfiere directamente el portapapeles y los archivos entre tus propios dispositivos sin confirmación"
+    autoTransferSuccess = "Transferido automáticamente"
+    autoTransferFileReceived = "Archivo recibido automáticamente: %s"
+    autoTransferClipboardReceived = "Portapapeles sincronizado automáticamente"
+
+    // Shortcuts & Native Share Sheet
+    shortcutSendFileShort = "Enviar archivo"
+    shortcutSendFileLong = "Enviar archivo al dispositivo"
+    shortcutSendClipboardShort = "Enviar portapapeles"
+    shortcutSendClipboardLong = "Enviar portapapeles al dispositivo"
+    clipboardEmpty = "El portapapeles está vacío"
+    shareTargetTitle = "Compartir con SyncSwift"
 }

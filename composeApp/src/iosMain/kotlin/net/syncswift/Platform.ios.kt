@@ -577,9 +577,9 @@ fun onIosRemoteNotificationReceived(userInfo: Map<Any?, *>) {
             )
             net.syncswift.connection.ConnectionManager.dispatchIncomingPairRequest(request)
             net.syncswift.notification.NotificationHistoryManager.addNotification(
-                title = copy.notificationPairRequestTitle,
-                body = copy.notificationPairRequestBody.replace("%s", senderName),
-                type = "pair",
+                title = copy.connectionAccepted,
+                body = copy.notificationPairAcceptedStatus.replace("%s", senderName),
+                type = "pair_accepted",
                 senderName = senderName
             )
         }

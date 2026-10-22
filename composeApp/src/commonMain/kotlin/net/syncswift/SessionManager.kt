@@ -72,6 +72,9 @@ expect object SessionManager {
     fun saveBiometricEnabled(enabled: Boolean)
     fun getSavedBiometricEnabled(): Boolean
 
+    fun saveAutoTransferEnabled(enabled: Boolean)
+    fun isAutoTransferEnabled(): Boolean
+
     fun getPlatformDeviceId(): String
     fun getMyDeviceName(): String
     fun getMyPlatformName(): String

@@ -276,8 +276,8 @@ val GermanCopy = Copy().apply {
     availableDevicesSection = "Andere Geräte im Netzwerk"
     localConnectedDevices = "Lokale Geräte (Gleiches WLAN)"
     remoteConnectedDevices = "Aus der Ferne verbundene Geräte"
-    remotePairingTitle = "Fernkopplung"
-    remotePairingSubtitle = "Verbinden Sie Geräte über verschiedene Netzwerke hinweg aus der Ferne."
+    remotePairingTitle = "Neues Gerät verbinden"
+    remotePairingSubtitle = "Koppeln Sie Geräte dauerhaft mit QR-Code oder 6-stelligem Code."
     codeExpiresIn = "Aktualisierung in: %s s"
     enter6DigitCode = "6-stelliger Kopplungscode"
     enter6DigitCodeHint = "123 456"
@@ -630,5 +630,20 @@ val GermanCopy = Copy().apply {
     clearClipboardHistory = "Verlauf löschen"
     clearClipboardConfirm = "Möchten Sie den gesamten Verlauf der Zwischenablage wirklich löschen?"
     filesCountSuffix = "Dateien"
+
+    // Auto Transfer Feature
+    autoTransfer = "Automatischer Transfer"
+    autoTransferDesc = "Zwischenablage und Dateien zwischen eigenen Geräten ohne Bestätigung direkt übertragen"
+    autoTransferSuccess = "Automatisch übertragen"
+    autoTransferFileReceived = "Datei automatisch empfangen: %s"
+    autoTransferClipboardReceived = "Zwischenablage automatisch synchronisiert"
+
+    // Shortcuts & Native Share Sheet
+    shortcutSendFileShort = "Datei senden"
+    shortcutSendFileLong = "Datei an Gerät senden"
+    shortcutSendClipboardShort = "Ablage senden"
+    shortcutSendClipboardLong = "Zwischenablage an Gerät senden"
+    clipboardEmpty = "Zwischenablage ist leer"
+    shareTargetTitle = "Mit SyncSwift teilen"
 }
 

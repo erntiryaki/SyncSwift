@@ -92,7 +92,7 @@ fun AccountScreen(
                 Text(
                     text = copy.myAccount,
                     color = Cloud,
-                    fontSize = 28.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-0.6).sp,
                     modifier = Modifier

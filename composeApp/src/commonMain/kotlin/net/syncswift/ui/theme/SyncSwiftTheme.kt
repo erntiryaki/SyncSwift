@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 enum class AppThemeMode {
@@ -144,21 +145,21 @@ fun SyncSwiftTheme(
     val font = net.syncswift.platformFontFamily()
     val baseTypography = androidx.compose.material3.Typography()
     val typography = baseTypography.copy(
-        displayLarge = baseTypography.displayLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Black, letterSpacing = 0.2.sp),
-        displayMedium = baseTypography.displayMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, letterSpacing = 0.2.sp),
-        displaySmall = baseTypography.displaySmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, letterSpacing = 0.2.sp),
-        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, letterSpacing = 0.2.sp),
-        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.2.sp),
-        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.2.sp),
-        titleLarge = baseTypography.titleLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.2.sp),
-        titleMedium = baseTypography.titleMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.2.sp),
-        titleSmall = baseTypography.titleSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.2.sp),
-        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, letterSpacing = 0.2.sp),
-        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, letterSpacing = 0.2.sp),
-        bodySmall = baseTypography.bodySmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, letterSpacing = 0.2.sp),
-        labelLarge = baseTypography.labelLarge.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.25.sp),
-        labelMedium = baseTypography.labelMedium.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.25.sp),
-        labelSmall = baseTypography.labelSmall.copy(fontFamily = font, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.25.sp)
+        displayLarge = baseTypography.displayLarge.copy(fontFamily = font, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Black, letterSpacing = (-0.3).sp),
+        displayMedium = baseTypography.displayMedium.copy(fontFamily = font, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, letterSpacing = (-0.3).sp),
+        displaySmall = baseTypography.displaySmall.copy(fontFamily = font, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, letterSpacing = (-0.3).sp),
+        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = font, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, letterSpacing = (-0.3).sp),
+        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = font, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = (-0.3).sp),
+        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = font, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = (-0.2).sp),
+        titleLarge = baseTypography.titleLarge.copy(fontFamily = font, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = (-0.2).sp),
+        titleMedium = baseTypography.titleMedium.copy(fontFamily = font, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = (-0.2).sp),
+        titleSmall = baseTypography.titleSmall.copy(fontFamily = font, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = font, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, letterSpacing = 0.1.sp),
+        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = font, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, letterSpacing = 0.1.sp),
+        bodySmall = baseTypography.bodySmall.copy(fontFamily = font, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, letterSpacing = 0.1.sp),
+        labelLarge = baseTypography.labelLarge.copy(fontFamily = font, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.1.sp),
+        labelMedium = baseTypography.labelMedium.copy(fontFamily = font, fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 0.1.sp),
+        labelSmall = baseTypography.labelSmall.copy(fontFamily = font, fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.1.sp)
     )
 
     CompositionLocalProvider(
@@ -166,8 +167,9 @@ fun SyncSwiftTheme(
         LocalThemeMode provides themeMode,
         androidx.compose.material3.LocalTextStyle provides androidx.compose.ui.text.TextStyle(
             fontFamily = font,
+            fontSize = 13.sp,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-            letterSpacing = 0.2.sp
+            letterSpacing = 0.1.sp
         )
     ) {
         MaterialTheme(

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 sealed interface SessionEvent {
     data class RemoteLoggedOut(val reason: String = "") : SessionEvent
+    data class QrLoggedIn(val email: String, val firstName: String = "", val lastName: String = "") : SessionEvent
 }
 
 object SessionEventBus {
@@ -14,5 +15,9 @@ object SessionEventBus {
 
     fun emitRemoteLogout(reason: String = "") {
         _events.tryEmit(SessionEvent.RemoteLoggedOut(reason))
+    }
+
+    fun emitQrLogin(email: String, firstName: String = "", lastName: String = "") {
+        _events.tryEmit(SessionEvent.QrLoggedIn(email, firstName, lastName))
     }
 }

@@ -267,7 +267,7 @@ fun ConnectedDeviceActionScreen(
                                     title = copy.disconnectDeviceAction,
                                     subtitle = copy.disconnectDeviceActionDesc,
                                     isDestructive = false,
-                                    onClick = { showDisconnectConfirmation = true }
+                                    onClick = onDisconnect
                                 )
                             }
 

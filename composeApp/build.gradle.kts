@@ -32,8 +32,48 @@ val envKeystoreFile = System.getenv("KEYSTORE_FILE") ?: envProps.getProperty("KE
 val envKeystorePassword = System.getenv("KEYSTORE_PASSWORD") ?: envProps.getProperty("KEYSTORE_PASSWORD", "")
 val envKeyAlias = System.getenv("KEY_ALIAS") ?: envProps.getProperty("KEY_ALIAS", "syncdrop_key")
 val envKeyPassword = System.getenv("KEY_PASSWORD") ?: envProps.getProperty("KEY_PASSWORD", "")
+val envTurnUrl = System.getenv("TURN_URL") ?: envProps.getProperty("TURN_URL", "")
+val envTurnUsername = System.getenv("TURN_USERNAME") ?: envProps.getProperty("TURN_USERNAME", "")
+val envTurnCredential = System.getenv("TURN_CREDENTIAL") ?: envProps.getProperty("TURN_CREDENTIAL", "")
+
+val appVersionName = "1.0.0"
+
+// Desktop has no BuildConfig; generate an equivalent Kotlin object from .env.local
+val desktopConfigDir = layout.buildDirectory.dir("generated/desktopConfig/kotlin")
+val generateDesktopConfig by tasks.registering {
+    val outDir = desktopConfigDir
+    val values = mapOf(
+        "SUPABASE_URL" to envSupabaseUrl,
+        "SUPABASE_ANON_KEY" to envSupabaseAnonKey,
+        "SUPABASE_SERVICE_ROLE_KEY" to envSupabaseServiceRoleKey,
+        "GOOGLE_WEB_CLIENT_ID" to envGoogleWebClientId,
+        "BREVO_API_KEY" to envBrevoApiKey,
+        "BREVO_SENDER_EMAIL" to envBrevoSenderEmail,
+        "AWS_SES_ACCESS_KEY_ID" to envAwsSesAccessKeyId,
+        "AWS_SES_SECRET_ACCESS_KEY" to envAwsSesSecretAccessKey,
+        "AWS_SES_REGION" to envAwsSesRegion,
+        "AWS_SES_SENDER_EMAIL" to envAwsSesSenderEmail,
+        "REVENUECAT_API_KEY" to envRevenueCatApiKey,
+        "TURN_URL" to envTurnUrl,
+        "TURN_USERNAME" to envTurnUsername,
+        "TURN_CREDENTIAL" to envTurnCredential,
+        "VERSION_NAME" to appVersionName
+    )
+    inputs.properties(values)
+    outputs.dir(outDir)
+    doLast {
+        val file = outDir.get().file("net/syncswift/DesktopBuildConfig.kt").asFile
+        file.parentFile.mkdirs()
+        val body = values.entries.joinToString("\n") { (k, v) ->
+            val escaped = v.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\${'$'}")
+            "    const val $k: String = \"$escaped\""
+        }
+        file.writeText("package net.syncswift\n\n// Auto-generated from .env.local. Do not edit.\ninternal object DesktopBuildConfig {\n$body\n}\n")
+    }
+}
 
 kotlin {
+    jvm("desktop") { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
     androidTarget { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
     listOf(
         iosX64(),
@@ -46,12 +86,23 @@ kotlin {
         }
     }
     sourceSets {
+        val desktopMain by getting
+
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
             implementation(compose.components.resources)
+        }
+        desktopMain.kotlin.srcDir(desktopConfigDir)
+        desktopMain.dependencies {
+            implementation(compose.desktop.currentOs)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
+            implementation("org.json:json:20240303")
+            implementation("org.jmdns:jmdns:3.5.12")
+            implementation("com.google.zxing:core:3.5.3")
+            implementation("com.github.kwhat:jnativehook:2.2.2")
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
@@ -144,6 +195,51 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+compose.desktop {
+    application {
+        mainClass = "net.syncswift.MainKt"
+        jvmArgs += listOf("-Dsun.java2d.uiScale.enabled=true", "-Dapple.awt.application.appearance=system")
+        nativeDistributions {
+            targetFormats(
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe
+            )
+            packageName = "SyncSwift"
+            packageVersion = appVersionName
+            description = "Seamless cross-device file sharing & universal clipboard"
+            vendor = "SyncSwift"
+            copyright = "© 2026 SyncSwift. All rights reserved."
+            modules("java.net.http", "java.naming", "java.prefs", "jdk.crypto.ec", "jdk.unsupported", "java.desktop")
+            windows {
+                iconFile.set(rootDir.resolve("desktop-icons/icon.ico"))
+                menuGroup = "SyncSwift"
+                shortcut = true
+                dirChooser = true
+                perUserInstall = true
+                upgradeUuid = "6E0C4C2A-8B8B-4C4F-9C59-5D3A1B7F2E10"
+            }
+            macOS {
+                iconFile.set(rootDir.resolve("desktop-icons/icon.icns"))
+                bundleID = "net.syncswift.desktop"
+                dockName = "SyncSwift"
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>NSLocalNetworkUsageDescription</key>
+                        <string>SyncSwift discovers your nearby devices on the local network to transfer files.</string>
+                        <key>NSBonjourServices</key>
+                        <array><string>_syncswift._tcp</string></array>
+                        <key>LSUIElement</key>
+                        <false/>
+                    """.trimIndent()
+                }
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "compileKotlinDesktop" }.configureEach { dependsOn(generateDesktopConfig) }
 
 compose.resources {
     packageOfResClass = "net.syncswift.resources"

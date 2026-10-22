@@ -74,9 +74,9 @@ fun TransfersScreen(
             Text(
                 text = copy.transfersTab,
                 color = Cloud,
-                fontSize = 24.sp,
+                fontSize = 23.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.6).sp
+                letterSpacing = (-0.3).sp
             )
         }
 
@@ -223,20 +223,25 @@ private fun TransferItemDetailCard(
                     Text(
                         text = item.fileName,
                         color = Cloud,
-                        fontSize = 14.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
                     val peer = if (item.peerName.isNotBlank()) net.syncswift.discovery.cleanDeviceDisplayName(item.peerName) else if (item.isSent) copy.transfersSent else copy.transfersReceived
+                    val isClipboard = item.fileName.startsWith("${copy.clipboard}:") ||
+                            item.fileName.startsWith("Pano:") ||
+                            item.fileName.startsWith("Clipboard:") ||
+                            item.mimeType.contains("text/plain", ignoreCase = true) ||
+                            item.mimeType.contains("clipboard", ignoreCase = true)
+
                     val statusText = when (item.status) {
-                        TransferStatus.COMPLETED -> "${item.formattedSize} · $peer"
-                        TransferStatus.FAILED, TransferStatus.CANCELLED -> "${item.formattedSize} · ${copy.transferFailedStatus}"
-                        TransferStatus.IN_PROGRESS -> "${item.formattedSize} · ${(item.progress * 100).toInt()}%"
-                        else -> item.formattedSize
+                        TransferStatus.COMPLETED, TransferStatus.FAILED, TransferStatus.CANCELLED -> if (isClipboard) peer else "${item.formattedSize} · $peer"
+                        TransferStatus.IN_PROGRESS -> "${(item.progress * 100).toInt()}%"
+                        else -> if (isClipboard) "" else item.formattedSize
                     }
                     Text(
                         text = statusText,
-                        color = if (isFailed) ErrorRed else Mist,
+                        color = Mist,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 2.dp)
                     )
@@ -246,14 +251,14 @@ private fun TransferItemDetailCard(
                 when (item.status) {
                     TransferStatus.IN_PROGRESS -> {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(26.dp),
+                            modifier = Modifier.size(20.dp),
                             color = Blue,
-                            strokeWidth = 2.5.dp
+                            strokeWidth = 2.dp
                         )
                     }
                     TransferStatus.COMPLETED -> {
                         AnimatedCheckCircleIcon(
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(22.dp),
                             circleColor = SuccessGreen,
                             checkColor = Color.White
                         )
@@ -261,12 +266,12 @@ private fun TransferItemDetailCard(
                     TransferStatus.FAILED, TransferStatus.CANCELLED -> {
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(22.dp)
                                 .clip(CircleShape)
                                 .background(ErrorRed.copy(alpha = 0.16f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            CrossVectorIcon(Modifier.size(16.dp), color = ErrorRed)
+                            CrossVectorIcon(Modifier.size(11.dp), color = ErrorRed)
                         }
                     }
                     else -> {}

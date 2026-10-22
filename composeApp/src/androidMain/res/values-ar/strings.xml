@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SyncSwift</string>
+    <string name="shortcut_send_file_short">إرسال ملف</string>
+    <string name="shortcut_send_file_long">إرسال ملف إلى الجهاز</string>
+    <string name="shortcut_send_clipboard_short">إرسال الحافظة</string>
+    <string name="shortcut_send_clipboard_long">إرسال الحافظة إلى الجهاز</string>
+</resources>

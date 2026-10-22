@@ -327,8 +327,8 @@ class Copy {
     var availableDevicesSection: String = "Other Devices on Network"
     var localConnectedDevices: String = "Local Network (Same Wi-Fi)"
     var remoteConnectedDevices: String = "Remote Connected Devices (Different Network)"
-    var remotePairingTitle: String = "Remote Pairing"
-    var remotePairingSubtitle: String = "Connect devices across different networks remotely."
+    var remotePairingTitle: String = "Pair New Device"
+    var remotePairingSubtitle: String = "Pair devices permanently with QR code or 6-digit code."
     var codeExpiresIn: String = "Refreshes in: %s s"
     var enter6DigitCode: String = "6-Digit Pairing Code"
     var enter6DigitCodeHint: String = "123 456"
@@ -659,6 +659,21 @@ class Copy {
     // PDF Features: Clipboard History Clear
     var clearClipboardHistory: String = "Clear History"
     var clearClipboardConfirm: String = "Are you sure you want to clear all clipboard history?"
+
+    // Auto Transfer Feature
+    var autoTransfer: String = "Auto Transfer"
+    var autoTransferDesc: String = "Directly transfer clipboard and files between your own devices without confirmation"
+    var autoTransferSuccess: String = "Transferred automatically"
+    var autoTransferFileReceived: String = "Auto-received file: %s"
+    var autoTransferClipboardReceived: String = "Clipboard synced automatically"
+
+    // Shortcuts & Native Share Sheet
+    var shortcutSendFileShort: String = "Send File"
+    var shortcutSendFileLong: String = "Send File to Device"
+    var shortcutSendClipboardShort: String = "Send Clipboard"
+    var shortcutSendClipboardLong: String = "Send Clipboard to Device"
+    var clipboardEmpty: String = "Clipboard is empty"
+    var shareTargetTitle: String = "Send with SyncSwift"
 }
 
 fun copyFor(language: AppLanguage): Copy = when (language) {
@@ -698,6 +713,27 @@ fun copyForLanguageCode(code: String?): Copy {
 }
 
 fun Copy.formatDeviceCount(count: Int): String = "$count $deviceSingle"
+
+fun formatNotificationBody(template: String, senderName: String, itemName: String, sizeStr: String = ""): String {
+    var result = template
+    val firstIdx = result.indexOf("%s")
+    if (firstIdx >= 0) {
+        result = result.substring(0, firstIdx) + senderName + result.substring(firstIdx + 2)
+    }
+    val secondIdx = result.indexOf("%s")
+    if (secondIdx >= 0) {
+        result = result.substring(0, secondIdx) + itemName + result.substring(secondIdx + 2)
+    }
+    val thirdIdx = result.indexOf("%s")
+    if (thirdIdx >= 0) {
+        val cleanSize = if (sizeStr.isNotBlank()) sizeStr else ""
+        result = result.substring(0, thirdIdx) + cleanSize + result.substring(thirdIdx + 2)
+    }
+    if (sizeStr.isBlank()) {
+        result = result.replace(" ()", "").replace("()", "").trim()
+    }
+    return result
+}
 
 fun currentAppCopy(): Copy {
     val saved = SessionManager.getSavedLanguage()

@@ -104,10 +104,10 @@ private suspend fun sendPairRequestViaFcm(target: DiscoveredDevice, selfName: St
 
     return ConnectionManager.sendFcmNotification(
         token = token,
-        title = targetCopy.notificationPairRequestTitle,
-        body = targetCopy.notificationPairRequestBody.replace("%s", selfName),
+        title = targetCopy.connectionAccepted,
+        body = targetCopy.notificationPairAcceptedStatus.replace("%s", selfName),
         data = mapOf(
-            "type" to "pair_request",
+            "type" to "pair_accepted",
             "senderId" to selfId,
             "senderName" to selfName,
             "senderHost" to selfHost,
@@ -1131,10 +1131,10 @@ actual object ConnectionManager {
                                         scope.launch(Dispatchers.Default) {
                                             sendFcmNotification(
                                                 token = pToken,
-                                                title = targetCopy.notificationPairRequestTitle,
-                                                body = targetCopy.notificationPairRequestBody.replace("%s", selfName),
+                                                title = targetCopy.connectionAccepted,
+                                                body = targetCopy.notificationPairAcceptedStatus.replace("%s", selfName),
                                                 data = mapOf(
-                                                    "type" to "pair_request",
+                                                    "type" to "pair_accepted",
                                                     "senderName" to selfName,
                                                     "senderHost" to (self?.host ?: ""),
                                                     "senderPort" to "${self?.port ?: 52424}",
@@ -1223,5 +1223,15 @@ actual object ConnectionManager {
                 }
             }
         }
+    }
+
+    private val _cachedAccountDevices = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
+    actual fun updateCachedAccountDevices(devices: List<DiscoveredDevice>) {
+        _cachedAccountDevices.value = devices
+    }
+    actual fun getCachedAccountDevices(): List<DiscoveredDevice> = _cachedAccountDevices.value
+    actual fun addCachedAccountDevice(device: DiscoveredDevice) {
+        val current = _cachedAccountDevices.value.filter { it.id != device.id && (device.host.isBlank() || it.host != device.host) }
+        _cachedAccountDevices.value = listOf(device) + current
     }
 }

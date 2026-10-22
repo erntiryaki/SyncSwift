@@ -143,9 +143,9 @@ private fun NavBarItem(
         Text(
             text = label,
             color = itemColor,
-            fontSize = 11.sp,
+            fontSize = 10.5.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-            letterSpacing = (-0.2).sp,
+            letterSpacing = 0.1.sp,
             maxLines = 1,
             softWrap = false
         )

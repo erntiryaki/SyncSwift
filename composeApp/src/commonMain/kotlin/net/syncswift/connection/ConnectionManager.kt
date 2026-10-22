@@ -82,4 +82,7 @@ expect object ConnectionManager {
     fun generateOrRotatePairingCode()
     fun ensurePairingCodeActive()
     fun connectViaPairingCode(code: String, onResult: (PairResult) -> Unit)
+    fun updateCachedAccountDevices(devices: List<DiscoveredDevice>)
+    fun getCachedAccountDevices(): List<DiscoveredDevice>
+    fun addCachedAccountDevice(device: DiscoveredDevice)
 }

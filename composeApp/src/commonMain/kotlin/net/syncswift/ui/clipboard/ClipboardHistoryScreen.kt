@@ -105,7 +105,7 @@ fun ClipboardHistoryScreen(
                             .clickable { showAddDialog = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("+", color = Blue, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        PlusVectorIcon(Modifier.size(16.dp), color = Blue)
                     }
 
                     // Clear History Button

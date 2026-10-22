@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SyncSwift</string>
+    <string name="shortcut_send_file_short">Envoyer fichier</string>
+    <string name="shortcut_send_file_long">Envoyer le fichier à l\'appareil</string>
+    <string name="shortcut_send_clipboard_short">Envoyer presse-papiers</string>
+    <string name="shortcut_send_clipboard_long">Envoyer le presse-papiers à l\'appareil</string>
+</resources>

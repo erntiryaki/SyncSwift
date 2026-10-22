@@ -7,6 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -32,6 +35,11 @@ import net.syncswift.Copy
 import net.syncswift.CrossVectorIcon
 import net.syncswift.DevicePlatformIcon
 import net.syncswift.TransferVectorIcon
+import net.syncswift.ClipboardVectorIcon
+import net.syncswift.DocumentVectorIcon
+import net.syncswift.FileImageIcon
+import net.syncswift.FilePdfIcon
+import net.syncswift.FileZipIcon
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.cleanDeviceDisplayName
 import net.syncswift.ui.theme.*
@@ -109,45 +117,92 @@ fun FileDeviceSelectScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // FILE PREVIEW CARD
+            // FILE PREVIEW CARD (Modernized with dynamic file-type iconography)
+            val isClipboard = fileName.startsWith("${copy.clipboard}:") ||
+                    fileName.startsWith("Pano:") ||
+                    fileName.startsWith("Clipboard:") ||
+                    fileSizeFormatted == copy.clipboard ||
+                    fileSizeFormatted.contains("chars", ignoreCase = true) ||
+                    fileSizeFormatted.contains("karakter", ignoreCase = true)
+
+            val ext = if (fileName.contains(".") && !isClipboard) fileName.substringAfterLast(".").lowercase() else ""
+            val isImage = !isClipboard && listOf("png", "jpg", "jpeg", "webp", "gif", "heic", "bmp", "svg").contains(ext)
+            val isPdf = !isClipboard && ext == "pdf"
+            val isZip = !isClipboard && listOf("zip", "rar", "7z", "tar", "gz", "apk").contains(ext)
+
+            val themeBlue = LocalSyncSwiftColors.current.blue
+            val (accentColor, badgeLabel) = when {
+                isClipboard -> Color(0xFF10B981) to copy.clipboard.uppercase()
+                isPdf -> Color(0xFFEF4444) to "PDF"
+                isZip -> Color(0xFFF59E0B) to "ZIP"
+                isImage -> Color(0xFF6366F1) to (ext.uppercase().ifBlank { "IMG" })
+                else -> themeBlue to (ext.uppercase().ifBlank { "FILE" })
+            }
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = CardSurface,
-                border = BorderStroke(1.dp, InputBorder.copy(alpha = 0.4f))
+                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Blue.copy(alpha = 0.15f)),
+                            .size(50.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(accentColor.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        TransferVectorIcon(Modifier.size(22.dp), color = Blue)
+                        when {
+                            isClipboard -> ClipboardVectorIcon(Modifier.size(24.dp), color = accentColor)
+                            isPdf -> FilePdfIcon(Modifier.size(32.dp))
+                            isZip -> FileZipIcon(Modifier.size(32.dp))
+                            isImage -> FileImageIcon(Modifier.size(32.dp))
+                            else -> DocumentVectorIcon(Modifier.size(24.dp), color = accentColor)
+                        }
                     }
 
                     Spacer(Modifier.width(14.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = if (isClipboard) fileName.removePrefix("${copy.clipboard}: ").removePrefix("Pano: ").removePrefix("Clipboard: ").trim() else fileName,
+                                color = Cloud,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = accentColor.copy(alpha = 0.14f),
+                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f))
+                            ) {
+                                Text(
+                                    text = badgeLabel,
+                                    color = accentColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            text = fileName,
-                            color = Cloud,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = fileSizeFormatted,
+                            text = if (isClipboard) copy.sendClipboardAction else fileSizeFormatted,
                             color = Mist,
-                            fontSize = 13.sp
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -178,10 +233,14 @@ fun FileDeviceSelectScreen(
                     )
                 }
             } else {
-                LazyColumn(
+                val isDark = LocalSyncSwiftColors.current.isDark
+                val blue = LocalSyncSwiftColors.current.blue
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(targetDevices) { dev ->
@@ -194,85 +253,74 @@ fun FileDeviceSelectScreen(
                             it.id == dev.id || (it.host.isNotBlank() && it.host == dev.host && it.name == dev.name)
                         } || (isDesktop && connected)
 
-                        val badgeText = when {
-                            isMyDevice -> copy.myDeviceLabel
-                            connected -> copy.connectedDeviceLabel
-                            else -> copy.filterNearby
-                        }
-                        val subtitleText = when {
-                            isMyDevice -> copy.myDeviceLabel
-                            connected -> copy.connectedDeviceLabel
-                            else -> "${dev.osType} · ${if (dev.isOnline) copy.deviceOnline else copy.offlineSleeping}"
-                        }
-                        val badgeColor = if (isMyDevice || connected) Blue else Mist
+                        val badgeColor = if (isMyDevice || connected) blue else Mist
 
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
+                                .height(122.dp)
+                                .clip(RoundedCornerShape(18.dp))
                                 .clickable { onSelectDevice(dev) },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(18.dp),
                             color = CardSurface,
-                            border = BorderStroke(1.dp, if (connected || isMyDevice) badgeColor.copy(alpha = 0.4f) else InputBorder.copy(alpha = 0.3f))
+                            border = BorderStroke(1.dp, if (connected || isMyDevice) badgeColor.copy(alpha = 0.5f) else InputBorder)
                         ) {
-                            Row(
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .fillMaxSize()
+                                    .padding(8.dp)
                             ) {
+                                // Online Green / Offline Gray Status Dot
                                 Box(
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(3.dp)
+                                        .size(7.dp)
                                         .clip(CircleShape)
-                                        .background(if (connected || isMyDevice) badgeColor.copy(alpha = 0.15f) else InputBg),
-                                    contentAlignment = Alignment.Center
+                                        .background(if (dev.isOnline) Color(0xFF10B981) else Color(0xFF94A3B8))
+                                )
+
+                                // Centered circular icon container and device labels
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = 4.dp, bottom = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
                                 ) {
-                                    DevicePlatformIcon(
-                                        name = dev.name,
-                                        osType = dev.osType,
-                                        modelCode = dev.modelCode,
-                                        color = if (connected || isMyDevice) badgeColor else Mist,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-
-                                Spacer(Modifier.width(14.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .background(if (connected || isMyDevice) badgeColor.copy(alpha = 0.15f) else (if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = cleanDeviceDisplayName(dev.name),
-                                            color = Cloud,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false)
+                                        DevicePlatformIcon(
+                                            name = dev.name,
+                                            osType = dev.osType,
+                                            modelCode = dev.modelCode,
+                                            color = if (connected || isMyDevice) badgeColor else blue,
+                                            modifier = Modifier.size(24.dp)
                                         )
-
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = badgeColor.copy(alpha = 0.15f),
-                                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
-                                        ) {
-                                            Text(
-                                                text = badgeText,
-                                                color = badgeColor,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
                                     }
-                                    Spacer(Modifier.height(3.dp))
+
+                                    Spacer(Modifier.height(8.dp))
+
                                     Text(
-                                        text = subtitleText,
+                                        text = cleanDeviceDisplayName(dev.name),
+                                        color = Cloud,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (isMyDevice) copy.myDeviceLabel else (if (connected) copy.connectedDeviceLabel else dev.osType),
                                         color = if (isMyDevice || connected) badgeColor else Mist,
-                                        fontSize = 12.sp
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }

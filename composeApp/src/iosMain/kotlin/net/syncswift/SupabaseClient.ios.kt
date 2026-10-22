@@ -1206,5 +1206,26 @@ actual object SupabaseNetwork {
             return emptyList()
         }
     }
+
+    actual suspend fun publishRemoteTransferSession(
+        transferId: String,
+        targetDeviceId: String,
+        targetDeviceName: String,
+        senderName: String,
+        fileName: String,
+        fileSize: Long,
+        mimeType: String,
+        downloadUrlOrContent: String,
+        isClipboard: Boolean
+    ): Boolean = true
+
+    actual suspend fun pollPendingRemoteTransfers(
+        myDeviceId: String,
+        myDeviceName: String
+    ): List<Map<String, String>> = emptyList()
+
+    actual suspend fun updateRemoteTransferStatus(transferId: String, status: String): Boolean = true
+
+    actual suspend fun checkRemoteTransferStatus(transferId: String): String? = null
 }
 

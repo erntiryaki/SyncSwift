@@ -276,8 +276,8 @@ val RussianCopy = Copy().apply {
     availableDevicesSection = "Другие устройства в сети"
     localConnectedDevices = "Локальные устройства (Та же сеть Wi-Fi)"
     remoteConnectedDevices = "Удаленно подключенные устройства"
-    remotePairingTitle = "Удаленное подключение"
-    remotePairingSubtitle = "Удаленное сопряжение устройств из разных сетей."
+    remotePairingTitle = "Подключить новое устройство"
+    remotePairingSubtitle = "Выполните постоянное сопряжение по QR-коду или 6-значному коду."
     codeExpiresIn = "Обновление через: %s с"
     enter6DigitCode = "6-значный код сопряжения"
     enter6DigitCodeHint = "123 456"
@@ -630,4 +630,19 @@ val RussianCopy = Copy().apply {
     clearClipboardHistory = "Очистить историю"
     clearClipboardConfirm = "Вы уверены, что хотите очистить всю историю буфера обмена?"
     filesCountSuffix = "файлов"
+
+    // Auto Transfer Feature
+    autoTransfer = "Автоматическая передача"
+    autoTransferDesc = "Прямая передача буфера обмена и файлов между своими устройствами без подтверждения"
+    autoTransferSuccess = "Передано автоматически"
+    autoTransferFileReceived = "Файл автоматически получен: %s"
+    autoTransferClipboardReceived = "Буфер обмена синхронизирован автоматически"
+
+    // Shortcuts & Native Share Sheet
+    shortcutSendFileShort = "Отправить файл"
+    shortcutSendFileLong = "Отправить файл на устройство"
+    shortcutSendClipboardShort = "Отправить буфер"
+    shortcutSendClipboardLong = "Отправить буфер обмена на устройство"
+    clipboardEmpty = "Буфер обмена пуст"
+    shareTargetTitle = "Поделиться через SyncSwift"
 }

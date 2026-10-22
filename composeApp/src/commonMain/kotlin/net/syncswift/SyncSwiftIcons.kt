@@ -83,6 +83,127 @@ fun SyncArrowIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(m
     drawPath(bottomArrow, color, style = stroke)
 }
 
+/** Single clockwise circular loop arrow icon for auto transfer with prominent bold arrowhead */
+@Composable
+fun CircularSyncArrowIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val minDim = size.minDimension
+    val strokeWidth = minDim * 0.10f
+    val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val r = minDim * 0.33f
+    val cx = size.width / 2f
+    val cy = size.height / 2f
+
+    // Clockwise arc sweeping around into the base of the arrowhead
+    val startAngle = -40f
+    val sweepAngle = 296f
+    drawArc(
+        color = color,
+        startAngle = startAngle,
+        sweepAngle = sweepAngle,
+        useCenter = false,
+        topLeft = Offset(cx - r, cy - r),
+        size = Size(r * 2f, r * 2f),
+        style = stroke
+    )
+
+    // Significantly enlarged, prominent, sharp, bold arrowhead pointing clockwise
+    val tipX = cx + minDim * 0.22f
+    val tipY = cy - r
+    val arrowLen = minDim * 0.38f
+    val arrowHalfH = minDim * 0.26f
+    val baseX = tipX - arrowLen
+
+    val arrowHead = Path().apply {
+        moveTo(tipX, tipY)
+        lineTo(baseX, tipY - arrowHalfH)
+        lineTo(baseX + minDim * 0.06f, tipY) // Sleek rear notch
+        lineTo(baseX, tipY + arrowHalfH)
+        close()
+    }
+    drawPath(arrowHead, color)
+}
+
+/** Geometrically centered Plus Icon with round caps */
+@Composable
+fun PlusVectorIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val sw = size.minDimension * 0.14f
+    val halfW = size.width / 2f
+    val halfH = size.height / 2f
+    val arm = size.minDimension * 0.32f
+
+    // Horizontal bar
+    drawLine(
+        color = color,
+        start = Offset(halfW - arm, halfH),
+        end = Offset(halfW + arm, halfH),
+        strokeWidth = sw,
+        cap = StrokeCap.Round
+    )
+    // Vertical bar
+    drawLine(
+        color = color,
+        start = Offset(halfW, halfH - arm),
+        end = Offset(halfW, halfH + arm),
+        strokeWidth = sw,
+        cap = StrokeCap.Round
+    )
+}
+
+/** Modern collaborative Workspace Empty State Hub Icon (replacing plain folder) */
+@Composable
+fun WorkspaceEmptyStateIcon(modifier: Modifier = Modifier, color: Color = Blue) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val sw = size.minDimension * 0.08f
+    val s = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+    val pad = w * 0.12f
+    val cardW = (w - pad * 2.8f) / 2f
+    val cardH = (h - pad * 2.8f) / 2f
+    val r = CornerRadius(cardW * 0.26f)
+
+    // Top-left node
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(pad, pad),
+        size = Size(cardW, cardH),
+        cornerRadius = r,
+        style = s
+    )
+    // Top-right node
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(pad * 1.8f + cardW, pad),
+        size = Size(cardW, cardH),
+        cornerRadius = r,
+        style = s
+    )
+    // Bottom-left node
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(pad, pad * 1.8f + cardH),
+        size = Size(cardW, cardH),
+        cornerRadius = r,
+        style = s
+    )
+    // Bottom-right node
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(pad * 1.8f + cardW, pad * 1.8f + cardH),
+        size = Size(cardW, cardH),
+        cornerRadius = r,
+        style = s
+    )
+
+    // Connecting central bridge
+    drawCircle(
+        color = color,
+        radius = size.minDimension * 0.07f,
+        center = Offset(w / 2f, h / 2f)
+    )
+}
+
+
 @Composable
 fun DesktopVectorIcon(modifier: Modifier = Modifier, color: Color = Mist) = Canvas(modifier) {
     val s = Stroke(size.minDimension * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round)

@@ -276,8 +276,8 @@ val ArabicCopy = Copy().apply {
     availableDevicesSection = "أجهزة أخرى على الشبكة"
     localConnectedDevices = "الأجهزة المحلية (نفس شبكة Wi-Fi)"
     remoteConnectedDevices = "الأجهزة المتصلة عن بُعد"
-    remotePairingTitle = "الاقتران عن بُعد"
-    remotePairingSubtitle = "إقران الأجهزة عبر شبكات مختلفة عن بُعد."
+    remotePairingTitle = "ربط جهاز جديد"
+    remotePairingSubtitle = "قم بإقران أجهزتك بشكل دائم برمز الاستجابة السريعة أو الرمز المكون من 6 أرقام."
     codeExpiresIn = "يتجدد خلال: %s ث"
     enter6DigitCode = "رمز الاقتران المكون من 6 أرقام"
     enter6DigitCodeHint = "123 456"
@@ -630,4 +630,19 @@ val ArabicCopy = Copy().apply {
     clearClipboardHistory = "مسح السجل"
     clearClipboardConfirm = "هل أنت متأكد من مسح كل سجل الحافظة؟"
     filesCountSuffix = "ملفات"
+
+    // Auto Transfer Feature
+    autoTransfer = "النقل التلقائي"
+    autoTransferDesc = "نقل الحافظة والملفات مباشرة بين أجهزتك الخاصة دون تأكيد"
+    autoTransferSuccess = "تم النقل تلقائياً"
+    autoTransferFileReceived = "تم استلام الملف تلقائياً: %s"
+    autoTransferClipboardReceived = "تمت مزامنة الحافظة تلقائياً"
+
+    // Shortcuts & Native Share Sheet
+    shortcutSendFileShort = "إرسال ملف"
+    shortcutSendFileLong = "إرسال ملف إلى الجهاز"
+    shortcutSendClipboardShort = "إرسال الحافظة"
+    shortcutSendClipboardLong = "إرسال الحافظة إلى الجهاز"
+    clipboardEmpty = "الحافظة فارغة"
+    shareTargetTitle = "المشاركة عبر SyncSwift"
 }

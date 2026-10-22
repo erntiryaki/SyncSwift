@@ -199,67 +199,56 @@ fun AuthTermsDisclaimer(
     val linkColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
     val textColor = AuthColors.textSecondary(isDark)
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Flexible wrapped text for terms
-            Text(
-                text = buildAnnotatedString {
-                    append(copy.termsNoticePrefix)
-                },
-                color = textColor,
-                fontSize = 11.5.sp,
-                textAlign = TextAlign.Center
+    val annotatedString = buildAnnotatedString {
+        append(copy.termsNoticePrefix)
+
+        pushStringAnnotation(tag = "membership", annotation = "membership")
+        withStyle(
+            SpanStyle(
+                color = linkColor,
+                fontWeight = FontWeight.SemiBold,
+                textDecoration = TextDecoration.Underline
             )
+        ) {
+            append(copy.termsOfService)
         }
+        pop()
 
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+        append(copy.termsAnd)
+
+        pushStringAnnotation(tag = "usage", annotation = "usage")
+        withStyle(
+            SpanStyle(
+                color = linkColor,
+                fontWeight = FontWeight.SemiBold,
+                textDecoration = TextDecoration.Underline
+            )
         ) {
-            Text(
-                text = copy.termsOfService,
-                color = linkColor,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .clickable { onOpenMembership() }
-                    .padding(horizontal = 2.dp, vertical = 2.dp)
-            )
+            append(copy.privacyPolicy)
+        }
+        pop()
 
-            Text(
-                text = copy.termsAnd,
-                color = textColor,
-                fontSize = 11.5.sp
-            )
-
-            Text(
-                text = copy.privacyPolicy,
-                color = linkColor,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .clickable { onOpenUsage() }
-                    .padding(horizontal = 2.dp, vertical = 2.dp)
-            )
-
-            if (copy.termsNoticeSuffix.isNotBlank()) {
-                Text(
-                    text = copy.termsNoticeSuffix,
-                    color = textColor,
-                    fontSize = 11.5.sp
-                )
-            }
+        if (copy.termsNoticeSuffix.isNotBlank()) {
+            append(copy.termsNoticeSuffix)
         }
     }
+
+    androidx.compose.foundation.text.ClickableText(
+        text = annotatedString,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        style = androidx.compose.ui.text.TextStyle(
+            color = textColor,
+            fontSize = 11.5.sp,
+            textAlign = TextAlign.Center,
+            fontFamily = net.syncswift.platformFontFamily()
+        ),
+        onClick = { offset ->
+            annotatedString.getStringAnnotations(tag = "membership", start = offset, end = offset)
+                .firstOrNull()?.let { onOpenMembership() }
+            annotatedString.getStringAnnotations(tag = "usage", start = offset, end = offset)
+                .firstOrNull()?.let { onOpenUsage() }
+        }
+    )
 }
