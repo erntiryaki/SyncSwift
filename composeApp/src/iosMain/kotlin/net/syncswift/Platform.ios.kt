@@ -638,3 +638,5 @@ fun setIosAdBannerProvider(provider: (String) -> platform.UIKit.UIView) {
 
 actual fun getPlatformLocalIpAddress(): String? = null
 
+actual fun platformSendFcmPush(token: String, title: String, body: String, data: Map<String, String>) {}
+

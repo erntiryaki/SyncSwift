@@ -60,7 +60,7 @@ actual fun startPlatformUdpDiscovery(onDeviceFound: (DiscoveredDevice) -> Unit) 
                     if (senderIp == myIp || senderIp == "127.0.0.1") continue
 
                     val msg = String(packet.data, 0, packet.length)
-                    if (msg.startsWith("SYNCSWIFT:ANNOUNCE|")) {
+                    if (msg.startsWith("SYNCSWIFT:ANNOUNCE|") || msg.startsWith("SYNCSWIFT:PAIR_ACCEPT|")) {
                         val parts = msg.split("|")
                         if (parts.size >= 5) {
                             val peerId = parts[1]
@@ -79,6 +79,61 @@ actual fun startPlatformUdpDiscovery(onDeviceFound: (DiscoveredDevice) -> Unit) 
                             withContext(Dispatchers.Main) {
                                 onDeviceFound(dev)
                             }
+                        }
+                    } else if (msg.startsWith("SYNCSWIFT:PAIR_REQ|")) {
+                        val parts = msg.split("|")
+                        val senderId = parts.getOrNull(1) ?: senderIp
+                        val senderName = parts.getOrNull(2) ?: "SyncSwift Device"
+                        val senderOs = parts.getOrNull(3) ?: "Other"
+                        val senderPort = parts.getOrNull(4)?.toIntOrNull() ?: 52424
+                        withContext(Dispatchers.Main) {
+                            net.syncswift.connection.ConnectionManager.dispatchIncomingPairRequest(
+                                net.syncswift.connection.IncomingPairRequest(
+                                    senderId = senderId,
+                                    senderName = senderName,
+                                    senderHost = senderIp,
+                                    senderPort = senderPort,
+                                    senderOsType = senderOs
+                                )
+                            )
+                        }
+                    } else if (msg.startsWith("SYNCSWIFT:FILE_REQ|")) {
+                        val parts = msg.split("|")
+                        val senderId = parts.getOrNull(1) ?: senderIp
+                        val senderName = parts.getOrNull(2) ?: "SyncSwift Device"
+                        val fileName = parts.getOrNull(3) ?: "Dosya"
+                        val fileSize = parts.getOrNull(4)?.toLongOrNull() ?: 0L
+                        val transferId = parts.getOrNull(5) ?: "tr_${System.currentTimeMillis()}"
+                        withContext(Dispatchers.Main) {
+                            net.syncswift.connection.ConnectionManager.dispatchIncomingTransferRequest(
+                                net.syncswift.connection.IncomingTransferRequest(
+                                    senderName = senderName,
+                                    fileName = fileName,
+                                    fileSize = fileSize,
+                                    mimeType = "application/octet-stream",
+                                    senderHost = senderIp,
+                                    senderPort = 52424,
+                                    transferId = transferId
+                                )
+                            )
+                        }
+                    } else if (msg.startsWith("SYNCSWIFT:CLIP_REQ|")) {
+                        val parts = msg.split("|")
+                        val senderId = parts.getOrNull(1) ?: senderIp
+                        val senderName = parts.getOrNull(2) ?: "SyncSwift Device"
+                        val clipText = parts.getOrNull(3) ?: ""
+                        withContext(Dispatchers.Main) {
+                            net.syncswift.connection.ConnectionManager.dispatchIncomingTransferRequest(
+                                net.syncswift.connection.IncomingTransferRequest(
+                                    senderName = senderName,
+                                    fileName = "Pano: ${clipText.take(30)}",
+                                    fileSize = clipText.length.toLong(),
+                                    mimeType = "text/plain",
+                                    senderHost = senderIp,
+                                    senderPort = 52424,
+                                    downloadUrl = clipText
+                                )
+                            )
                         }
                     }
                 } catch (_: java.net.SocketTimeoutException) {
@@ -112,6 +167,57 @@ actual fun sendDirectUdpAnnouncement(targetHost: String, targetPort: Int) {
             val myName = SessionManager.getMyDeviceName()
             val myId = SessionManager.getPlatformDeviceId()
             val msg = "SYNCSWIFT:PAIR_ACCEPT|$myId|$myName|Android|52424"
+            val data = msg.toByteArray()
+            val addr = InetAddress.getByName(targetHost)
+            val packet = DatagramPacket(data, data.size, addr, targetPort)
+            val socket = DatagramSocket()
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
+    }
+}
+
+actual fun sendDirectUdpPairRequest(targetHost: String, targetPort: Int) {
+    if (targetHost.isBlank() || targetHost == "127.0.0.1") return
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val myName = SessionManager.getMyDeviceName()
+            val myId = SessionManager.getPlatformDeviceId()
+            val msg = "SYNCSWIFT:PAIR_REQ|$myId|$myName|Android|52424"
+            val data = msg.toByteArray()
+            val addr = InetAddress.getByName(targetHost)
+            val packet = DatagramPacket(data, data.size, addr, targetPort)
+            val socket = DatagramSocket()
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
+    }
+}
+
+actual fun sendDirectUdpFileRequest(targetHost: String, targetPort: Int, fileName: String, fileSize: Long, transferId: String) {
+    if (targetHost.isBlank() || targetHost == "127.0.0.1") return
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val myName = SessionManager.getMyDeviceName()
+            val myId = SessionManager.getPlatformDeviceId()
+            val msg = "SYNCSWIFT:FILE_REQ|$myId|$myName|$fileName|$fileSize|$transferId"
+            val data = msg.toByteArray()
+            val addr = InetAddress.getByName(targetHost)
+            val packet = DatagramPacket(data, data.size, addr, targetPort)
+            val socket = DatagramSocket()
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
+    }
+}
+
+actual fun sendDirectUdpClipRequest(targetHost: String, targetPort: Int, previewText: String) {
+    if (targetHost.isBlank() || targetHost == "127.0.0.1") return
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val myName = SessionManager.getMyDeviceName()
+            val myId = SessionManager.getPlatformDeviceId()
+            val msg = "SYNCSWIFT:CLIP_REQ|$myId|$myName|${previewText.replace('|', ' ').take(60)}"
             val data = msg.toByteArray()
             val addr = InetAddress.getByName(targetHost)
             val packet = DatagramPacket(data, data.size, addr, targetPort)

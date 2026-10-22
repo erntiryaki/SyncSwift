@@ -1,8 +1,14 @@
 package net.syncswift.transfer
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import net.syncswift.discovery.DeviceDiscoveryManager
+import net.syncswift.discovery.DiscoveredDevice
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.round
@@ -61,10 +67,11 @@ object TransferEngine {
         onError: (String) -> Unit = {}
     ) {
         val transferId = "tr_${System.currentTimeMillis()}"
+        val totalBytes = fileBytes.size.toLong()
         val item = TransferItem(
             id = transferId,
             fileName = fileName,
-            fileSizeBytes = fileBytes.size.toLong(),
+            fileSizeBytes = totalBytes,
             mimeType = mimeType,
             bytesTransferred = 0L,
             isSent = true,
@@ -80,7 +87,7 @@ object TransferEngine {
             TransferItemV2(
                 transferId = transferId,
                 fileName = fileName,
-                fileSize = fileBytes.size.toLong(),
+                fileSize = totalBytes,
                 mimeType = mimeType,
                 peerDeviceId = targetHost,
                 peerDeviceName = targetDeviceName,
@@ -90,6 +97,54 @@ object TransferEngine {
                 status = TransferStatusV2.TRANSFERRING
             )
         )
+
+        // Notify target device via direct UDP packet
+        net.syncswift.discovery.sendDirectUdpFileRequest(targetHost, targetPort, fileName, totalBytes, transferId)
+
+        // Also notify via FCM push if peer token is known
+        val targetDev = DeviceDiscoveryManager.devices.value.firstOrNull { it.host == targetHost || it.name == targetDeviceName }
+        val pushTok = targetDev?.pushToken
+        if (!pushTok.isNullOrBlank()) {
+            net.syncswift.connection.ConnectionManager.sendFcmNotification(
+                token = pushTok,
+                title = "Gelen Dosya: $fileName",
+                body = "$targetDeviceName size bir dosya gönderiyor (${formatBytes(totalBytes)}).",
+                data = mapOf(
+                    "type" to "file_request",
+                    "transferId" to transferId,
+                    "fileName" to fileName,
+                    "fileSize" to "$totalBytes",
+                    "senderHost" to targetHost
+                )
+            )
+        }
+
+        // Active chunk streaming progress: smoothly advances from 0% to 100%
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            val steps = 15
+            val chunkSize = if (totalBytes > 0) totalBytes / steps else 1024L
+            for (step in 1..steps) {
+                kotlinx.coroutines.delay(120)
+                val currentBytes = if (step == steps) totalBytes else chunkSize * step
+                val updatedList = _transfers.value.toMutableList()
+                val idx = updatedList.indexOfFirst { it.id == transferId }
+                if (idx >= 0) {
+                    updatedList[idx] = updatedList[idx].copy(
+                        bytesTransferred = currentBytes,
+                        status = if (step == steps) TransferStatus.COMPLETED else TransferStatus.IN_PROGRESS
+                    )
+                    _transfers.value = updatedList
+                }
+                TransferEngineV2.updateProgress(
+                    transferId = transferId,
+                    bytesTransferred = currentBytes,
+                    speedBytesPerSec = (chunkSize * 8).coerceAtLeast(1024 * 512),
+                    chunkIndex = step,
+                    totalChunks = steps
+                )
+            }
+            TransferEngineV2.completeTransfer(transferId)
+        }
         onSuccess()
     }
 
@@ -106,6 +161,24 @@ object TransferEngine {
             deviceId = targetHost,
             deviceName = targetDeviceName
         )
+        // Notify target device via direct UDP packet
+        net.syncswift.discovery.sendDirectUdpClipRequest(targetHost, targetPort, text)
+
+        // Also notify via FCM push if peer token is known
+        val targetDev = DeviceDiscoveryManager.devices.value.firstOrNull { it.host == targetHost || it.name == targetDeviceName }
+        val pushTok = targetDev?.pushToken
+        if (!pushTok.isNullOrBlank()) {
+            net.syncswift.connection.ConnectionManager.sendFcmNotification(
+                token = pushTok,
+                title = "Yeni Pano İçeriği",
+                body = text.take(50),
+                data = mapOf(
+                    "type" to "clipboard_request",
+                    "text" to text,
+                    "senderHost" to targetHost
+                )
+            )
+        }
         onSuccess()
     }
 

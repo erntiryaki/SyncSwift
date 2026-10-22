@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Environment
 import android.util.Log
 import java.io.File
+import kotlinx.coroutines.launch
 
 actual fun currentPlatform(): PlatformFlavor = PlatformFlavor.Android
 actual fun currentTimeMs(): Long = System.currentTimeMillis()
@@ -389,5 +390,43 @@ actual fun getPlatformLocalIpAddress(): String? {
         return candidates.firstOrNull()
     } catch (_: Exception) {
         return null
+    }
+}
+
+actual fun platformSendFcmPush(token: String, title: String, body: String, data: Map<String, String>) {
+    if (token.isBlank()) return
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        try {
+            val url = java.net.URL("https://api.syncswift.net/api/fcm/send")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+
+            val payload = org.json.JSONObject().apply {
+                put("token", token)
+                put("targetToken", token)
+                put("title", title)
+                put("body", body)
+                put("priority", "high")
+                if (title.isNotBlank() || body.isNotBlank()) {
+                    put("notification", org.json.JSONObject().apply {
+                        put("title", title)
+                        put("body", body)
+                        put("sound", "default")
+                    })
+                }
+                val dataObj = org.json.JSONObject()
+                data.forEach { (k, v) -> dataObj.put(k, v) }
+                if (title.isNotBlank()) dataObj.put("title", title)
+                if (body.isNotBlank()) dataObj.put("body", body)
+                put("data", dataObj)
+            }
+
+            conn.outputStream.use { it.write(payload.toString().toByteArray()) }
+            conn.responseCode
+        } catch (_: Exception) {}
     }
 }

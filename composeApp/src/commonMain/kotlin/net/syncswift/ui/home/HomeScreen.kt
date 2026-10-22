@@ -515,22 +515,12 @@ fun HomeScreen(
                         color = CardSurface,
                         border = BorderStroke(1.dp, InputBorder)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = LocalSyncSwiftColors.current.blue
-                            )
-                            Text(
-                                text = copy.scanningNetworkDevices,
-                                color = Mist,
-                                fontSize = 13.sp
-                            )
-                        }
+                        Text(
+                            text = copy.noNearbyDevicesYet,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
                     }
                 }
 

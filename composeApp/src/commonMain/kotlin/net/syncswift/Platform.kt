@@ -41,3 +41,4 @@ expect fun showFileLocation(filePathOrUri: String?, fileName: String)
 expect fun formatEpochToDate(epochMillis: Long): String
 expect fun getCurrentPaywallSlotKey(): String
 expect fun getPlatformLocalIpAddress(): String?
+expect fun platformSendFcmPush(token: String, title: String, body: String, data: Map<String, String>)

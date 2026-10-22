@@ -441,21 +441,24 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
         }
     }
 
-    // Periodic active session verification: verify if this device was removed from Supabase devices table
+    // Ensure device is registered in Supabase on Home screen
     LaunchedEffect(email, screen) {
         if (email.isNotBlank() && screen == AuthStep.Home) {
             val devId = SessionManager.getPlatformDeviceId()
-            while (isActive) {
-                delay(12000)
-                if (email.isNotBlank() && screen == AuthStep.Home) {
-                    val uid = SessionManager.getLoggedInUserId() ?: SupabaseNetwork.getUserId(email)
-                    val isActiveInDb = SupabaseNetwork.isDeviceActiveInSupabase(devId, uid)
-                    if (!isActiveInDb) {
-                        SessionEventBus.emitRemoteLogout("Device removed from Supabase devices table")
-                        break
-                    }
-                }
-            }
+            val myName = SessionManager.getMyDeviceName()
+            val myPlatform = SessionManager.getMyPlatformName()
+            val myToken = SessionManager.getMyPushToken()
+            val uid = SessionManager.getLoggedInUserId() ?: SupabaseNetwork.getUserId(email)
+            SupabaseNetwork.registerDeviceInSupabase(
+                email = email,
+                deviceId = devId,
+                deviceName = myName,
+                deviceType = myPlatform,
+                pushToken = myToken,
+                localIp = "",
+                port = 52424,
+                userId = uid
+            )
         }
     }
 
@@ -1244,6 +1247,101 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
                 }
             }
 
+            // BOTTOM SHEET: Gelen Bağlantı İsteği
+            val pairReq = pendingPairRequest
+            if (pairReq != null) {
+                net.syncswift.ui.components.SyncSwiftBottomSheet(
+                    visible = true,
+                    onDismissRequest = {
+                        net.syncswift.connection.ConnectionManager.rejectPairRequest(pairReq)
+                    },
+                    title = copy.notificationPairRequestTitle,
+                    titleIcon = { LaptopVectorIcon(Modifier.size(20.dp), color = Blue) },
+                    confirmText = copy.accept,
+                    confirmColor = Blue,
+                    confirmTextColor = Color.White,
+                    onConfirm = {
+                        net.syncswift.connection.ConnectionManager.acceptPairRequest(pairReq)
+                    },
+                    dismissText = "Reddet",
+                    onDismiss = {
+                        net.syncswift.connection.ConnectionManager.rejectPairRequest(pairReq)
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "${pairReq.senderName} cihazınızla bağlantı kurmak istiyor.",
+                            color = Cloud,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${pairReq.senderOsType} • ${pairReq.senderHost}",
+                            color = Mist,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
+            // BOTTOM SHEET: Gelen Dosya Aktarım İsteği
+            val transferReq = pendingTransferRequest
+            if (transferReq != null) {
+                net.syncswift.ui.components.SyncSwiftBottomSheet(
+                    visible = true,
+                    onDismissRequest = {
+                        net.syncswift.connection.ConnectionManager.rejectTransferRequest(transferReq)
+                    },
+                    title = "Gelen Dosya İsteği",
+                    titleIcon = { TransferVectorIcon(Modifier.size(20.dp), color = SuccessGreen) },
+                    confirmText = copy.accept,
+                    confirmColor = SuccessGreen,
+                    confirmTextColor = Color.White,
+                    onConfirm = {
+                        net.syncswift.connection.ConnectionManager.acceptTransferRequest(transferReq)
+                    },
+                    dismissText = "Reddet",
+                    onDismiss = {
+                        net.syncswift.connection.ConnectionManager.rejectTransferRequest(transferReq)
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "${transferReq.senderName} size bir dosya göndermek istiyor:",
+                            color = Mist,
+                            fontSize = 13.sp
+                        )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = CardSurface,
+                            border = BorderStroke(1.dp, InputBorder)
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    text = transferReq.fileName,
+                                    color = Cloud,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = transferReq.formattedSize,
+                                    color = Mist,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // BOTTOM SHEET: Maksimum Cihaz Sınırı Uyarısı & Eski Cihazımı Kaldır
             if (blockedDeviceLimitData != null) {
                 val limitData = blockedDeviceLimitData!!
@@ -1544,5 +1642,6 @@ fun SyncSwiftApp(onboardingSeen: Boolean = false, onOnboardingFinished: () -> Un
     }
 }
 }
+
 
 

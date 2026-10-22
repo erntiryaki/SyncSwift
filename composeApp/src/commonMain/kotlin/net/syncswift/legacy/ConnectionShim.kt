@@ -8,6 +8,7 @@ import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.pairing.PairingManager
 import net.syncswift.pairing.PairedDevice
+import net.syncswift.SessionManager
 
 enum class PairResult {
     ACCEPTED,
@@ -92,7 +93,21 @@ object ConnectionManager {
         markDeviceConnected(target.id.ifBlank { target.host })
         markDeviceConnected("${target.host}:${target.port}")
         markDeviceConnected(target.name)
-        net.syncswift.discovery.sendDirectUdpAnnouncement(target.host, target.port)
+        net.syncswift.discovery.sendDirectUdpPairRequest(target.host, target.port)
+        if (!target.pushToken.isNullOrBlank()) {
+            sendFcmNotification(
+                token = target.pushToken,
+                title = "SyncSwift Bağlantı İsteği",
+                body = "${SessionManager.getMyDeviceName()} cihazınızla bağlanmak istiyor.",
+                data = mapOf(
+                    "type" to "pair_request",
+                    "senderHost" to (DeviceDiscoveryManager.getLocalIpAddress() ?: ""),
+                    "senderPort" to "52424",
+                    "senderId" to SessionManager.getPlatformDeviceId(),
+                    "senderName" to SessionManager.getMyDeviceName()
+                )
+            )
+        }
         onResult(PairResult.ACCEPTED)
     }
 
@@ -197,7 +212,9 @@ object ConnectionManager {
     fun updateCachedAccountDevices(devices: List<DiscoveredDevice>) {}
     fun getCachedAccountDevices(): List<DiscoveredDevice> = emptyList()
     fun addCachedAccountDevice(device: DiscoveredDevice) {}
-    fun sendFcmNotification(token: String, title: String, body: String, data: Map<String, String> = emptyMap()) {}
+    fun sendFcmNotification(token: String, title: String, body: String, data: Map<String, String> = emptyMap()) {
+        net.syncswift.platformSendFcmPush(token, title, body, data)
+    }
     fun dispatchIncomingTransferRequest(request: IncomingTransferRequest) {
         _pendingTransferRequest.value = request
     }
