@@ -255,12 +255,42 @@ fun HomeScreen(
         list.distinctBy { cleanDeviceDisplayName(it.name) }
     }
 
-    val nearbyDevices = remember { emptyList<UiDeviceItem>() }
+    val nearbyDevices = remember(realOtherDevices, connectedKeys, myDevices, registeredAccountDevices) {
+        val myDeviceIds = myDevices.map { it.id }.toSet()
+        val myDeviceNames = myDevices.map { cleanDeviceDisplayName(it.name) }.toSet()
 
-    val allDeviceItems = remember(connectedDevices, myDevices) {
+        val list = mutableListOf<UiDeviceItem>()
+
+        realOtherDevices.filter { dev ->
+            val devClean = cleanDeviceDisplayName(dev.name)
+            val isAlreadyInMyDevices = myDeviceIds.contains(dev.id) || myDeviceNames.contains(devClean)
+            val isConn = connectedKeys.contains("${dev.host}:${dev.port}") ||
+                    connectedKeys.contains(dev.id) ||
+                    connectedKeys.contains(dev.host) ||
+                    connectedKeys.contains(devClean) ||
+                    ConnectionManager.isDeviceConnected(dev)
+            !isConn && !isAlreadyInMyDevices && !isMyAccountDevice(dev)
+        }.forEach { dev ->
+            val clean = cleanDeviceDisplayName(dev.name)
+            list.add(
+                UiDeviceItem(
+                    id = dev.id.ifBlank { dev.host },
+                    name = clean,
+                    os = formatDeviceOs(dev.osType, dev.name),
+                    isOnline = dev.isOnline,
+                    section = DeviceSectionType.NEARBY,
+                    realDevice = dev.copy(name = clean)
+                )
+            )
+        }
+
+        list.distinctBy { cleanDeviceDisplayName(it.name) }
+    }
+
+    val allDeviceItems = remember(nearbyDevices, connectedDevices, myDevices) {
         val result = mutableListOf<UiDeviceItem>()
-        // Priority order: Connected > My Devices > Nearby
-        for (item in connectedDevices + myDevices + nearbyDevices) {
+        // Priority order: Connected > Nearby > My Devices
+        for (item in connectedDevices + nearbyDevices + myDevices) {
             val isDuplicate = result.any { existing ->
                 (item.realDevice?.host?.isNotBlank() == true && item.realDevice?.host != "127.0.0.1" && item.realDevice?.host == existing.realDevice?.host) ||
                 (item.id.isNotBlank() && item.id == existing.id) ||
@@ -451,24 +481,24 @@ fun HomeScreen(
                 ) {
                 Spacer(Modifier.height(8.dp))
 
-                // SECTION 1: KENDİ CİHAZLARIM (Horizontal Oval Cards)
+                // SECTION 1: YEREL CİHAZLAR (Discovered LAN Devices)
                 SectionHeaderRow(
-                    title = copy.myDevicesTitle,
-                    count = myDevices.size,
+                    title = copy.nearbyDevicesSection,
+                    count = nearbyDevices.size,
                     copy = copy,
-                    onViewAllClick = { viewAllSection = DeviceSectionType.MY_DEVICES }
+                    onViewAllClick = { viewAllSection = DeviceSectionType.NEARBY }
                 )
 
                 Spacer(Modifier.height(12.dp))
 
-                if (myDevices.isNotEmpty()) {
+                if (nearbyDevices.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        myDevices.take(5).forEach { dev ->
+                        nearbyDevices.take(6).forEach { dev ->
                             NearbyDeviceCard(
                                 item = dev,
                                 onClick = { handleDeviceSelection(dev) },
@@ -485,12 +515,22 @@ fun HomeScreen(
                         color = CardSurface,
                         border = BorderStroke(1.dp, InputBorder)
                     ) {
-                        Text(
-                            text = copy.noLinkedDesktop,
-                            color = Mist,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(14.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = LocalSyncSwiftColors.current.blue
+                            )
+                            Text(
+                                text = copy.scanningNetworkDevices,
+                                color = Mist,
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
 
@@ -513,7 +553,7 @@ fun HomeScreen(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        connectedDevices.take(5).forEach { dev ->
+                        connectedDevices.take(6).forEach { dev ->
                             NearbyDeviceCard(
                                 item = dev,
                                 onClick = { handleDeviceSelection(dev) },
@@ -532,6 +572,51 @@ fun HomeScreen(
                     ) {
                         Text(
                             text = copy.noConnectedDevicesYet,
+                            color = Mist,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // SECTION 3: KENDİ CİHAZLARIM (Horizontal Oval Cards)
+                SectionHeaderRow(
+                    title = copy.myDevicesTitle,
+                    count = myDevices.size,
+                    copy = copy,
+                    onViewAllClick = { viewAllSection = DeviceSectionType.MY_DEVICES }
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                if (myDevices.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        myDevices.take(6).forEach { dev ->
+                            NearbyDeviceCard(
+                                item = dev,
+                                onClick = { handleDeviceSelection(dev) },
+                                modifier = Modifier.width(114.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        color = CardSurface,
+                        border = BorderStroke(1.dp, InputBorder)
+                    ) {
+                        Text(
+                            text = copy.noLinkedDesktop,
                             color = Mist,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(14.dp)

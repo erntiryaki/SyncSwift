@@ -172,10 +172,14 @@ export default function App() {
     callTauri<DeviceIdentity | null>("get_or_create_device_identity", {}, null).then(id => {
       if (id) {
         setIdentity(id);
-        callTauri<PairingSession | null>("create_pairing_session", { deviceId: id.device_id }, null).then(sess => {
+        Promise.all([
+          callTauri<PairingSession | null>("create_pairing_session", { deviceId: id.device_id }, null),
+          callTauri<string>("get_local_ip_address", {}, "127.0.0.1")
+        ]).then(([sess, localIp]) => {
           if (sess) {
             setPairingSession(sess);
-            const qrUri = `syncswift://remote?code=${sess.pairing_code}&host=192.168.1.100&port=52424&name=${encodeURIComponent(id.device_name)}&os=Windows`;
+            const actualHost = localIp && localIp !== "127.0.0.1" ? localIp : "127.0.0.1";
+            const qrUri = `syncswift://remote?code=${sess.pairing_code}&host=${actualHost}&port=52424&name=${encodeURIComponent(id.device_name)}&os=Windows`;
             QRCode.toDataURL(qrUri, { margin: 1, width: 180, color: { dark: "#0A0F1D", light: "#FFFFFF" } })
               .then(setQrDataUrl)
               .catch(() => {});

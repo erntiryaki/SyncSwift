@@ -126,7 +126,7 @@ fn start_lan_discovery_thread() {
 
             if let Ok((len, src)) = socket.recv_from(&mut buf) {
                 if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if text.starts_with("SYNCSWIFT:ANNOUNCE|") {
+                    if text.starts_with("SYNCSWIFT:ANNOUNCE|") || text.starts_with("SYNCSWIFT:PAIR_ACCEPT|") || text.starts_with("SYNCSWIFT:PAIR_REQ|") {
                         let parts: Vec<&str> = text.split('|').collect();
                         if parts.len() >= 5 {
                             let peer_id = parts[1].to_string();
@@ -146,6 +146,10 @@ fn start_lan_discovery_thread() {
                                         port: peer_port,
                                     });
                                 }
+
+                                // Send direct announcement back to sender so mobile immediately discovers PC
+                                let ack = format!("SYNCSWIFT:ANNOUNCE|win_desktop|{}|Windows|52424", my_name);
+                                let _ = socket.send_to(ack.as_bytes(), src);
                             }
                         }
                     }

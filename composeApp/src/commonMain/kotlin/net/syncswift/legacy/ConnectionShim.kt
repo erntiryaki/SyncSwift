@@ -92,6 +92,7 @@ object ConnectionManager {
         markDeviceConnected(target.id.ifBlank { target.host })
         markDeviceConnected("${target.host}:${target.port}")
         markDeviceConnected(target.name)
+        net.syncswift.discovery.sendDirectUdpAnnouncement(target.host, target.port)
         onResult(PairResult.ACCEPTED)
     }
 
@@ -189,6 +190,7 @@ object ConnectionManager {
         markDeviceConnected("${dev.host}:${dev.port}")
         markDeviceConnected(dev.name)
         markDeviceConnected(clean)
+        net.syncswift.discovery.sendDirectUdpAnnouncement(dev.host, dev.port)
         onResult(PairResult.ACCEPTED)
     }
 

@@ -104,3 +104,20 @@ actual fun stopPlatformUdpDiscovery() {
     } catch (_: Exception) {}
     activeSocket = null
 }
+
+actual fun sendDirectUdpAnnouncement(targetHost: String, targetPort: Int) {
+    if (targetHost.isBlank() || targetHost == "127.0.0.1") return
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val myName = SessionManager.getMyDeviceName()
+            val myId = SessionManager.getPlatformDeviceId()
+            val msg = "SYNCSWIFT:PAIR_ACCEPT|$myId|$myName|Android|52424"
+            val data = msg.toByteArray()
+            val addr = InetAddress.getByName(targetHost)
+            val packet = DatagramPacket(data, data.size, addr, targetPort)
+            val socket = DatagramSocket()
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
+    }
+}
