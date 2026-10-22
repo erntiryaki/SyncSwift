@@ -175,25 +175,23 @@ fun ConnectedDevicesScreen(
             }
 
             fun attemptDirectLocalPairing() {
-                if (host.isNotBlank() && host != "127.0.0.1" && host != "0.0.0.0") {
-                    val dev = DeviceDiscoveryManager.addManualDevice(host = host, port = port, name = name, osType = os)
-                    showScanModal = false
-                    showNativeToast(copy.sendingConnectionRequest)
-                    ConnectionManager.requestPairing(dev) { result ->
-                        when (result) {
-                            PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
-                            PairResult.REJECTED -> {
-                                ConnectionManager.disconnectDevice(dev, notifyPeer = false)
-                                showNativeToast(copy.connectionRejected)
-                            }
-                            PairResult.EXPIRED_OR_USED -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
-                            PairResult.UNAVAILABLE -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
-                            PairResult.PENDING_APPROVAL -> {}
+                val targetHost = when {
+                    host.isNotBlank() && host != "127.0.0.1" && host != "0.0.0.0" -> host
+                    else -> DeviceDiscoveryManager.devices.value.firstOrNull { !it.isSelf }?.host ?: DeviceDiscoveryManager.getLocalIpAddress() ?: "127.0.0.1"
+                }
+                val dev = DeviceDiscoveryManager.addManualDevice(host = targetHost, port = port, name = name, osType = os)
+                showScanModal = false
+                showNativeToast(copy.sendingConnectionRequest)
+                ConnectionManager.requestPairing(dev) { result ->
+                    when (result) {
+                        PairResult.ACCEPTED -> showNativeToast(copy.connectionAccepted)
+                        PairResult.REJECTED -> {
+                            ConnectionManager.disconnectDevice(dev, notifyPeer = false)
+                            showNativeToast(copy.connectionRejected)
                         }
+                        PairResult.EXPIRED_OR_USED, PairResult.UNAVAILABLE -> showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                        PairResult.PENDING_APPROVAL -> {}
                     }
-                } else {
-                    showScanModal = false
-                    showNativeToast(copy.codeExpiredOrAlreadyUsed)
                 }
             }
 

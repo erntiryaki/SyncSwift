@@ -20,36 +20,42 @@ actual object SupabaseNetwork {
         idToken: String?,
         password: String
     ): Boolean = withContext(Dispatchers.IO) {
+        val supabaseUrl = SyncSwiftConfig.SUPABASE_URL
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext false
         try {
             val providerString = when (provider) {
                 IdentityProvider.Google -> "google"
                 IdentityProvider.Apple -> "apple"
                 else -> "email"
             }
-
             val cleanEmail = email.lowercase().trim()
-            Log.d("SupabaseNetwork", "Registering user in Supabase via RPC for $cleanEmail ($providerString)...")
+            Log.d("SupabaseNetwork", "Registering user in Supabase for $cleanEmail ($providerString)...")
 
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/rpc/register_auth_user")
+            // 1. Supabase standard auth signup using anon key
+            val url = URL("$supabaseUrl/auth/v1/signup")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
-            conn.setRequestProperty("apikey", effectiveKey)
-            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
+            conn.setRequestProperty("apikey", anonKey)
+            conn.setRequestProperty("Authorization", "Bearer $anonKey")
             conn.setRequestProperty("Content-Type", "application/json")
             conn.doOutput = true
 
-            val payload = org.json.JSONObject().apply {
-                put("p_email", cleanEmail)
-                put("p_password", password)
-                put("p_first_name", firstName)
-                put("p_last_name", lastName)
-                put("p_provider", providerString)
+            val signupPayload = org.json.JSONObject().apply {
+                put("email", cleanEmail)
+                put("password", password.ifBlank { "SyncSwift_${System.currentTimeMillis()}!" })
+                val meta = org.json.JSONObject().apply {
+                    put("first_name", firstName)
+                    put("last_name", lastName)
+                    put("provider", providerString)
+                }
+                put("data", meta)
             }
 
             conn.outputStream.use { os ->
-                os.write(payload.toString().toByteArray(Charsets.UTF_8))
+                os.write(signupPayload.toString().toByteArray(Charsets.UTF_8))
             }
 
             val responseCode = conn.responseCode
@@ -58,17 +64,50 @@ actual object SupabaseNetwork {
             } else {
                 conn.errorStream?.bufferedReader()?.readText() ?: ""
             }
-            Log.d("SupabaseNetwork", "register_auth_user RPC response: code=$responseCode body=$responseText")
+            Log.d("SupabaseNetwork", "signup response: code=$responseCode body=$responseText")
 
+            var userId: String? = null
             if (responseCode in 200..299) {
-                val json = org.json.JSONObject(responseText)
-                val userId = json.optString("user_id").ifBlank { null }
-                if (!userId.isNullOrBlank()) {
-                    SessionManager.saveLoggedInUserId(userId)
-                }
-                return@withContext true
+                val idRegex = "\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                userId = idRegex.find(responseText)?.groupValues?.getOrNull(1)
             }
-            return@withContext false
+            if (userId.isNullOrBlank()) {
+                userId = getUserIdFromProfile(cleanEmail)
+            }
+            if (!userId.isNullOrBlank()) {
+                SessionManager.saveLoggedInUserId(userId)
+            }
+
+            // 2. Upsert profile table
+            try {
+                val profPayload = org.json.JSONObject().apply {
+                    if (!userId.isNullOrBlank()) put("id", userId)
+                    put("email", cleanEmail)
+                    if (firstName.isNotBlank()) put("first_name", firstName)
+                    if (lastName.isNotBlank()) put("last_name", lastName)
+                    put("auth_provider", providerString)
+                }
+
+                val postUrl = URL("$supabaseUrl/rest/v1/profiles")
+                val postConn = postUrl.openConnection() as HttpURLConnection
+                postConn.requestMethod = "POST"
+                postConn.connectTimeout = 8000
+                postConn.readTimeout = 8000
+                postConn.setRequestProperty("apikey", anonKey)
+                postConn.setRequestProperty("Authorization", "Bearer $anonKey")
+                postConn.setRequestProperty("Content-Type", "application/json")
+                postConn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+                postConn.doOutput = true
+                postConn.outputStream.use { os ->
+                    os.write(profPayload.toString().toByteArray(Charsets.UTF_8))
+                }
+                val postCode = postConn.responseCode
+                Log.d("SupabaseNetwork", "Profiles POST code: $postCode")
+            } catch (ex: Exception) {
+                Log.w("SupabaseNetwork", "Profile upsert error: ${ex.message}")
+            }
+
+            return@withContext responseCode in 200..299 || responseCode == 422
         } catch (e: Exception) {
             Log.e("SupabaseNetwork", "Failed to register user in Supabase: ${e.message}", e)
             return@withContext false
@@ -76,27 +115,24 @@ actual object SupabaseNetwork {
     }
 
     actual suspend fun checkUserExists(email: String): Boolean = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext false
+        val supabaseUrl = SyncSwiftConfig.SUPABASE_URL
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext false
         try {
             val cleanEmail = email.lowercase().trim()
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/rpc/check_user_exists")
+            val url = URL("$supabaseUrl/rest/v1/profiles?email=eq.$cleanEmail&select=id")
             val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
+            conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            conn.setRequestProperty("apikey", effectiveKey)
-            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-
-            val payload = org.json.JSONObject().apply { put("p_email", cleanEmail) }
-            conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-
+            conn.setRequestProperty("apikey", anonKey)
+            conn.setRequestProperty("Authorization", "Bearer $anonKey")
+            conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code in 200..299) {
                 val body = conn.inputStream.bufferedReader().readText().trim()
-                val exists = body == "true"
-                Log.d("SupabaseNetwork", "check_user_exists RPC for $cleanEmail: $exists")
+                val exists = body.contains("\"id\"") && body != "[]"
+                Log.d("SupabaseNetwork", "checkUserExists for $cleanEmail: $exists")
                 return@withContext exists
             }
             return@withContext false
@@ -107,30 +143,29 @@ actual object SupabaseNetwork {
     }
 
     actual suspend fun getUserProvider(email: String): IdentityProvider? = withContext(Dispatchers.IO) {
-        if (SyncSwiftConfig.SUPABASE_URL.isBlank() || effectiveKey.isBlank()) return@withContext null
+        val supabaseUrl = SyncSwiftConfig.SUPABASE_URL
+        val anonKey = effectiveKey
+        if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext null
         try {
             val cleanEmail = email.lowercase().trim()
-            val url = URL("${SyncSwiftConfig.SUPABASE_URL}/rest/v1/rpc/get_user_provider")
+            val url = URL("$supabaseUrl/rest/v1/profiles?email=eq.$cleanEmail&select=auth_provider")
             val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
+            conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            conn.setRequestProperty("apikey", effectiveKey)
-            conn.setRequestProperty("Authorization", "Bearer $effectiveKey")
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-
-            val payload = org.json.JSONObject().apply { put("p_email", cleanEmail) }
-            conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+            conn.setRequestProperty("apikey", anonKey)
+            conn.setRequestProperty("Authorization", "Bearer $anonKey")
+            conn.setRequestProperty("Accept", "application/json")
 
             val code = conn.responseCode
             if (code in 200..299) {
-                val body = conn.inputStream.bufferedReader().readText().trim().replace("\"", "").lowercase()
-                Log.d("SupabaseNetwork", "get_user_provider RPC for $cleanEmail: $body")
+                val body = conn.inputStream.bufferedReader().readText().trim().lowercase()
+                Log.d("SupabaseNetwork", "getUserProvider for $cleanEmail: $body")
                 return@withContext when {
                     body.contains("google") -> IdentityProvider.Google
                     body.contains("apple") -> IdentityProvider.Apple
-                    body.isNotBlank() && body != "null" -> IdentityProvider.EmailPassword
+                    body.contains("email") -> IdentityProvider.EmailPassword
+                    body.isNotBlank() && body != "[]" -> IdentityProvider.EmailPassword
                     else -> null
                 }
             }

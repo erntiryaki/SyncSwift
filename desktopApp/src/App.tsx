@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import { 
   Send, 
   Smartphone, 
   Laptop, 
-  ShieldCheck, 
   FolderLock, 
   Settings, 
   Sun, 
@@ -16,10 +16,20 @@ import {
   X,
   HardDrive,
   Trash2,
-  Plus
+  Plus,
+  ClipboardList,
+  RefreshCw,
+  FolderSync,
+  Globe,
+  Share2,
+  DownloadCloud,
+  ShieldCheck,
+  Crown,
+  Monitor,
+  ExternalLink
 } from "lucide-react";
 
-type NavTab = "home" | "devices" | "transfers" | "vault" | "settings";
+type NavTab = "home" | "clipboard" | "vault" | "sync" | "remote" | "settings";
 
 interface DeviceIdentity {
   device_id: string;
@@ -63,7 +73,22 @@ interface PairingSession {
   expires_at_ms: number;
 }
 
-// Helper to safely call Tauri IPC with graceful fallback
+interface SyncRule {
+  id: string;
+  local_path: string;
+  target_device: string;
+  direction: "two_way" | "one_way";
+  delete_propagation: boolean;
+  is_active: boolean;
+}
+
+interface ClipboardItem {
+  id: string;
+  content: string;
+  timestamp: string;
+  source_device: string;
+}
+
 async function callTauri<T>(cmd: string, args: Record<string, unknown> = {}, fallback: T): Promise<T> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -77,6 +102,7 @@ export default function App() {
   const [tab, setTab] = useState<NavTab>("home");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [copied, setCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const isTrayMode = window.location.search.includes("mode=tray");
 
   // Live state from Tauri backend
@@ -85,6 +111,57 @@ export default function App() {
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [vaultFiles, setVaultFiles] = useState<VaultFile[]>([]);
   const [pairingSession, setPairingSession] = useState<PairingSession | null>(null);
+
+  // Feature States
+  const [autoSyncClipboard, setAutoSyncClipboard] = useState(true);
+  const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>([
+    {
+      id: "1",
+      content: "https://syncswift.net/docs/architecture",
+      timestamp: "10 dk önce",
+      source_device: "Pixel 9 Pro"
+    },
+    {
+      id: "2",
+      content: "ssh root@169.58.143.66 -p 22",
+      timestamp: "1 saat önce",
+      source_device: "Bu Bilgisayar"
+    },
+    {
+      id: "3",
+      content: "SyncSwift2026SecurePass!",
+      timestamp: "3 saat önce",
+      source_device: "MacBook Air"
+    }
+  ]);
+
+  const [syncRules] = useState<SyncRule[]>([
+    {
+      id: "rule_1",
+      local_path: "C:\\Users\\btc\\Documents\\SyncSwift",
+      target_device: "Pixel 9 Pro",
+      direction: "two_way",
+      delete_propagation: true,
+      is_active: true
+    },
+    {
+      id: "rule_2",
+      local_path: "C:\\Users\\btc\\Pictures\\Screenshots",
+      target_device: "Tüm Bağlı Cihazlar",
+      direction: "one_way",
+      delete_propagation: false,
+      is_active: true
+    }
+  ]);
+
+  const [remoteFolders] = useState([
+    { name: "Camera", device: "Pixel 9 Pro", itemsCount: 142, size: "3.4 GB" },
+    { name: "Downloads", device: "Pixel 9 Pro", itemsCount: 28, size: "840 MB" },
+    { name: "Documents", device: "Pixel 9 Pro", itemsCount: 12, size: "45 MB" }
+  ]);
+
+  const [isPro] = useState(true);
+  const [language, setLanguage] = useState<"tr" | "en">("tr");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -95,7 +172,15 @@ export default function App() {
     callTauri<DeviceIdentity | null>("get_or_create_device_identity", {}, null).then(id => {
       if (id) {
         setIdentity(id);
-        callTauri<PairingSession | null>("create_pairing_session", { deviceId: id.device_id }, null).then(setPairingSession);
+        callTauri<PairingSession | null>("create_pairing_session", { deviceId: id.device_id }, null).then(sess => {
+          if (sess) {
+            setPairingSession(sess);
+            const qrUri = `syncswift://remote?code=${sess.pairing_code}&host=192.168.1.100&port=52424&name=${encodeURIComponent(id.device_name)}&os=Windows`;
+            QRCode.toDataURL(qrUri, { margin: 1, width: 180, color: { dark: "#0A0F1D", light: "#FFFFFF" } })
+              .then(setQrDataUrl)
+              .catch(() => {});
+          }
+        });
       }
     });
 
@@ -115,7 +200,7 @@ export default function App() {
   };
 
   const handleCopyCode = () => {
-    const code = pairingSession?.pairing_code || "SWIFT-2026-X";
+    const code = pairingSession?.pairing_code || "482910";
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -157,460 +242,590 @@ export default function App() {
     setTransfers(prev => prev.map(t => t.transfer_id === transferId ? { ...t, status: "CANCELLED" } : t));
   };
 
+  const handleWindowAction = async (action: "minimize" | "maximize" | "close") => {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const appWindow = getCurrentWindow();
+      if (action === "minimize") await appWindow.minimize();
+      else if (action === "maximize") {
+        const isMax = await appWindow.isMaximized();
+        if (isMax) await appWindow.unmaximize();
+        else await appWindow.maximize();
+      }
+      else if (action === "close") await appWindow.close();
+    } catch (_e) {}
+  };
+
   if (isTrayMode) {
     const latestTx = transfers.find(t => t.status === "TRANSFERRING");
     return (
-      <div className="w-[360px] h-[480px] bg-[var(--bg-night)] text-[var(--text-cloud)] p-4 flex flex-col justify-between select-none font-sans">
+      <div className="app-shell" style={{ width: 360, height: 480, padding: 18, flexDirection: "column", justifyContent: "space-between" }}>
         <div>
-          <div className="flex items-center justify-between pb-3 border-b border-[var(--border-input)]">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-[var(--success-green)] animate-pulse" />
-              <span className="font-bold text-sm">SyncSwift Ready</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--border-input)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="online-dot" />
+              <span style={{ fontWeight: 700, fontSize: 14 }}>SyncSwift Hazır</span>
             </div>
-            <button 
-              onClick={toggleTheme}
-              className="p-1.5 rounded-full hover:bg-[var(--bg-input)] text-[var(--text-mist)]"
-            >
+            <button onClick={toggleTheme} className="icon-btn">
               {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </button>
           </div>
 
-          <div className="mt-4 p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-input)] flex items-center justify-between">
-            <div>
-              <div className="text-xs text-[var(--text-mist)]">This Device</div>
-              <div className="text-sm font-semibold mt-0.5 truncate max-w-[200px]">
-                {identity?.device_name || "SyncSwift Desktop"}
-              </div>
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 14, backgroundColor: "var(--bg-card)", border: "1px solid var(--border-input)" }}>
+            <div style={{ fontSize: 11, color: "var(--text-mist)" }}>Bu Bilgisayar</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 4 }}>
+              {identity?.device_name || "SyncSwift Windows PC"}
             </div>
-            <span className="text-[10px] bg-[var(--bg-input)] px-2 py-1 rounded text-[var(--accent-blue)] font-mono">
-              {identity?.device_id || "win_..."}
-            </span>
           </div>
 
-          <div className="mt-4">
-            <div className="text-xs font-bold text-[var(--text-mist)] uppercase tracking-wider mb-2">Active Transfer</div>
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-mist)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              Aktif Aktarım
+            </div>
             {latestTx ? (
-              <div className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-input)]">
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-medium truncate max-w-[180px]">{latestTx.file_name}</span>
-                  <span className="text-[var(--accent-blue)] font-bold">In Progress</span>
+              <div className="swift-card" style={{ padding: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600 }}>{latestTx.file_name}</span>
+                  <span style={{ color: "var(--accent-blue)", fontWeight: 700 }}>Aktarılıyor</span>
                 </div>
-                <div className="w-full h-1.5 bg-[var(--bg-input)] rounded-full overflow-hidden">
-                  <div className="h-full bg-[var(--accent-blue)] rounded-full animate-pulse w-[65%]" />
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: "68%" }} />
                 </div>
-                <div className="flex justify-between items-center text-[10px] text-[var(--text-placeholder)] mt-1.5">
-                  <span>12.5 MB/s (LAN Mesh)</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-mist)", marginTop: 6 }}>
+                  <span>24.8 MB/s (LAN Mesh)</span>
                   <span>{(latestTx.file_size / (1024 * 1024)).toFixed(1)} MB</span>
                 </div>
               </div>
             ) : (
-              <div className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-input)] text-xs text-center text-[var(--text-placeholder)]">
-                No active transfers
+              <div className="swift-card" style={{ padding: 16, textAlign: "center", fontSize: 13, color: "var(--text-placeholder)" }}>
+                Aktif aktarım bulunmuyor
               </div>
             )}
           </div>
         </div>
 
-        <div className="pt-3 border-t border-[var(--border-input)] flex items-center justify-between text-xs text-[var(--text-mist)]">
+        <div style={{ paddingTop: 12, borderTop: "1px solid var(--border-input)", display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-mist)" }}>
           <span>v2.0 Self-Hosted</span>
-          <button 
-            onClick={() => window.close()}
-            className="hover:text-[var(--text-cloud)]"
-          >
-            Close
-          </button>
+          <button onClick={() => window.close()} className="icon-btn sm" style={{ border: "none", background: "none" }}>Kapat</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-[var(--bg-night)] text-[var(--text-cloud)] overflow-hidden font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-[var(--bg-card)] border-r border-[var(--border-input)] flex flex-col justify-between p-4 z-10">
+    <div className="app-shell">
+      {/* Sidebar Navigation */}
+      <aside className="app-sidebar">
         <div>
-          {/* Logo & App Name */}
-          <div className="flex items-center gap-3 px-2 py-3 mb-6">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[var(--btn-pill-bg)] to-[var(--accent-blue)] flex items-center justify-center shadow-lg shadow-blue-500/20 text-white font-extrabold text-lg">
-              S
-            </div>
-            <div>
-              <h1 className="font-extrabold text-base tracking-tight">SyncSwift</h1>
-              <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-mist)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--success-green)]" />
-                {identity ? `${identity.device_name}` : "LAN Mesh Active"}
+          {/* Brand Header */}
+          <div className="brand-header">
+            <div className="brand-logo-icon">S</div>
+            <div className="brand-text">
+              <h1>SyncSwift</h1>
+              <div className="status-indicator">
+                <span className="online-dot" />
+                <span>{identity ? identity.device_name : "LAN Mesh Hazır"}</span>
               </div>
             </div>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="space-y-1">
-            <button
-              onClick={() => setTab("home")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                tab === "home" 
-                  ? "bg-[var(--bg-input)] text-[var(--accent-blue)] border border-[var(--border-highlight)]" 
-                  : "text-[var(--text-mist)] hover:text-[var(--text-cloud)] hover:bg-[var(--bg-input)]"
-              }`}
+          {/* Nav Items */}
+          <nav className="nav-menu">
+            <button 
+              onClick={() => setTab("home")} 
+              className={`nav-item ${tab === "home" ? "active" : ""}`}
             >
               <Send size={18} />
-              <span>Transfers & Mesh</span>
+              <span>Hızlı Paylaşım</span>
             </button>
 
-            <button
-              onClick={() => setTab("devices")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                tab === "devices" 
-                  ? "bg-[var(--bg-input)] text-[var(--accent-blue)] border border-[var(--border-highlight)]" 
-                  : "text-[var(--text-mist)] hover:text-[var(--text-cloud)] hover:bg-[var(--bg-input)]"
-              }`}
+            <button 
+              onClick={() => setTab("clipboard")} 
+              className={`nav-item ${tab === "clipboard" ? "active" : ""}`}
             >
-              <Smartphone size={18} />
-              <span>Paired Devices</span>
+              <ClipboardList size={18} />
+              <span>Pano Geçmişi</span>
+              <span className="nav-item-badge">{clipboardItems.length}</span>
             </button>
 
-            <button
-              onClick={() => setTab("vault")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                tab === "vault" 
-                  ? "bg-[var(--bg-input)] text-[var(--accent-blue)] border border-[var(--border-highlight)]" 
-                  : "text-[var(--text-mist)] hover:text-[var(--text-cloud)] hover:bg-[var(--bg-input)]"
-              }`}
+            <button 
+              onClick={() => setTab("vault")} 
+              className={`nav-item ${tab === "vault" ? "active" : ""}`}
             >
               <FolderLock size={18} />
-              <span>Personal Vault</span>
+              <span>Kasa & Takım</span>
             </button>
 
-            <button
-              onClick={() => setTab("settings")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                tab === "settings" 
-                  ? "bg-[var(--bg-input)] text-[var(--accent-blue)] border border-[var(--border-highlight)]" 
-                  : "text-[var(--text-mist)] hover:text-[var(--text-cloud)] hover:bg-[var(--bg-input)]"
-              }`}
+            <button 
+              onClick={() => setTab("sync")} 
+              className={`nav-item ${tab === "sync" ? "active" : ""}`}
+            >
+              <FolderSync size={18} />
+              <span>Klasör Eşitleme</span>
+              <span className="nav-item-badge">{syncRules.length}</span>
+            </button>
+
+            <button 
+              onClick={() => setTab("remote")} 
+              className={`nav-item ${tab === "remote" ? "active" : ""}`}
+            >
+              <Monitor size={18} />
+              <span>Uzak Gezgin</span>
+            </button>
+
+            <button 
+              onClick={() => setTab("settings")} 
+              className={`nav-item ${tab === "settings" ? "active" : ""}`}
             >
               <Settings size={18} />
-              <span>Settings</span>
+              <span>Ayarlar</span>
             </button>
           </nav>
         </div>
 
-        {/* VPS & Storage Status Banner */}
-        <div className="p-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-input)] space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[var(--text-mist)] font-medium flex items-center gap-1.5">
-              <HardDrive size={13} /> MinIO S3 Vault
-            </span>
-            <span className="text-[var(--success-green)] font-semibold">Online</span>
-          </div>
-          <div className="w-full h-1.5 bg-[var(--border-input)] rounded-full overflow-hidden">
-            <div className="h-full bg-[var(--accent-blue)] rounded-full w-[20%]" />
-          </div>
-          <div className="flex justify-between text-[10px] text-[var(--text-placeholder)]">
-            <span>{vaultFiles.length} file(s) synced</span>
-            <span>Zero-Knowledge</span>
+        {/* Sidebar Footer */}
+        <div className="sidebar-footer">
+          <div className="device-badge-row">
+            <div>
+              <div style={{ color: "var(--text-mist)", fontSize: 10, textTransform: "uppercase", fontWeight: 700 }}>Ağ Durumu</div>
+              <div style={{ color: "var(--text-cloud)", fontWeight: 700, marginTop: 2 }}>Port 52424 • Aktif</div>
+            </div>
+            <span className="os-tag" style={{ color: "var(--accent-blue)" }}>P2P Mesh</span>
           </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* TopBar with controls */}
-        <header className="h-14 border-b border-[var(--border-input)] flex items-center justify-between px-6 bg-[var(--bg-card)]/50 backdrop-blur-md">
-          <div className="flex items-center gap-3 text-xs text-[var(--text-mist)]">
-            <span className="flex items-center gap-1.5 font-medium">
-              <Wifi size={14} className="text-[var(--accent-blue)]" />
-              Direct Mesh: Ready
-            </span>
-            <span>•</span>
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck size={14} className="text-[var(--success-green)]" />
-              ChaCha20-Poly1305 AEAD
-            </span>
+      {/* Main Viewport */}
+      <main className="main-viewport">
+        {/* Custom Window Title Bar */}
+        <header className="window-titlebar">
+          <div className="titlebar-title">
+            <Laptop size={16} color="var(--accent-blue)" />
+            <span>SyncSwift Desktop v2.0</span>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-xl bg-[var(--bg-input)] text-[var(--text-mist)] hover:text-[var(--text-cloud)] transition-colors"
-              title="Toggle Theme"
-            >
+          <div className="titlebar-actions">
+            <button onClick={toggleTheme} className="icon-btn" title="Tema Değiştir">
               {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
             </button>
-
-            {/* Window Controls */}
-            <div className="flex items-center gap-1 pl-2 border-l border-[var(--border-input)]">
-              <button className="p-2 rounded-lg hover:bg-[var(--bg-input)] text-[var(--text-mist)]">
-                <Minus size={14} />
-              </button>
-              <button className="p-2 rounded-lg hover:bg-[var(--bg-input)] text-[var(--text-mist)]">
-                <Square size={12} />
-              </button>
-              <button 
-                onClick={() => window.close()}
-                className="p-2 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-[var(--text-mist)]"
-              >
-                <X size={14} />
-              </button>
-            </div>
+            <button onClick={() => handleWindowAction("minimize")} className="icon-btn" title="Simge Durumuna Küçült">
+              <Minus size={14} />
+            </button>
+            <button onClick={() => handleWindowAction("maximize")} className="icon-btn" title="Pencereyi Büyüt">
+              <Square size={12} />
+            </button>
+            <button onClick={() => handleWindowAction("close")} className="icon-btn danger" title="Kapat">
+              <X size={15} />
+            </button>
           </div>
         </header>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
+        {/* Dynamic Content Body based on tab */}
+        <div className="content-body">
           {tab === "home" && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              {/* Hero Drop Target */}
-              <div 
-                onClick={() => {
-                  if (devices.length > 0) {
-                    handleStartMockTransfer(devices[0]);
-                  }
-                }}
-                className="p-8 rounded-2xl bg-[var(--bg-card)] border-2 border-dashed border-[var(--border-input)] hover:border-[var(--accent-blue)]/50 transition-all text-center flex flex-col items-center justify-center gap-4 cursor-pointer group"
-              >
-                <div className="w-14 h-14 rounded-2xl bg-[var(--bg-input)] group-hover:scale-105 transition-transform flex items-center justify-center text-[var(--accent-blue)]">
-                  <Send size={26} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold">Drag & drop files or click to stream</h2>
-                  <p className="text-xs text-[var(--text-mist)] mt-1">
-                    Chunked into 1 MiB AEAD frames and encrypted with Ed25519 authenticated session keys
-                  </p>
-                </div>
-                <button className="pill-button text-xs py-2.5 px-6">
-                  Select Files to Send
-                </button>
+            <div>
+              <div className="section-header">
+                <h2 className="section-title">Hızlı Paylaşım & Cihazlar</h2>
+                <p className="section-desc">Yerel ağdaki cihazlara anında dosya ve pano aktarın.</p>
               </div>
 
-              {/* Active Transfers Queue */}
+              {/* 2-Column Hero: Pairing Code + QR Code */}
+              <div className="cards-grid-2">
+                {/* 6-Digit Code Card */}
+                <div className="swift-card">
+                  <div className="card-title">
+                    <Share2 size={18} color="var(--accent-blue)" />
+                    <span>Hızlı Eşleşme Kodu</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: "var(--text-mist)", marginTop: 8 }}>
+                    Mobil cihazınızdan <strong>Bağlı Cihazlar</strong> menüsüne girip bu 6 haneli kodu yazın:
+                  </p>
+                  <div className="pair-code-hero">
+                    <span className="pair-digits">{pairingSession?.pairing_code || "482910"}</span>
+                    <button onClick={handleCopyCode} className="pill-button sm">
+                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                      <span>{copied ? "Kopyalandı" : "Kopyala"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* QR Code Card */}
+                <div className="swift-card" style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                  <div style={{ backgroundColor: "#FFFFFF", padding: 8, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {qrDataUrl ? (
+                      <img src={qrDataUrl} alt="Pairing QR" style={{ width: 110, height: 110, display: "block" }} />
+                    ) : (
+                      <div style={{ width: 110, height: 110, backgroundColor: "#E2E8F0", borderRadius: 10 }} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="card-title" style={{ fontSize: 14 }}>
+                      <Smartphone size={16} color="var(--accent-blue)" />
+                      <span>Kamera ile Tara</span>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-mist)", marginTop: 6, lineHeight: 1.4 }}>
+                      Mobil uygulamadaki <strong>QR Tara</strong> butonuna dokunarak doğrudan anında bağlanın.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Discovered LAN Mesh Devices */}
+              <div style={{ marginTop: 32 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.2 }}>Ağdaki Cihazlar ({devices.length})</h3>
+                    <p style={{ fontSize: 12.5, color: "var(--text-mist)", marginTop: 2 }}>Port 52424 UDP yayını ile bulunan cihazlar</p>
+                  </div>
+                  <button onClick={() => callTauri<LanDevice[]>("get_lan_devices", {}, []).then(setDevices)} className="pill-button secondary sm">
+                    <RefreshCw size={13} />
+                    <span>Yenile</span>
+                  </button>
+                </div>
+
+                {devices.length === 0 ? (
+                  <div className="swift-card" style={{ textAlign: "center", padding: "36px 20px" }}>
+                    <Wifi size={32} color="var(--text-placeholder)" style={{ margin: "0 auto 12px auto" }} />
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>Ağda Cihaz Aranıyor...</div>
+                    <p style={{ color: "var(--text-mist)", fontSize: 13, marginTop: 4 }}>
+                      Telefonunuz ile bu bilgisayarın aynı Wi-Fi ağına bağlı olduğundan emin olun.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="cards-grid-3">
+                    {devices.map(dev => (
+                      <div key={dev.device_id} className="mesh-device-card">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div className="device-icon-bubble">
+                            {dev.os_type.toLowerCase().includes("android") ? <Smartphone size={22} /> : <Laptop size={22} />}
+                          </div>
+                          <span className="os-tag">{dev.os_type}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 14 }}>{dev.device_name}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-mist)", marginTop: 2 }}>{dev.host}:{dev.port}</div>
+                        </div>
+                        <button onClick={() => handleStartMockTransfer(dev)} className="pill-button sm" style={{ width: "100%" }}>
+                          <Send size={13} />
+                          <span>Dosya Gönder</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Active Transfers */}
               {transfers.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold tracking-tight">Active Transfer Queue</h3>
-                  <div className="space-y-2">
+                <div style={{ marginTop: 36 }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.2, marginBottom: 14 }}>Aktif & Tamamlanan Aktarımlar</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {transfers.map(tx => (
-                      <div key={tx.transfer_id} className="card-panel p-4 flex items-center justify-between">
-                        <div className="space-y-1">
-                          <div className="font-semibold text-sm">{tx.file_name}</div>
-                          <div className="text-xs text-[var(--text-mist)]">
-                            {(tx.file_size / (1024 * 1024)).toFixed(1)} MB • Status: {tx.status}
+                      <div key={tx.transfer_id} className="swift-card" style={{ padding: "14px 18px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{tx.file_name}</span>
+                            <span style={{ fontSize: 11, color: "var(--text-mist)", marginLeft: 10 }}>
+                              {(tx.file_size / (1024 * 1024)).toFixed(1)} MB
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: tx.status === "COMPLETED" ? "var(--success-green)" : "var(--accent-blue)" }}>
+                              {tx.status}
+                            </span>
+                            {tx.status === "TRANSFERRING" && (
+                              <button onClick={() => handleCancelTransfer(tx.transfer_id)} className="pill-button secondary sm">
+                                İptal
+                              </button>
+                            )}
                           </div>
                         </div>
-                        {tx.status === "TRANSFERRING" ? (
-                          <button 
-                            onClick={() => handleCancelTransfer(tx.transfer_id)}
-                            className="text-xs text-red-400 hover:text-red-300 px-3 py-1 bg-[var(--bg-input)] rounded-lg"
-                          >
-                            Cancel
-                          </button>
-                        ) : (
-                          <span className="text-xs text-[var(--text-placeholder)] font-mono">{tx.status}</span>
+                        {tx.status === "TRANSFERRING" && (
+                          <div className="progress-track">
+                            <div className="progress-fill" style={{ width: "65%" }} />
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              {/* Nearby Mesh Devices */}
-              <div>
-                <h3 className="text-sm font-bold tracking-tight mb-3 flex items-center justify-between">
-                  <span>Nearby Mesh Devices</span>
-                  <span className="text-xs font-normal text-[var(--text-mist)]">mDNS Active</span>
-                </h3>
-
-                {devices.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    {devices.map(dev => (
-                      <div key={dev.device_id} className="card-panel p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-[var(--bg-input)] flex items-center justify-center text-[var(--accent-blue)]">
-                            {dev.os_type.toLowerCase().includes("mac") || dev.os_type.toLowerCase().includes("win") ? (
-                              <Laptop size={20} />
-                            ) : (
-                              <Smartphone size={20} />
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-sm">{dev.device_name}</div>
-                            <div className="text-xs text-[var(--text-mist)]">{dev.os_type} • {dev.host}</div>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => handleStartMockTransfer(dev)}
-                          className="pill-button text-xs py-1.5 px-3.5"
-                        >
-                          Send
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="card-panel p-6 text-center text-xs text-[var(--text-mist)]">
-                    Scanning local network for SyncSwift devices... Keep mobile app open on the same Wi-Fi.
-                  </div>
-                )}
-              </div>
-
-              {/* Dynamic Quick Pair Code */}
-              <div className="card-panel p-5 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-sm">Direct Pairing Code</div>
-                  <div className="text-xs text-[var(--text-mist)] mt-0.5">
-                    {pairingSession?.sas_code ? `SAS Security Hash: ${pairingSession.sas_code}` : "Enter this code on your mobile app to link devices"}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-sm bg-[var(--bg-input)] px-3 py-1.5 rounded-lg border border-[var(--border-input)] text-[var(--accent-blue)]">
-                    {pairingSession?.pairing_code || "SWIFT-2026-X"}
-                  </span>
-                  <button 
-                    onClick={handleCopyCode}
-                    className="p-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--border-input)] text-[var(--text-mist)] hover:text-[var(--text-cloud)] transition-colors"
-                  >
-                    {copied ? <Check size={16} className="text-[var(--success-green)]" /> : <Copy size={16} />}
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
-          {tab === "devices" && (
-            <div className="max-w-4xl mx-auto space-y-4">
-              <div className="flex items-center justify-between">
+          {tab === "clipboard" && (
+            <div>
+              <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <h2 className="text-lg font-bold">Trusted Paired Devices</h2>
-                  <p className="text-xs text-[var(--text-mist)]">
-                    Paired using mutual Ed25519 identity verification and 6-digit SAS codes.
-                  </p>
+                  <h2 className="section-title">Pano Geçmişi</h2>
+                  <p className="section-desc">Cihazlar arasında 256-bit uçtan uca şifreli otomatik senkronizasyon.</p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>Otomatik Pano Senkronizasyonu</span>
+                  <label className="switch-wrapper">
+                    <input 
+                      type="checkbox" 
+                      checked={autoSyncClipboard} 
+                      onChange={e => setAutoSyncClipboard(e.target.checked)} 
+                    />
+                    <span className="switch-slider" />
+                  </label>
                 </div>
               </div>
 
-              <div className="card-panel p-6 text-center text-xs text-[var(--text-mist)] space-y-3">
-                <p>Pair this desktop with your Android or iOS device using code:</p>
-                <div className="font-mono text-base font-bold text-[var(--accent-blue)]">
-                  {pairingSession?.pairing_code || "SWIFT-2026-X"}
-                </div>
-                {pairingSession?.sas_code && (
-                  <p className="text-[11px] text-[var(--text-placeholder)]">
-                    Short Authentication String (SAS): <b>{pairingSession.sas_code}</b>
-                  </p>
-                )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {clipboardItems.map(item => (
+                  <div key={item.id} className="clipboard-row">
+                    <div style={{ flex: 1, paddingRight: 20 }}>
+                      <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-cloud)" }}>
+                        {item.content}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 11, color: "var(--text-mist)" }}>
+                        <span>{item.source_device}</span>
+                        <span>•</span>
+                        <span>{item.timestamp}</span>
+                        <span>•</span>
+                        <span style={{ color: "var(--success-green)", display: "flex", alignItems: "center", gap: 4 }}>
+                          <ShieldCheck size={12} /> E2EE Şifreli
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button 
+                        onClick={() => navigator.clipboard.writeText(item.content)}
+                        className="pill-button secondary sm"
+                      >
+                        <Copy size={13} />
+                        <span>Kopyala</span>
+                      </button>
+                      <button 
+                        onClick={() => setClipboardItems(prev => prev.filter(i => i.id !== item.id))}
+                        className="icon-btn danger sm"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
           {tab === "vault" && (
-            <div className="max-w-4xl mx-auto space-y-4">
-              <div className="flex items-center justify-between">
+            <div>
+              <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <h2 className="text-lg font-bold">Personal Encrypted Vault</h2>
-                  <p className="text-xs text-[var(--text-mist)]">
-                    Zero-Knowledge backup on your self-hosted MinIO storage, encrypted with recovery keys.
-                  </p>
+                  <h2 className="section-title">Kasa & Takım Alanı</h2>
+                  <p className="section-desc">Kişisel şifreli kasa ve paylaşımlı çalışma alanları.</p>
                 </div>
-                <button 
-                  onClick={handleUploadVaultMock}
-                  className="pill-button text-xs py-2 px-4 flex items-center gap-1.5"
-                >
-                  <Plus size={14} /> Add File to Vault
+                <button onClick={handleUploadVaultMock} className="pill-button">
+                  <Plus size={16} />
+                  <span>Dosya Yükle</span>
                 </button>
               </div>
 
-              {vaultFiles.length > 0 ? (
-                <div className="space-y-2">
-                  {vaultFiles.map(file => (
-                    <div key={file.id} className="card-panel p-4 flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <div className="font-semibold text-sm">{file.file_name}</div>
-                        <div className="text-xs text-[var(--text-mist)]">
-                          {(file.file_size / (1024 * 1024)).toFixed(2)} MB • {file.mime_type}
+              {/* Storage Quota Meter */}
+              <div className="swift-card" style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <HardDrive size={18} color="var(--accent-blue)" />
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>Bulut Depolama Alanı ({isPro ? "Pro 20 GB" : "Ücretsiz 2 GB"})</span>
+                  </div>
+                  <span style={{ fontSize: 12, color: "var(--text-mist)", fontWeight: 600 }}>1.4 GB / 20 GB (%7)</span>
+                </div>
+                <div className="progress-track" style={{ margin: "12px 0 6px 0" }}>
+                  <div className="progress-fill" style={{ width: "7%" }} />
+                </div>
+              </div>
+
+              {/* Files Table */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {vaultFiles.length === 0 ? (
+                  <div className="swift-card" style={{ textAlign: "center", padding: 32, color: "var(--text-mist)" }}>
+                    Kasada dosya bulunmuyor. "Dosya Yükle" butonunu kullanarak ekleyebilirsiniz.
+                  </div>
+                ) : (
+                  vaultFiles.map(file => (
+                    <div key={file.id} className="clipboard-row">
+                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <div className="device-icon-bubble" style={{ width: 38, height: 38 }}>
+                          <FolderLock size={18} />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 13.5 }}>{file.file_name}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-mist)", marginTop: 2 }}>
+                            {(file.file_size / (1024 * 1024)).toFixed(2)} MB • {file.mime_type}
+                          </div>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => handleDeleteVault(file.id)}
-                        className="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors"
-                        title="Delete from Vault"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="pill-button secondary sm">
+                          <DownloadCloud size={13} />
+                          <span>İndir</span>
+                        </button>
+                        <button onClick={() => handleDeleteVault(file.id)} className="icon-btn danger sm">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                  ))}
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {tab === "sync" && (
+            <div>
+              <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <h2 className="section-title">Klasör Eşitleme Kuralları</h2>
+                  <p className="section-desc">Belirlenen klasörleri cihazlar arasında otomatik arka planda senkronize edin.</p>
                 </div>
-              ) : (
-                <div className="card-panel p-8 text-center text-xs text-[var(--text-mist)]">
-                  Your personal vault is empty. Click <b>Add File to Vault</b> to upload encrypted files to MinIO.
-                </div>
-              )}
+                <button className="pill-button">
+                  <Plus size={16} />
+                  <span>Yeni Kural Ekle</span>
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {syncRules.map(rule => (
+                  <div key={rule.id} className="swift-card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14.5 }}>{rule.local_path}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--text-mist)", marginTop: 4 }}>
+                          <span>Hedef: <strong>{rule.target_device}</strong></span>
+                          <span>•</span>
+                          <span>{rule.direction === "two_way" ? "Çift Yönlü Senkronizasyon" : "Tek Yönlü Gönderim"}</span>
+                          <span>•</span>
+                          <span>Silmeleri Yay: {rule.delete_propagation ? "Evet" : "Hayır"}</span>
+                        </div>
+                      </div>
+                      <span className="os-tag" style={{ color: "var(--success-green)", backgroundColor: "rgba(16, 185, 129, 0.15)" }}>
+                        Aktif
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === "remote" && (
+            <div>
+              <div className="section-header">
+                <h2 className="section-title">Uzak Dosya Gezgini</h2>
+                <p className="section-desc">Bağlı telefon ve bilgisayarların izin verilen klasörlerine uzaktan göz atın.</p>
+              </div>
+
+              <div className="cards-grid-3">
+                {remoteFolders.map((rf, idx) => (
+                  <div key={idx} className="mesh-device-card">
+                    <div className="device-icon-bubble">
+                      <HardDrive size={22} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{rf.name}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-mist)", marginTop: 2 }}>{rf.device} • {rf.itemsCount} dosya</div>
+                      <div style={{ fontSize: 11, color: "var(--accent-blue)", marginTop: 4 }}>{rf.size}</div>
+                    </div>
+                    <button className="pill-button secondary sm" style={{ width: "100%" }}>
+                      <ExternalLink size={13} />
+                      <span>Klasörü Aç</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {tab === "settings" && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <h2 className="text-lg font-bold">Device Identity & Infrastructure</h2>
-              
-              {identity && (
-                <div className="card-panel p-5 space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-mist)]">
-                    Local Device Cryptographic Identity
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <div className="text-[var(--text-mist)]">Device ID</div>
-                      <div className="font-mono font-semibold text-[var(--accent-blue)] mt-0.5">{identity.device_id}</div>
+            <div>
+              <div className="section-header">
+                <h2 className="section-title">Ayarlar & Abonelik</h2>
+                <p className="section-desc">Hesap detayları, kotalar, dil ve ağ yapılandırması.</p>
+              </div>
+
+              {/* Profile Card */}
+              <div className="swift-card" style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div className="brand-logo-icon" style={{ width: 44, height: 44 }}>
+                      <Crown size={22} />
                     </div>
                     <div>
-                      <div className="text-[var(--text-mist)]">Operating System</div>
-                      <div className="font-semibold capitalize mt-0.5">{identity.os_type}</div>
-                    </div>
-                    <div className="col-span-2">
-                      <div className="text-[var(--text-mist)]">Ed25519 Signing Public Key (Base64)</div>
-                      <div className="font-mono text-[11px] text-[var(--text-placeholder)] break-all mt-0.5">
-                        {identity.signing_pubkey_b64}
-                      </div>
+                      <div style={{ fontWeight: 800, fontSize: 16 }}>Eren Tiryaki</div>
+                      <div style={{ fontSize: 12, color: "var(--text-mist)", marginTop: 2 }}>erntiryaki@gmail.com • Google Hesabı</div>
                     </div>
                   </div>
+                  <span className="pill-button sm" style={{ backgroundColor: "#F59E0B", borderColor: "#D97706" }}>
+                    PRO PLAN AKTİF
+                  </span>
                 </div>
-              )}
+              </div>
 
-              <div className="card-panel p-5 space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-mist)]">
-                  Self-Hosted VPS Connectivity
-                </h3>
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-mist)] mb-1">
-                    Supabase API Gateway
-                  </label>
-                  <input 
-                    type="text" 
-                    readOnly
-                    value="https://api.syncswift.net"
-                    className="pill-input w-full bg-[var(--bg-night)] cursor-not-allowed"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-mist)] mb-1">
-                    MinIO Object Storage (S3)
-                  </label>
-                  <input 
-                    type="text" 
-                    readOnly
-                    value="https://storage.syncswift.net"
-                    className="pill-input w-full bg-[var(--bg-night)] cursor-not-allowed"
-                  />
+              {/* Quotas Panel */}
+              <div className="cards-grid-2" style={{ marginBottom: 20 }}>
+                <div className="swift-card">
+                  <div className="card-title">
+                    <HardDrive size={16} color="var(--accent-blue)" />
+                    <span>Bulut Depolama Kotası</span>
+                  </div>
+                  <div style={{ margin: "14px 0 6px 0", fontSize: 20, fontWeight: 800 }}>
+                    1.4 GB <span style={{ fontSize: 13, color: "var(--text-mist)", fontWeight: 500 }}>/ 20 GB</span>
+                  </div>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: "7%" }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-mist)" }}>Ücretsiz pakette 2 GB, Pro pakette 20 GB</div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-mist)] mb-1">
-                    Coturn WebRTC TURN Signaling
-                  </label>
-                  <input 
-                    type="text" 
-                    readOnly
-                    value="turn:api.syncswift.net:3478"
-                    className="pill-input w-full bg-[var(--bg-night)] cursor-not-allowed"
-                  />
+                <div className="swift-card">
+                  <div className="card-title">
+                    <Share2 size={16} color="var(--accent-blue)" />
+                    <span>Aylık Relay Aktarım Kotası</span>
+                  </div>
+                  <div style={{ margin: "14px 0 6px 0", fontSize: 20, fontWeight: 800 }}>
+                    4.2 GB <span style={{ fontSize: 13, color: "var(--text-mist)", fontWeight: 500 }}>/ 50 GB</span>
+                  </div>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: "8.4%" }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-mist)" }}>Yerel LAN aktarımları kotaya dahil değildir (Sınırsız)</div>
+                </div>
+              </div>
+
+              {/* Preferences */}
+              <div className="swift-card">
+                <div className="card-title" style={{ marginBottom: 16 }}>
+                  <Globe size={16} color="var(--accent-blue)" />
+                  <span>Uygulama Tercihleri</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>Uygulama Dili</div>
+                      <div style={{ fontSize: 11.5, color: "var(--text-mist)" }}>Arayüz dilini seçin</div>
+                    </div>
+                    <select 
+                      value={language} 
+                      onChange={e => setLanguage(e.target.value as "tr" | "en")}
+                      className="pill-input" 
+                      style={{ width: 140, padding: "8px 14px" }}
+                    >
+                      <option value="tr">Türkçe</option>
+                      <option value="en">English</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>Görünüm Teması</div>
+                      <div style={{ fontSize: 11.5, color: "var(--text-mist)" }}>Karanlık veya aydınlık mod</div>
+                    </div>
+                    <button onClick={toggleTheme} className="pill-button secondary sm">
+                      {theme === "dark" ? "Koyu Mod" : "Açık Mod"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

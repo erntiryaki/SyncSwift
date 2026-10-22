@@ -95,12 +95,72 @@ fn get_or_create_device_identity(device_name: Option<String>) -> Result<DeviceId
     Ok(identity)
 }
 
+fn get_local_ip() -> String {
+    if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        if socket.connect("8.8.8.8:80").is_ok() {
+            if let Ok(addr) = socket.local_addr() {
+                return addr.ip().to_string();
+            }
+        }
+    }
+    "127.0.0.1".to_string()
+}
+
+fn start_lan_discovery_thread() {
+    std::thread::spawn(|| {
+        let socket = match std::net::UdpSocket::bind("0.0.0.0:52424") {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let _ = socket.set_broadcast(true);
+        let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(1500)));
+
+        let mut buf = [0u8; 1024];
+        loop {
+            let my_ip = get_local_ip();
+            let my_name = hostname::get()
+                .map(|h| h.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "Windows PC".to_string());
+            let msg = format!("SYNCSWIFT:ANNOUNCE|win_desktop|{}|Windows|52424", my_name);
+            let _ = socket.send_to(msg.as_bytes(), "255.255.255.255:52424");
+
+            if let Ok((len, src)) = socket.recv_from(&mut buf) {
+                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
+                    if text.starts_with("SYNCSWIFT:ANNOUNCE|") {
+                        let parts: Vec<&str> = text.split('|').collect();
+                        if parts.len() >= 5 {
+                            let peer_id = parts[1].to_string();
+                            let peer_name = parts[2].to_string();
+                            let peer_os = parts[3].to_string();
+                            let peer_port: u16 = parts[4].parse().unwrap_or(52424);
+                            let peer_host = src.ip().to_string();
+
+                            if peer_host != my_ip && peer_host != "127.0.0.1" {
+                                if let Ok(mut devs) = LAN_DEVICES.lock() {
+                                    devs.retain(|d| d.device_id != peer_id && d.host != peer_host);
+                                    devs.push(LanDeviceDto {
+                                        device_id: peer_id,
+                                        device_name: peer_name,
+                                        os_type: peer_os,
+                                        host: peer_host,
+                                        port: peer_port,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2500));
+        }
+    });
+}
+
 #[tauri::command]
 fn create_pairing_session(_device_id: String) -> Result<PairingSessionDto, String> {
-    let rand_num: u32 = rand::random::<u32>() % 9000 + 1000;
-    let pairing_code = format!("SWIFT-{}", rand_num);
-    let sas_num: u32 = rand::random::<u32>() % 900000 + 100000;
-    let sas_code = format!("{:06}", sas_num);
+    let rand_num: u32 = rand::random::<u32>() % 900000 + 100000;
+    let sas_code = format!("{:06}", rand_num);
+    let pairing_code = sas_code.clone();
 
     Ok(PairingSessionDto {
         session_id: format!("sess_{}", rand_num),
@@ -109,6 +169,11 @@ fn create_pairing_session(_device_id: String) -> Result<PairingSessionDto, Strin
         status: "PENDING".to_string(),
         expires_at_ms: 300_000,
     })
+}
+
+#[tauri::command]
+fn get_local_ip_address() -> Result<String, String> {
+    Ok(get_local_ip())
 }
 
 #[tauri::command]
@@ -242,6 +307,8 @@ fn add_sync_rule(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    start_lan_discovery_thread();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_autostart::init(
@@ -250,6 +317,7 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             get_or_create_device_identity,
+            get_local_ip_address,
             create_pairing_session,
             approve_pairing_session,
             get_lan_devices,

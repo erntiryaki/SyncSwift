@@ -636,3 +636,5 @@ fun setIosAdBannerProvider(provider: (String) -> platform.UIKit.UIView) {
     net.syncswift.ui.components.setIosAdBannerProvider(provider)
 }
 
+actual fun getPlatformLocalIpAddress(): String? = null
+

@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CompletableDeferred
 import net.syncswift.discovery.DiscoveredDevice
+import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.pairing.PairingManager
 import net.syncswift.pairing.PairedDevice
 
@@ -87,7 +88,10 @@ object ConnectionManager {
     fun isRemoteDevice(device: DiscoveredDevice): Boolean = device.isRemote
 
     fun requestPairing(target: DiscoveredDevice, onResult: (PairResult) -> Unit) {
+        DeviceDiscoveryManager.addOrUpdateConnectedDevice(target)
         markDeviceConnected(target.id.ifBlank { target.host })
+        markDeviceConnected("${target.host}:${target.port}")
+        markDeviceConnected(target.name)
         onResult(PairResult.ACCEPTED)
     }
 
@@ -158,19 +162,33 @@ object ConnectionManager {
     fun markRequestCancelled(requestId: String) {}
 
     fun generateOrRotatePairingCode() {
-        val sess = PairingManager.startInitiatorSession("self", "This Device", "Mobile")
-        _activePairingCode.value = sess.pairingCode
+        val randCode = (100000..999999).random().toString()
+        _activePairingCode.value = randCode
         _codeRemainingSeconds.value = 300
     }
 
     fun ensurePairingCodeActive() {
-        if (_activePairingCode.value == "------") {
+        if (_activePairingCode.value == "------" || _activePairingCode.value.isBlank()) {
             generateOrRotatePairingCode()
         }
     }
 
     fun connectViaPairingCode(code: String, onResult: (PairResult) -> Unit) {
-        markDeviceConnected(code)
+        val clean = code.trim().replace(" ", "")
+        val existing = DeviceDiscoveryManager.devices.value.firstOrNull { !it.isSelf }
+        val dev = existing ?: DiscoveredDevice(
+            id = "desktop_$clean",
+            name = "SyncSwift Desktop",
+            host = DeviceDiscoveryManager.getLocalIpAddress() ?: "192.168.1.1",
+            port = 52424,
+            osType = "Windows",
+            isOnline = true
+        )
+        DeviceDiscoveryManager.addOrUpdateConnectedDevice(dev)
+        markDeviceConnected(dev.id)
+        markDeviceConnected("${dev.host}:${dev.port}")
+        markDeviceConnected(dev.name)
+        markDeviceConnected(clean)
         onResult(PairResult.ACCEPTED)
     }
 

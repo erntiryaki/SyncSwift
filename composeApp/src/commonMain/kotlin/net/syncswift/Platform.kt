@@ -40,3 +40,4 @@ expect fun openFile(filePathOrUri: String?, fileName: String, mimeType: String)
 expect fun showFileLocation(filePathOrUri: String?, fileName: String)
 expect fun formatEpochToDate(epochMillis: Long): String
 expect fun getCurrentPaywallSlotKey(): String
+expect fun getPlatformLocalIpAddress(): String?

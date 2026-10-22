@@ -93,12 +93,13 @@ fun EditProfileScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(vertical = 6.dp)
                 .height(48.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(InputBg)
                     .clickable(onClick = onBack),
@@ -106,13 +107,13 @@ fun EditProfileScreen(
             ) {
                 ChevronLeftIcon(Modifier.size(18.dp), color = Cloud)
             }
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(16.dp))
             Text(
                 text = copy.editProfileTitle,
                 color = Cloud,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.4).sp
+                letterSpacing = (-0.3).sp
             )
         }
 

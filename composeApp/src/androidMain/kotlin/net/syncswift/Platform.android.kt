@@ -368,3 +368,26 @@ actual fun getCurrentPaywallSlotKey(): String {
     val slot = hour / 3
     return "$year-$month-$day-$slot"
 }
+
+actual fun getPlatformLocalIpAddress(): String? {
+    try {
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()?.toList() ?: return null
+        val candidates = mutableListOf<String>()
+        for (iface in interfaces) {
+            if (iface.isLoopback || !iface.isUp) continue
+            val addrs = iface.inetAddresses
+            while (addrs.hasMoreElements()) {
+                val addr = addrs.nextElement()
+                if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                    val host = addr.hostAddress ?: continue
+                    if (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.")) {
+                        candidates.add(host)
+                    }
+                }
+            }
+        }
+        return candidates.firstOrNull()
+    } catch (_: Exception) {
+        return null
+    }
+}

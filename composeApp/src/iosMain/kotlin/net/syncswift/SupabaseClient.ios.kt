@@ -74,16 +74,18 @@ actual object SupabaseNetwork {
 
             val payload = """
                 {
-                    "p_email": "$clean",
-                    "p_password": "$password",
-                    "p_first_name": "$firstName",
-                    "p_last_name": "$lastName",
-                    "p_provider": "$providerString"
+                    "email": "$clean",
+                    "password": "${password.ifBlank { "SyncSwift_${System.currentTimeMillis()}!" }}",
+                    "data": {
+                        "first_name": "$firstName",
+                        "last_name": "$lastName",
+                        "provider": "$providerString"
+                    }
                 }
             """.trimIndent()
 
-            val rpcResp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/rpc/register_auth_user",
+            val signupResp = executeRequest(
+                urlString = "$supabaseUrl/auth/v1/signup",
                 method = "POST",
                 headers = mapOf(
                     "apikey" to anonKey,
@@ -93,12 +95,33 @@ actual object SupabaseNetwork {
                 body = payload
             )
 
-            if (rpcResp.statusCode in 200..299) {
-                val idRegex = "\"user_id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
-                val userId = idRegex.find(rpcResp.body)?.groupValues?.getOrNull(1)
+            if (signupResp.statusCode in 200..299) {
+                val idRegex = "\"id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                val userId = idRegex.find(signupResp.body)?.groupValues?.getOrNull(1)
                 if (!userId.isNullOrBlank()) {
                     SessionManager.saveLoggedInUserId(userId)
                 }
+                // Upsert profile
+                val profPayload = """
+                    {
+                        ${if (!userId.isNullOrBlank()) "\"id\": \"$userId\"," else ""}
+                        "email": "$clean",
+                        "first_name": "$firstName",
+                        "last_name": "$lastName",
+                        "auth_provider": "$providerString"
+                    }
+                """.trimIndent()
+                executeRequest(
+                    urlString = "$supabaseUrl/rest/v1/profiles",
+                    method = "POST",
+                    headers = mapOf(
+                        "apikey" to anonKey,
+                        "Authorization" to "Bearer $anonKey",
+                        "Content-Type" to "application/json",
+                        "Prefer" to "resolution=merge-duplicates"
+                    ),
+                    body = profPayload
+                )
                 return true
             }
             return false
@@ -115,16 +138,15 @@ actual object SupabaseNetwork {
         try {
             val clean = cleanEmail(email)
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/rpc/check_user_exists",
-                method = "POST",
+                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean&select=id",
+                method = "GET",
                 headers = mapOf(
                     "apikey" to anonKey,
                     "Authorization" to "Bearer $anonKey",
-                    "Content-Type" to "application/json"
-                ),
-                body = """{"p_email":"$clean"}"""
+                    "Accept" to "application/json"
+                )
             )
-            return resp.statusCode in 200..299 && resp.body.trim() == "true"
+            return resp.statusCode in 200..299 && resp.body.contains("\"id\"") && resp.body.trim() != "[]"
         } catch (e: Exception) {
             return false
         }
@@ -137,21 +159,21 @@ actual object SupabaseNetwork {
         try {
             val clean = cleanEmail(email)
             val resp = executeRequest(
-                urlString = "$supabaseUrl/rest/v1/rpc/get_user_provider",
-                method = "POST",
+                urlString = "$supabaseUrl/rest/v1/profiles?email=eq.$clean&select=auth_provider",
+                method = "GET",
                 headers = mapOf(
                     "apikey" to anonKey,
                     "Authorization" to "Bearer $anonKey",
-                    "Content-Type" to "application/json"
-                ),
-                body = """{"p_email":"$clean"}"""
+                    "Accept" to "application/json"
+                )
             )
             if (resp.statusCode in 200..299) {
-                val body = resp.body.trim().replace("\"", "").lowercase()
+                val body = resp.body.trim().lowercase()
                 return when {
                     body.contains("google") -> IdentityProvider.Google
                     body.contains("apple") -> IdentityProvider.Apple
-                    body.isNotBlank() && body != "null" -> IdentityProvider.EmailPassword
+                    body.contains("email") -> IdentityProvider.EmailPassword
+                    body.isNotBlank() && body != "[]" -> IdentityProvider.EmailPassword
                     else -> null
                 }
             }

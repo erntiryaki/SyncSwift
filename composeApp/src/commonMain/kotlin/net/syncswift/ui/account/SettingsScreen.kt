@@ -83,6 +83,34 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
+            // Top Header Bar matching ConnectedDevicesScreen style
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 6.dp)
+                    .height(48.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(InputBg)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ChevronLeftIcon(Modifier.size(18.dp), color = Cloud)
+                }
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    text = copy.settingsTitle,
+                    color = Cloud,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.3).sp
+                )
+            }
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -90,36 +118,7 @@ fun SettingsScreen(
                     .padding(horizontal = 20.dp)
                     .verticalScroll(scrollState)
             ) {
-                Spacer(Modifier.height(14.dp))
-
-                // Top Header Bar matching AccountScreen style
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(InputBg)
-                            .clickable(onClick = onBack),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        ChevronLeftIcon(Modifier.size(18.dp), color = Cloud)
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Text(
-                        text = copy.settingsTitle,
-                        color = Cloud,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.6).sp
-                    )
-                }
-
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(10.dp))
 
                 // 1. Language Selection (Birebir AccountMenuItemRow)
                 AccountMenuItemRow(

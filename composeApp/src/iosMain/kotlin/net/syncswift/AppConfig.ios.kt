@@ -13,7 +13,7 @@ actual object PlatformConfig {
     }
 
     actual val supabaseUrl: String get() = getEnvOrBundle("SUPABASE_URL", "https://api.syncswift.net")
-    actual val supabaseAnonKey: String get() = getEnvOrBundle("SUPABASE_ANON_KEY", "")
+    actual val supabaseAnonKey: String get() = getEnvOrBundle("SUPABASE_ANON_KEY", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc5MjI0NTA5MiwiZXhwIjo0OTQ3NDEzNDYwLCJyb2xlIjoiYW5vbiJ9.W4EgdJGRf2-pBcLOp8Ofh4KYgcD8j2EvFhJu3jfz1Vs")
     actual val googleWebClientId: String get() = getEnvOrBundle("GOOGLE_WEB_CLIENT_ID", "911753763379-cbm16jd1nhg1rjtrjvfuvakn34racuen.apps.googleusercontent.com")
     actual val awsSesRegion: String get() = getEnvOrBundle("AWS_SES_REGION", "eu-central-1")
     actual val awsSesSenderEmail: String get() = getEnvOrBundle("AWS_SES_SENDER_EMAIL", "noreply@syncswift.net")

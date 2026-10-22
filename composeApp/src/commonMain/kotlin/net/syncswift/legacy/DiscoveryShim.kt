@@ -34,19 +34,26 @@ object DeviceDiscoveryManager {
     fun startDiscovery() {
         _isScanning.value = true
         LanDiscoveryEngine.setDiscovering(true)
+        startPlatformUdpDiscovery { dev ->
+            addOrUpdateConnectedDevice(dev)
+        }
     }
 
     fun stopDiscovery() {
         _isScanning.value = false
         LanDiscoveryEngine.setDiscovering(false)
+        stopPlatformUdpDiscovery()
     }
 
-    fun getSelfDevice(): DiscoveredDevice? = DiscoveredDevice(
-        id = "self",
-        name = "This Device",
-        host = "127.0.0.1",
-        isSelf = true
-    )
+    fun getSelfDevice(): DiscoveredDevice? {
+        val ip = getLocalIpAddress() ?: "127.0.0.1"
+        return DiscoveredDevice(
+            id = net.syncswift.SessionManager.getPlatformDeviceId(),
+            name = net.syncswift.SessionManager.getMyDeviceName(),
+            host = ip,
+            isSelf = true
+        )
+    }
 
     fun addManualDevice(host: String, port: Int = 52424, name: String = "SyncSwift Device", osType: String = "Other"): DiscoveredDevice {
         val dev = DiscoveredDevice(id = host, name = name, host = host, port = port, osType = osType)
@@ -66,7 +73,7 @@ object DeviceDiscoveryManager {
     }
 
     fun broadcastGoodbye() {}
-    fun getLocalIpAddress(): String? = "127.0.0.1"
+    fun getLocalIpAddress(): String? = net.syncswift.getPlatformLocalIpAddress() ?: "127.0.0.1"
 
     fun addOrUpdateConnectedDevice(device: DiscoveredDevice) {
         val list = _devices.value.toMutableList()

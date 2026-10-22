@@ -323,13 +323,21 @@ fun AccountScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // 4. ORIGINAL REAL MENUS (Settings removed since it is in the header)
+            // 4. ORIGINAL REAL MENUS
             // 1. Connected Devices
             AccountMenuItemRow(
                 icon = { DevicesIcon(Modifier.size(22.dp), color = iconColor) },
                 title = copy.connectedDevicesMenu,
                 subtitle = copy.connectedDevicesMenuDesc,
                 onClick = onOpenConnectedDevices
+            )
+
+            // 2. Settings (birebir Bağlı Cihazlar gibi)
+            AccountMenuItemRow(
+                icon = { SettingsIcon(Modifier.size(22.dp), color = iconColor) },
+                title = copy.settingsMenu,
+                subtitle = copy.settingsMenuDesc,
+                onClick = onOpenSettings
             )
 
             // 3. Connect Desktop (My Devices)

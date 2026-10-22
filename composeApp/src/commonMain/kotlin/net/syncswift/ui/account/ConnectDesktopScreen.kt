@@ -252,43 +252,43 @@ fun ConnectDesktopScreen(
             }
 
             fun attemptDirectLocalPairing() {
-                if (host.isNotBlank() && host != "127.0.0.1" && host != "0.0.0.0") {
-                    val resolvedOs = if (os.isNotBlank()) os else "Windows"
-                    val dev = net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(host, port, name, resolvedOs).let {
-                        if (extractedId.isNotBlank()) it.copy(id = extractedId) else it
-                    }
-                    ConnectionManager.requestPairing(dev) { pairRes ->
-                        isConnecting = false
-                        if (pairRes == PairResult.ACCEPTED) {
-                            showNativeToast(copy.connectionAccepted)
-                            ConnectionManager.addCachedAccountDevice(dev)
-                            if (userEmail.isNotBlank()) {
-                                scope.launch {
-                                    try {
-                                        SupabaseNetwork.registerDeviceInSupabase(
-                                            email = userEmail,
-                                            deviceId = dev.id,
-                                            deviceName = dev.name,
-                                            deviceType = dev.osType,
-                                            pushToken = dev.pushToken ?: "",
-                                            localIp = dev.host,
-                                            port = dev.port,
-                                            userId = SessionManager.getLoggedInUserId()
-                                        )
-                                    } catch (_: Exception) {}
-                                    refreshDevices()
-                                }
-                            } else {
+                val targetHost = when {
+                    host.isNotBlank() && host != "127.0.0.1" && host != "0.0.0.0" -> host
+                    else -> net.syncswift.discovery.DeviceDiscoveryManager.devices.value.firstOrNull { !it.isSelf }?.host
+                        ?: net.syncswift.discovery.DeviceDiscoveryManager.getLocalIpAddress() ?: "127.0.0.1"
+                }
+                val resolvedOs = if (os.isNotBlank()) os else "Windows"
+                val dev = net.syncswift.discovery.DeviceDiscoveryManager.addManualDevice(targetHost, port, name, resolvedOs).let {
+                    if (extractedId.isNotBlank()) it.copy(id = extractedId) else it
+                }
+                ConnectionManager.requestPairing(dev) { pairRes ->
+                    isConnecting = false
+                    if (pairRes == PairResult.ACCEPTED) {
+                        showNativeToast(copy.connectionAccepted)
+                        ConnectionManager.addCachedAccountDevice(dev)
+                        if (userEmail.isNotBlank()) {
+                            scope.launch {
+                                try {
+                                    SupabaseNetwork.registerDeviceInSupabase(
+                                        email = userEmail,
+                                        deviceId = dev.id,
+                                        deviceName = dev.name,
+                                        deviceType = dev.osType,
+                                        pushToken = dev.pushToken ?: "",
+                                        localIp = dev.host,
+                                        port = dev.port,
+                                        userId = SessionManager.getLoggedInUserId()
+                                    )
+                                } catch (_: Exception) {}
                                 refreshDevices()
                             }
-                            onDismiss()
                         } else {
-                            showNativeToast(copy.codeExpiredOrAlreadyUsed)
+                            refreshDevices()
                         }
+                        onDismiss()
+                    } else {
+                        showNativeToast(copy.codeExpiredOrAlreadyUsed)
                     }
-                } else {
-                    isConnecting = false
-                    showNativeToast(copy.codeExpiredOrAlreadyUsed)
                 }
             }
 
