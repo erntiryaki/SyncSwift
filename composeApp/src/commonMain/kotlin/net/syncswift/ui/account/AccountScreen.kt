@@ -332,14 +332,6 @@ fun AccountScreen(
                 onClick = onOpenConnectedDevices
             )
 
-            // 2. Settings (birebir Bağlı Cihazlar gibi)
-            AccountMenuItemRow(
-                icon = { SettingsIcon(Modifier.size(22.dp), color = iconColor) },
-                title = copy.settingsMenu,
-                subtitle = copy.settingsMenuDesc,
-                onClick = onOpenSettings
-            )
-
             // 3. Connect Desktop (My Devices)
             AccountMenuItemRow(
                 icon = { SmartphoneVectorIcon(Modifier.size(22.dp), color = iconColor) },
