@@ -471,6 +471,7 @@ val GermanCopy = Copy().apply {
     removeDeviceConfirmTitle = "Gerät entfernen"
     removeDeviceConfirmDesc = "Sind Sie sicher, dass Sie dieses Gerät entfernen möchten? Sie werden auf diesem Gerät abgemeldet."
     deviceRemovedSuccess = "Gerät entfernt. Sie können sich jetzt anmelden."
+    deviceDisconnectedSuccess = "Verbindung erfolgreich getrennt."
     remoteSignedOut = "Sie wurden abgemeldet, da dieses Gerät aus Ihrem Konto entfernt wurde."
     timeJustNow = "Gerade eben"
     timeMinutesAgo = "vor %d Min."

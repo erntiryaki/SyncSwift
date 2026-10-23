@@ -1072,18 +1072,7 @@ fun HomeScreen(
                 onDisconnect = {
                     deviceForAction = null
                     ConnectionManager.disconnectDevice(target)
-                    if (loggedInEmail.isNotBlank()) {
-                        scope.launch {
-                            try {
-                                SupabaseNetwork.removeUserDevice(loggedInEmail, target.id)
-                                registeredAccountDevices = SupabaseNetwork.fetchAllUserDevices(loggedInEmail)
-                                ConnectionManager.updateCachedAccountDevices(registeredAccountDevices)
-                            } catch (_: Exception) {}
-                        }
-                    }
-                    DeviceDiscoveryManager.removeManualDevice(target.host)
-                    DeviceDiscoveryManager.removeManualDevice(target.id)
-                    showNativeToast(copy.deviceRemovedSuccess)
+                    showNativeToast(copy.deviceDisconnectedSuccess)
                 },
                 onDismiss = {
                     deviceForAction = null

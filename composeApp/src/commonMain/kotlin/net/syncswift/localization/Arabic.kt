@@ -471,6 +471,7 @@ val ArabicCopy = Copy().apply {
     removeDeviceConfirmTitle = "إزالة الجهاز"
     removeDeviceConfirmDesc = "هل أنت متأكد من أنك تريد إزالة هذا الجهاز؟ سيتم تسجيل خروجك من هذا الجهاز."
     deviceRemovedSuccess = "تمت إزالة الجهاز. يمكنك الآن تسجيل الدخول."
+    deviceDisconnectedSuccess = "تم قطع الاتصال بالجهاز بنجاح."
     remoteSignedOut = "تم تسجيل خروجك لأن هذا الجهاز تمت إزالته من حسابك."
     timeJustNow = "الآن"
     timeMinutesAgo = "منذ %d دقيقة"

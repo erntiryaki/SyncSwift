@@ -502,6 +502,7 @@ class Copy {
     var removeDeviceConfirmDesc: String = "Are you sure you want to remove this device? You will be signed out on that device."
     var removeAction: String = "Remove"
     var deviceRemovedSuccess: String = "Device removed. You can now sign in."
+    var deviceDisconnectedSuccess: String = "Device disconnected successfully."
     var remoteSignedOut: String = "You were signed out because this device was removed from your account."
     var timeJustNow: String = "Just now"
     var timeMinutesAgo: String = "%d min ago"

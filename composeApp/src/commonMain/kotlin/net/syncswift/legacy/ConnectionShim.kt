@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import net.syncswift.discovery.DiscoveredDevice
 import net.syncswift.discovery.DeviceDiscoveryManager
 import net.syncswift.pairing.PairingManager
@@ -88,12 +90,17 @@ object ConnectionManager {
 
     fun isRemoteDevice(device: DiscoveredDevice): Boolean = device.isRemote
 
+    private val pendingPairCallbacks = mutableMapOf<String, (PairResult) -> Unit>()
+
     fun requestPairing(target: DiscoveredDevice, onResult: (PairResult) -> Unit) {
-        DeviceDiscoveryManager.addOrUpdateConnectedDevice(target)
-        markDeviceConnected(target.id.ifBlank { target.host })
-        markDeviceConnected("${target.host}:${target.port}")
-        markDeviceConnected(target.name)
+        val targetKey = target.host.ifBlank { target.id }
+        pendingPairCallbacks[targetKey] = onResult
+        pendingPairCallbacks[target.id] = onResult
+
+        // Send UDP pair request to target
         net.syncswift.discovery.sendDirectUdpPairRequest(target.host, target.port)
+
+        // Send FCM notification if target has token
         if (!target.pushToken.isNullOrBlank()) {
             sendFcmNotification(
                 token = target.pushToken,
@@ -108,12 +115,41 @@ object ConnectionManager {
                 )
             )
         }
-        onResult(PairResult.ACCEPTED)
+
+        // Auto timeout fallback (15 seconds) if peer doesn't reply
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            kotlinx.coroutines.delay(15000)
+            val cb = pendingPairCallbacks.remove(targetKey) ?: pendingPairCallbacks.remove(target.id)
+            cb?.invoke(PairResult.UNAVAILABLE)
+        }
+    }
+
+    fun handlePairResponse(senderHost: String, senderId: String, accepted: Boolean) {
+        val cb = pendingPairCallbacks.remove(senderHost) ?: pendingPairCallbacks.remove(senderId)
+        if (accepted) {
+            markDeviceConnected(senderId)
+            markDeviceConnected(senderHost)
+            cb?.invoke(PairResult.ACCEPTED)
+        } else {
+            cb?.invoke(PairResult.REJECTED)
+        }
+    }
+
+    fun handlePeerDisconnected(senderHost: String, senderId: String) {
+        markDeviceDisconnected(senderId)
+        markDeviceDisconnected(senderHost)
+        markDeviceDisconnected("$senderHost:52424")
     }
 
     fun disconnectDevice(target: DiscoveredDevice, notifyPeer: Boolean = true) {
         val key = target.id.ifBlank { target.host }
         markDeviceDisconnected(key)
+        markDeviceDisconnected(target.host)
+        markDeviceDisconnected("${target.host}:${target.port}")
+        markDeviceDisconnected(target.name)
+        if (notifyPeer) {
+            net.syncswift.discovery.sendDirectUdpDisconnect(target.host, target.port)
+        }
     }
 
     fun notifyRemoteLogout(target: DiscoveredDevice) {}
@@ -121,21 +157,30 @@ object ConnectionManager {
     fun acceptPairRequest(request: IncomingPairRequest) {
         val key = request.senderId.ifBlank { request.senderHost }
         markDeviceConnected(key, request.isRemote)
+        markDeviceConnected(request.senderHost, request.isRemote)
+        markDeviceConnected("${request.senderHost}:${request.senderPort}", request.isRemote)
+        net.syncswift.discovery.sendDirectUdpPairResponse(request.senderHost, request.senderPort, accepted = true)
         request.deferredResponse.complete(true)
         _pendingPairRequest.value = null
     }
 
     fun rejectPairRequest(request: IncomingPairRequest) {
+        net.syncswift.discovery.sendDirectUdpPairResponse(request.senderHost, request.senderPort, accepted = false)
         request.deferredResponse.complete(false)
         _pendingPairRequest.value = null
     }
 
     fun acceptTransferRequest(request: IncomingTransferRequest) {
+        net.syncswift.discovery.sendDirectUdpTransferResponse(request.senderHost, request.senderPort, request.transferId, accepted = true)
         request.deferredResponse.complete(true)
         _pendingTransferRequest.value = null
+
+        // Add incoming item to transfers list
+        net.syncswift.transfer.TransferEngine.receiveIncomingTransfer(request)
     }
 
     fun rejectTransferRequest(request: IncomingTransferRequest) {
+        net.syncswift.discovery.sendDirectUdpTransferResponse(request.senderHost, request.senderPort, request.transferId, accepted = false)
         request.deferredResponse.complete(false)
         _pendingTransferRequest.value = null
     }

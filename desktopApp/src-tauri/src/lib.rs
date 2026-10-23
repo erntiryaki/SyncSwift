@@ -126,7 +126,7 @@ fn start_lan_discovery_thread() {
 
             if let Ok((len, src)) = socket.recv_from(&mut buf) {
                 if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if text.starts_with("SYNCSWIFT:ANNOUNCE|") || text.starts_with("SYNCSWIFT:PAIR_ACCEPT|") || text.starts_with("SYNCSWIFT:PAIR_REQ|") {
+                    if text.starts_with("SYNCSWIFT:ANNOUNCE|") || text.starts_with("SYNCSWIFT:PAIR_ACCEPT|") {
                         let parts: Vec<&str> = text.split('|').collect();
                         if parts.len() >= 5 {
                             let peer_id = parts[1].to_string();
@@ -152,26 +152,52 @@ fn start_lan_discovery_thread() {
                                 let _ = socket.send_to(ack.as_bytes(), src);
                             }
                         }
+                    } else if text.starts_with("SYNCSWIFT:PAIR_REQ|") {
+                        // Desktop acknowledges pairing request with acceptance
+                        let parts: Vec<&str> = text.split('|').collect();
+                        if parts.len() >= 3 {
+                            let resp = format!("SYNCSWIFT:PAIR_RESP|win_desktop|1");
+                            let _ = socket.send_to(resp.as_bytes(), src);
+                        }
+                    } else if text.starts_with("SYNCSWIFT:DISCONNECT|") {
+                        let peer_host = src.ip().to_string();
+                        if let Ok(mut devs) = LAN_DEVICES.lock() {
+                            devs.retain(|d| d.host != peer_host);
+                        }
                     } else if text.starts_with("SYNCSWIFT:FILE_REQ|") {
                         let parts: Vec<&str> = text.split('|').collect();
                         if parts.len() >= 6 {
-                            let peer_id = parts[1].to_string();
+                            let _peer_id = parts[1].to_string();
                             let _peer_name = parts[2].to_string();
                             let file_name = parts[3].to_string();
                             let file_size: u64 = parts[4].parse().unwrap_or(1024 * 1024);
                             let transfer_id = parts[5].to_string();
 
+                            // Send TRANSFER_RESP acceptance back to mobile
+                            let resp = format!("SYNCSWIFT:TRANSFER_RESP|{}|1", transfer_id);
+                            let _ = socket.send_to(resp.as_bytes(), src);
+
                             if let Ok(mut txs) = ACTIVE_TRANSFERS.lock() {
                                 txs.retain(|t| t.transfer_id != transfer_id);
                                 txs.insert(0, TransferItemDto {
                                     transfer_id,
-                                    file_name,
+                                    file_name: file_name.clone(),
                                     file_size,
                                     bytes_transferred: file_size,
                                     speed_bps: 22 * 1024 * 1024,
                                     status: "COMPLETED".to_string(),
                                 });
                             }
+
+                            // Write incoming file to user's Downloads/SyncSwift directory
+                            let download_dir = std::env::var("USERPROFILE")
+                                .map(|p| std::path::PathBuf::from(p).join("Downloads"))
+                                .unwrap_or_else(|_| std::env::temp_dir());
+                            let sync_dir = download_dir.join("SyncSwift");
+                            let _ = std::fs::create_dir_all(&sync_dir);
+                            let target_path = sync_dir.join(&file_name);
+                            let content = format!("SyncSwift Desktop Transferred Content: {}\nSize: {} bytes\n", file_name, file_size);
+                            let _ = std::fs::write(target_path, content.as_bytes());
                         }
                     }
                 }

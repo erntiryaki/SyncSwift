@@ -471,6 +471,7 @@ val RussianCopy = Copy().apply {
     removeDeviceConfirmTitle = "Удалить устройство"
     removeDeviceConfirmDesc = "Вы уверены, что хотите удалить это устройство? Вы выйдете из аккаунта на этом устройстве."
     deviceRemovedSuccess = "Устройство удалено. Теперь вы можете войти."
+    deviceDisconnectedSuccess = "Устройство успешно отключено."
     remoteSignedOut = "Вы вышли из системы, так как это устройство было удалено из вашего аккаунта."
     timeJustNow = "Только что"
     timeMinutesAgo = "%d мин. назад"

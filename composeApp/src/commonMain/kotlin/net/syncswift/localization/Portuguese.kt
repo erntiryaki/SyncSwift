@@ -471,6 +471,7 @@ val PortugueseCopy = Copy().apply {
     removeDeviceConfirmTitle = "Remover dispositivo"
     removeDeviceConfirmDesc = "Tem certeza de que deseja remover este dispositivo? A sua sessão será encerrada nesse dispositivo."
     deviceRemovedSuccess = "Dispositivo removido. Agora pode iniciar sessão."
+    deviceDisconnectedSuccess = "Ligação terminada com sucesso."
     remoteSignedOut = "A sua sessão foi encerrada porque este dispositivo foi removido da sua conta."
     timeJustNow = "Agora"
     timeMinutesAgo = "há %d min"

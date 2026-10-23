@@ -471,6 +471,7 @@ val TurkishCopy = Copy().apply {
     removeDeviceConfirmTitle = "Cihazı Kaldır"
     removeDeviceConfirmDesc = "Bu cihazı hesabınızdan kaldırmak istediğinizden emin misiniz? Bu cihazdaki oturumunuz otomatik olarak kapatılacaktır."
     deviceRemovedSuccess = "Cihaz kaldırıldı. Şimdi giriş yapabilirsiniz."
+    deviceDisconnectedSuccess = "Bağlantı başarıyla kesildi."
     remoteSignedOut = "Hesabınız başka bir cihazdan kaldırıldığı için bu cihazdaki oturumunuz kapatıldı."
     timeJustNow = "Şimdi"
     timeMinutesAgo = "%d dk önce"

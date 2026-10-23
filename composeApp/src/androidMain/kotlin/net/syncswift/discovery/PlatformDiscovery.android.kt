@@ -97,6 +97,19 @@ actual fun startPlatformUdpDiscovery(onDeviceFound: (DiscoveredDevice) -> Unit) 
                                 )
                             )
                         }
+                    } else if (msg.startsWith("SYNCSWIFT:PAIR_RESP|")) {
+                        val parts = msg.split("|")
+                        val senderId = parts.getOrNull(1) ?: senderIp
+                        val accepted = parts.getOrNull(2) == "1" || parts.getOrNull(2)?.equals("true", ignoreCase = true) == true
+                        withContext(Dispatchers.Main) {
+                            net.syncswift.connection.ConnectionManager.handlePairResponse(senderIp, senderId, accepted)
+                        }
+                    } else if (msg.startsWith("SYNCSWIFT:DISCONNECT|")) {
+                        val parts = msg.split("|")
+                        val senderId = parts.getOrNull(1) ?: senderIp
+                        withContext(Dispatchers.Main) {
+                            net.syncswift.connection.ConnectionManager.handlePeerDisconnected(senderIp, senderId)
+                        }
                     } else if (msg.startsWith("SYNCSWIFT:FILE_REQ|")) {
                         val parts = msg.split("|")
                         val senderId = parts.getOrNull(1) ?: senderIp
@@ -116,6 +129,13 @@ actual fun startPlatformUdpDiscovery(onDeviceFound: (DiscoveredDevice) -> Unit) 
                                     transferId = transferId
                                 )
                             )
+                        }
+                    } else if (msg.startsWith("SYNCSWIFT:TRANSFER_RESP|")) {
+                        val parts = msg.split("|")
+                        val transferId = parts.getOrNull(1) ?: ""
+                        val accepted = parts.getOrNull(2) == "1" || parts.getOrNull(2)?.equals("true", ignoreCase = true) == true
+                        withContext(Dispatchers.Main) {
+                            net.syncswift.transfer.TransferEngine.handleTransferResponse(transferId, accepted)
                         }
                     } else if (msg.startsWith("SYNCSWIFT:CLIP_REQ|")) {
                         val parts = msg.split("|")
@@ -194,6 +214,38 @@ actual fun sendDirectUdpPairRequest(targetHost: String, targetPort: Int) {
     }
 }
 
+actual fun sendDirectUdpPairResponse(targetHost: String, targetPort: Int, accepted: Boolean) {
+    if (targetHost.isBlank() || targetHost == "127.0.0.1") return
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val myId = SessionManager.getPlatformDeviceId()
+            val msg = "SYNCSWIFT:PAIR_RESP|$myId|${if (accepted) "1" else "0"}"
+            val data = msg.toByteArray()
+            val addr = InetAddress.getByName(targetHost)
+            val packet = DatagramPacket(data, data.size, addr, targetPort)
+            val socket = DatagramSocket()
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
+    }
+}
+
+actual fun sendDirectUdpDisconnect(targetHost: String, targetPort: Int) {
+    if (targetHost.isBlank() || targetHost == "127.0.0.1") return
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val myId = SessionManager.getPlatformDeviceId()
+            val msg = "SYNCSWIFT:DISCONNECT|$myId"
+            val data = msg.toByteArray()
+            val addr = InetAddress.getByName(targetHost)
+            val packet = DatagramPacket(data, data.size, addr, targetPort)
+            val socket = DatagramSocket()
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
+    }
+}
+
 actual fun sendDirectUdpFileRequest(targetHost: String, targetPort: Int, fileName: String, fileSize: Long, transferId: String) {
     if (targetHost.isBlank() || targetHost == "127.0.0.1") return
     CoroutineScope(Dispatchers.IO).launch {
@@ -201,6 +253,21 @@ actual fun sendDirectUdpFileRequest(targetHost: String, targetPort: Int, fileNam
             val myName = SessionManager.getMyDeviceName()
             val myId = SessionManager.getPlatformDeviceId()
             val msg = "SYNCSWIFT:FILE_REQ|$myId|$myName|$fileName|$fileSize|$transferId"
+            val data = msg.toByteArray()
+            val addr = InetAddress.getByName(targetHost)
+            val packet = DatagramPacket(data, data.size, addr, targetPort)
+            val socket = DatagramSocket()
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
+    }
+}
+
+actual fun sendDirectUdpTransferResponse(targetHost: String, targetPort: Int, transferId: String, accepted: Boolean) {
+    if (targetHost.isBlank() || targetHost == "127.0.0.1") return
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val msg = "SYNCSWIFT:TRANSFER_RESP|$transferId|${if (accepted) "1" else "0"}"
             val data = msg.toByteArray()
             val addr = InetAddress.getByName(targetHost)
             val packet = DatagramPacket(data, data.size, addr, targetPort)
@@ -227,3 +294,4 @@ actual fun sendDirectUdpClipRequest(targetHost: String, targetPort: Int, preview
         } catch (_: Exception) {}
     }
 }
+

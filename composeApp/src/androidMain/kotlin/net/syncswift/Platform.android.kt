@@ -430,3 +430,23 @@ actual fun platformSendFcmPush(token: String, title: String, body: String, data:
         } catch (_: Exception) {}
     }
 }
+
+actual fun platformSaveIncomingFile(fileName: String, bytes: ByteArray) {
+    val ctx = SessionManager.getAppContext()
+    try {
+        val downloadsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "SyncSwift")
+        if (!downloadsDir.exists()) downloadsDir.mkdirs()
+        val destFile = File(downloadsDir, fileName)
+        destFile.writeBytes(bytes)
+    } catch (_: Throwable) {
+        try {
+            if (ctx != null) {
+                val appDir = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "SyncSwift")
+                if (!appDir.exists()) appDir.mkdirs()
+                val destFile = File(appDir, fileName)
+                destFile.writeBytes(bytes)
+            }
+        } catch (_: Throwable) {}
+    }
+}
+

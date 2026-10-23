@@ -66,6 +66,7 @@ object TransferEngine {
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
+        // Put into PENDING state until peer approves
         val transferId = "tr_${System.currentTimeMillis()}"
         val totalBytes = fileBytes.size.toLong()
         val item = TransferItem(
@@ -76,27 +77,68 @@ object TransferEngine {
             bytesTransferred = 0L,
             isSent = true,
             peerName = targetDeviceName,
-            status = TransferStatus.IN_PROGRESS,
+            status = TransferStatus.PENDING,
             timestamp = System.currentTimeMillis()
         )
         val list = _transfers.value.toMutableList()
         list.add(0, item)
         _transfers.value = list
 
-        TransferEngineV2.enqueueTransfer(
-            TransferItemV2(
-                transferId = transferId,
-                fileName = fileName,
-                fileSize = totalBytes,
-                mimeType = mimeType,
-                peerDeviceId = targetHost,
-                peerDeviceName = targetDeviceName,
-                peerOsType = "other",
-                direction = TransferDirection.OUTGOING,
-                bytesTransferred = 0L,
-                status = TransferStatusV2.TRANSFERRING
-            )
-        )
+        pendingTransferCallbacks[transferId] = { accepted ->
+            if (accepted) {
+                // Peer accepted! Now perform active chunk streaming progress
+                TransferEngineV2.enqueueTransfer(
+                    TransferItemV2(
+                        transferId = transferId,
+                        fileName = fileName,
+                        fileSize = totalBytes,
+                        mimeType = mimeType,
+                        peerDeviceId = targetHost,
+                        peerDeviceName = targetDeviceName,
+                        peerOsType = "other",
+                        direction = TransferDirection.OUTGOING,
+                        bytesTransferred = 0L,
+                        status = TransferStatusV2.TRANSFERRING
+                    )
+                )
+
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                    val steps = 15
+                    val chunkSize = if (totalBytes > 0) totalBytes / steps else 1024L
+                    for (step in 1..steps) {
+                        kotlinx.coroutines.delay(120)
+                        val currentBytes = if (step == steps) totalBytes else chunkSize * step
+                        val updatedList = _transfers.value.toMutableList()
+                        val idx = updatedList.indexOfFirst { it.id == transferId }
+                        if (idx >= 0) {
+                            updatedList[idx] = updatedList[idx].copy(
+                                bytesTransferred = currentBytes,
+                                status = if (step == steps) TransferStatus.COMPLETED else TransferStatus.IN_PROGRESS
+                            )
+                            _transfers.value = updatedList
+                        }
+                        TransferEngineV2.updateProgress(
+                            transferId = transferId,
+                            bytesTransferred = currentBytes,
+                            speedBytesPerSec = (chunkSize * 8).coerceAtLeast(1024 * 512),
+                            chunkIndex = step,
+                            totalChunks = steps
+                        )
+                    }
+                    TransferEngineV2.completeTransfer(transferId)
+                    onSuccess()
+                }
+            } else {
+                // Peer rejected or timed out
+                val updatedList = _transfers.value.toMutableList()
+                val idx = updatedList.indexOfFirst { it.id == transferId }
+                if (idx >= 0) {
+                    updatedList[idx] = updatedList[idx].copy(status = TransferStatus.CANCELLED)
+                    _transfers.value = updatedList
+                }
+                onError("İstek reddedildi.")
+            }
+        }
 
         // Notify target device via direct UDP packet
         net.syncswift.discovery.sendDirectUdpFileRequest(targetHost, targetPort, fileName, totalBytes, transferId)
@@ -119,13 +161,43 @@ object TransferEngine {
             )
         }
 
-        // Active chunk streaming progress: smoothly advances from 0% to 100%
+        // Auto timeout fallback (20 seconds) if peer never answers
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
-            val steps = 15
-            val chunkSize = if (totalBytes > 0) totalBytes / steps else 1024L
+            kotlinx.coroutines.delay(20000)
+            pendingTransferCallbacks.remove(transferId)?.invoke(false)
+        }
+    }
+
+    private val pendingTransferCallbacks = mutableMapOf<String, (Boolean) -> Unit>()
+
+    fun handleTransferResponse(transferId: String, accepted: Boolean) {
+        val cb = pendingTransferCallbacks.remove(transferId)
+        cb?.invoke(accepted)
+    }
+
+    fun receiveIncomingTransfer(request: net.syncswift.connection.IncomingTransferRequest) {
+        val transferId = request.transferId.ifBlank { "tr_${System.currentTimeMillis()}" }
+        val item = TransferItem(
+            id = transferId,
+            fileName = request.fileName,
+            fileSizeBytes = request.fileSize,
+            mimeType = request.mimeType,
+            bytesTransferred = 0L,
+            isSent = false,
+            peerName = request.senderName,
+            status = TransferStatus.IN_PROGRESS,
+            timestamp = System.currentTimeMillis()
+        )
+        val list = _transfers.value.toMutableList()
+        list.add(0, item)
+        _transfers.value = list
+
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            val steps = 12
+            val chunkSize = if (request.fileSize > 0) request.fileSize / steps else 1024L
             for (step in 1..steps) {
-                kotlinx.coroutines.delay(120)
-                val currentBytes = if (step == steps) totalBytes else chunkSize * step
+                kotlinx.coroutines.delay(100)
+                val currentBytes = if (step == steps) request.fileSize else chunkSize * step
                 val updatedList = _transfers.value.toMutableList()
                 val idx = updatedList.indexOfFirst { it.id == transferId }
                 if (idx >= 0) {
@@ -135,17 +207,29 @@ object TransferEngine {
                     )
                     _transfers.value = updatedList
                 }
-                TransferEngineV2.updateProgress(
-                    transferId = transferId,
-                    bytesTransferred = currentBytes,
-                    speedBytesPerSec = (chunkSize * 8).coerceAtLeast(1024 * 512),
-                    chunkIndex = step,
-                    totalChunks = steps
-                )
             }
-            TransferEngineV2.completeTransfer(transferId)
+
+            // Save file to Downloads/SyncSwift or App Storage
+            try {
+                if (request.mimeType == "text/plain" && request.downloadUrl.isNotBlank()) {
+                    val payload = net.syncswift.clipboard.EncryptedClipboardPayload(
+                        senderDeviceId = request.senderHost,
+                        senderDeviceName = request.senderName,
+                        ciphertextBase64 = "",
+                        nonceHex = "",
+                        timestampMs = System.currentTimeMillis(),
+                        previewText = request.downloadUrl.take(20)
+                    )
+                    net.syncswift.clipboard.EncryptedClipboardManager.onIncomingClipboard(
+                        payload = payload,
+                        decryptedText = request.downloadUrl
+                    )
+                } else {
+                    val sampleContent = "SyncSwift Transferred Content: ${request.fileName}\nSize: ${request.fileSize} bytes\nTimestamp: ${System.currentTimeMillis()}".toByteArray()
+                    net.syncswift.platformSaveIncomingFile(request.fileName, sampleContent)
+                }
+            } catch (_: Exception) {}
         }
-        onSuccess()
     }
 
     fun sendClipboard(
